@@ -986,8 +986,9 @@ static int work_decode(const json_t *val, struct work *work) {
 			if (!create_epl_vm(elastic_src)) {
 				work_package.blacklisted = true;
 				applog(LOG_ERR, "ERROR: Unable to convert 'source' to AST for work_id: %s\n\n%s\n", work_package.work_str, str);
-				free(elastic_src);
-				return 0;
+//				free(elastic_src);
+//				return 0;
+				continue;
 			}
 
 			free(elastic_src);
