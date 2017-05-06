@@ -1,4 +1,8 @@
-<h1><b>DO NOT USE - Code is not usable until SN integration is complete</b></h1>
+<h1><b>DO NOT USE!</b></h1>
+
+Please use the fork create by EK at https://github.com/OrdinaryDude/elastic-miner
+
+Once mainnet is launched, if I get some free time I may create an updated miner...but as of now this miner will no longer work with elastic coin due to recent changes to the protocol.
 
 
 # xel_miner 0.9.1
