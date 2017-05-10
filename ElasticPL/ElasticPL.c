@@ -12,6 +12,10 @@
 #include "ElasticPL.h"
 #include "../miner.h"
 
+uint32_t max_vm_ints = 0;
+uint32_t max_vm_uints = 0;
+uint32_t max_vm_floats = 0;
+
 
 /*
 #define NAV_LEFT_DOWN	0
@@ -132,6 +136,10 @@ extern bool create_epl_vm(char *source) {
 		applog(LOG_ERR, "ERROR: Unable To Allocate VM Parser Stack!");
 		return false;
 	}
+
+	max_vm_ints = 0;
+	max_vm_uints = 0;
+	max_vm_floats = 0;
 
 	if (!init_token_list(&token_list, TOKEN_LIST_SIZE)) {
 		applog(LOG_ERR, "ERROR: Unable To Allocate Token List For Parser!");
@@ -267,22 +275,28 @@ static void print_node(ast* node) {
 
 	switch (node->type) {
 	case NODE_CONSTANT:
-		if (node->is_float)
+		if (node->data_type == DT_FLOAT)
 			printf("Type: %d,\t%f\n", node->type, node->fvalue);
+		else if (node->data_type == DT_INT)
+			printf("Type: %d,\t%ld\n", node->type, node->ivalue);
 		else
-			printf("Type: %d,\t%ld\n", node->type, node->value);
-		break;
+			printf("Type: %d,\t%ld\n", node->type, node->uvalue);
+			break;
 	case NODE_VAR_CONST:
-		if (node->is_float)
-			printf("Type: %d,\tf[%ld]\n", node->type, node->value);
+		if (node->data_type == DT_FLOAT)
+			printf("Type: %d,\tf[%ld]\n", node->type, node->uvalue);
+		else if (node->data_type == DT_INT)
+			printf("Type: %d,\ti[%ld]\n", node->type, node->uvalue);
 		else
-			printf("Type: %d,\tm[%ld]\n", node->type, node->value);
+			printf("Type: %d,\tu[%ld]\n", node->type, node->uvalue);
 		break;
 	case NODE_VAR_EXP:
-		if (node->is_float)
+		if (node->data_type == DT_FLOAT)
 			printf("Type: %d,\tf[x]\n", node->type);
+		else if (node->data_type == DT_INT)
+			printf("Type: %d,\ti[x]\n", node->type);
 		else
-			printf("Type: %d,\tm[x]\n", node->type);
+			printf("Type: %d,\tu[x]\n", node->type);
 		break;
 	default:
 		printf("Type: %d,\t%s\n", node->type, get_node_str(node->type));
@@ -292,9 +306,12 @@ static void print_node(ast* node) {
 
 extern char* get_node_str(NODE_TYPE node_type) {
 	switch (node_type) {
+	case NODE_ARRAY_INT:	return "int[]";
+	case NODE_ARRAY_UINT:	return "uint[]";
+	case NODE_ARRAY_FLOAT:	return "float[]";
 	case NODE_CONSTANT:		return "";
-	case NODE_VAR_CONST:	return "m/f[]";
-	case NODE_VAR_EXP:		return "m/f[x]";
+	case NODE_VAR_CONST:	return "i/u/f[]";
+	case NODE_VAR_EXP:		return "i/u/f[x]";
 	case NODE_VERIFY:		return "verify";
 	case NODE_ASSIGN:		return "=";
 	case NODE_OR:			return "||";

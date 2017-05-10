@@ -26,16 +26,17 @@ Prec:		(Precedence) Determines Parsing Order
 Data Type:  Data Type Of Value Returned By Operator / Function
 ******************************************************************************/
 struct EXP_TOKEN_LIST epl_token[] = {
-	{ "<eof>",						5,	TOKEN_EOF,			EXP_NONE,		0,	0,	DT_NONE },
 	{ "//",							2,	TOKEN_COMMENT,		EXP_NONE,		0,	0,	DT_NONE },
 	{ "/*",							2,	TOKEN_BLOCK_COMMENT,EXP_NONE,		0,	0,	DT_NONE },
-	{ "trace",						5,	TOKEN_TRACE,		EXP_FUNCTION,	0,	0,	DT_NONE },
 	{ ";",							1,	TOKEN_END_STATEMENT,EXP_NONE,		0,	0,	DT_NONE },
 	{ ",",							1,	TOKEN_COMMA,		EXP_NONE,		0,	0,	DT_NONE },
 	{ "{",							1,	TOKEN_BLOCK_BEGIN,	EXP_STATEMENT,	2,	1,	DT_NONE },
 	{ "}",							1,	TOKEN_BLOCK_END,	EXP_STATEMENT,	2,	1,	DT_NONE },
 	{ "(",							1,	TOKEN_OPEN_PAREN,	EXP_NONE,		0,	1,	DT_INT },
 	{ ")",							1,	TOKEN_CLOSE_PAREN,	EXP_NONE,		0,	1,	DT_INT },
+	{ "uint",						4,	TOKEN_ARRAY_UINT,	EXP_STATEMENT,	1,	0,	DT_NONE },
+	{ "int",						3,	TOKEN_ARRAY_INT,	EXP_STATEMENT,	1,	0,	DT_NONE },
+	{ "float",						5,	TOKEN_ARRAY_FLOAT,	EXP_STATEMENT,	1,	0,	DT_NONE },
 	{ "init_once",					9,	TOKEN_INIT_ONCE,	EXP_STATEMENT,	1,	2,	DT_NONE },
 	{ "verify",						6,	TOKEN_VERIFY,		EXP_STATEMENT,	1,	2,	DT_NONE },
 	{ "repeat",						6,	TOKEN_REPEAT,		EXP_STATEMENT,	3,	2,	DT_NONE },
@@ -44,6 +45,8 @@ struct EXP_TOKEN_LIST epl_token[] = {
 	{ "break",						5,	TOKEN_BREAK,		EXP_STATEMENT,	0,	2,	DT_NONE },
 	{ "continue",					8,	TOKEN_CONTINUE,		EXP_STATEMENT,	0,	2,	DT_NONE },
 
+	{ "i[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_INT },
+	{ "u[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_UINT },
 	{ "m[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_INT },
 	{ "f[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_FLOAT },
 	{ "]",							1,	TOKEN_VAR_END,		EXP_EXPRESSION,	1,	4,	DT_INT },

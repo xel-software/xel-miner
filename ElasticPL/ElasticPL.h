@@ -19,8 +19,13 @@
 #define TOKEN_LIST_SIZE 4096
 #define PARSE_STACK_SIZE 24000
 
-#define VM_MEMORY_SIZE	64000	// Number Of Integers Supported By ElasticPL
-#define VM_FLOAT_SIZE	1000	// Number Of Doubles Supported By ElasticPL
+#define MAX_VM_MEMORY_SIZE	100000		// Maximum Number Of Bytes That Can Be Used By VM Memory Model
+#define VM_MEMORY_SIZE	64000			// Number Of Integers Supported By ElasticPL
+#define VM_FLOAT_SIZE	1000			// Number Of Doubles Supported By ElasticPL
+
+extern uint32_t max_vm_ints;
+extern uint32_t max_vm_uints;
+extern uint32_t max_vm_floats;
 
 typedef enum {
 	NODE_ERROR,
@@ -100,6 +105,9 @@ typedef enum {
 	NODE_FABS,
 	NODE_FMOD,
 	NODE_GCD,
+	NODE_ARRAY_INT,
+	NODE_ARRAY_UINT,
+	NODE_ARRAY_FLOAT,
 	NODE_INIT_ONCE
 } NODE_TYPE;
 
@@ -186,6 +194,9 @@ typedef enum {
 	TOKEN_FABS,
 	TOKEN_FMOD,
 	TOKEN_GCD,
+	TOKEN_ARRAY_INT,
+	TOKEN_ARRAY_UINT,
+	TOKEN_ARRAY_FLOAT,
 	TOKEN_INIT_ONCE
 } EPL_TOKEN_TYPE;
 
@@ -198,6 +209,7 @@ typedef enum {
 
 typedef enum {
 	DT_INT,
+	DT_UINT,
 	DT_FLOAT,
 	DT_STRING,
 	DT_NONE
@@ -236,7 +248,9 @@ typedef struct AST {
 	NODE_TYPE type;
 	EXP_TYPE exp;
 	int32_t value;
-	double fvalue;
+	int32_t ivalue;
+	uint32_t uvalue;
+	int64_t fvalue;
 	unsigned char *svalue;
 	int token_num;
 	int line_num;
@@ -278,7 +292,7 @@ static ast* pop_exp();
 static void push_exp(ast* exp);
 static int pop_op();
 static void push_op(int token_id);
-static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, int32_t value, double fvalue, unsigned char *svalue, int token_num, int line_num, DATA_TYPE data_type, ast* left, ast* right);
+static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, int32_t ivalue, uint32_t uvalue, int64_t fvalue, unsigned char *svalue, int token_num, int line_num, DATA_TYPE data_type, ast* left, ast* right);
 extern char* get_node_str(NODE_TYPE node_type);
 extern void dump_vm_ast(ast* root);
 static void print_node(ast* node);

@@ -15,13 +15,13 @@
 
 int num_exp = 0;
 
-
-static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, int32_t value, double fvalue, unsigned char *svalue, int token_num, int line_num, DATA_TYPE data_type, ast* left, ast* right) {
+static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, int32_t ivalue, uint32_t uvalue, int64_t fvalue, unsigned char *svalue, int token_num, int line_num, DATA_TYPE data_type, ast* left, ast* right) {
 	ast* e = calloc(1, sizeof(ast));
 	if (e) {
 		e->type = node_type;
 		e->exp = exp_type;
-		e->value = value;
+		e->ivalue = ivalue;
+		e->uvalue = uvalue;
 		e->fvalue = fvalue;
 		e->svalue = svalue;
 		e->token_num = token_num;
@@ -134,10 +134,11 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 			return true;
 		break;
 
-	// Expressions w/ 1 Int (Right Operand)
+	// Expressions w/ 1 Int/Uint (Right Operand)
 	case NODE_ABS:
 	case NODE_VERIFY:
-		if ((stack_exp[stack_exp_idx]->data_type == DT_INT) && (stack_exp[stack_exp_idx]->token_num > token_num))
+		if ((stack_exp[stack_exp_idx]->token_num > token_num) &&
+			((stack_exp[stack_exp_idx]->data_type == DT_INT) || (stack_exp[stack_exp_idx]->data_type == DT_UINT)))
 			return true;
 		break;
 
@@ -157,12 +158,64 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 				return true;
 		break;
 
-	// Expressions w/ 1 Int or Float (Right Operand)
-	case NODE_CONSTANT:
+	// Expressions w/ 1 Unsigned Int (Right Operand)
 	case NODE_VAR_CONST:
 	case NODE_VAR_EXP:
 		if ((stack_exp[stack_exp_idx]->token_num < token_num) &&
-			(stack_exp[stack_exp_idx]->data_type == DT_INT) || (stack_exp[stack_exp_idx]->data_type == DT_FLOAT))
+			(stack_exp[stack_exp_idx]->data_type == DT_UINT))
+			return true;
+		break;
+
+
+	// VM Memory Declarations
+	case NODE_ARRAY_INT:
+	case NODE_ARRAY_UINT:
+	case NODE_ARRAY_FLOAT:
+		if ((stack_exp[stack_exp_idx]->token_num > token_num) && (stack_exp[stack_exp_idx]->data_type == DT_UINT)) {
+
+			if (node_type == NODE_ARRAY_INT) {
+				if (max_vm_ints == 0) {
+					max_vm_ints = stack_exp[stack_exp_idx]->uvalue;
+				}
+				else {
+					applog(LOG_ERR, "Syntax Error - Line: %d  Int array already declared", token->line_num);
+					return false;
+				}
+			}
+			else if (node_type == NODE_ARRAY_UINT) {
+				if (max_vm_uints == 0) {
+					max_vm_uints = stack_exp[stack_exp_idx]->uvalue;
+				}
+				else {
+					applog(LOG_ERR, "Syntax Error - Line: %d  Unsigned Int array already declared", token->line_num);
+					return false;
+				}
+			}
+			else {
+				if (max_vm_floats == 0) {
+					max_vm_floats = stack_exp[stack_exp_idx]->uvalue;
+				}
+				else {
+					applog(LOG_ERR, "Syntax Error - Line: %d  Float array already declared", token->line_num);
+					return false;
+				}
+			}
+
+			if ((max_vm_ints + max_vm_uints + max_vm_floats) > MAX_VM_MEMORY_SIZE) {
+				applog(LOG_ERR, "Syntax Error - Requested VM Memory (%d bytes) exceeds allowable (%d bytes)", (max_vm_ints + max_vm_uints + max_vm_floats), MAX_VM_MEMORY_SIZE);
+				return false;
+			}
+
+			return true;
+		}
+		break;
+
+	// Expressions w/ 1 Int/Uint or Float (Right Operand)
+	case NODE_CONSTANT:
+//	case NODE_VAR_CONST:
+//	case NODE_VAR_EXP:
+		if ((stack_exp[stack_exp_idx]->token_num < token_num) &&
+			(stack_exp[stack_exp_idx]->data_type == DT_INT) || (stack_exp[stack_exp_idx]->data_type == DT_UINT) || (stack_exp[stack_exp_idx]->data_type == DT_FLOAT))
 			return true;
 		break;
 
@@ -171,7 +224,7 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 	case NODE_NOT:
 	case NODE_NEG:
 		if ((stack_exp[stack_exp_idx]->token_num > token_num) &&
-			(stack_exp[stack_exp_idx]->data_type == DT_INT) || (stack_exp[stack_exp_idx]->data_type == DT_FLOAT))
+			(stack_exp[stack_exp_idx]->data_type == DT_INT) || (stack_exp[stack_exp_idx]->data_type == DT_UINT) || (stack_exp[stack_exp_idx]->data_type == DT_FLOAT))
 			return true;
 		break;
 
@@ -189,7 +242,7 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 	case NODE_OR_ASSIGN:
 		if (((stack_exp[stack_exp_idx - 1]->token_num < token_num) && (stack_exp[stack_exp_idx]->token_num > token_num)) &&
 			((stack_exp[stack_exp_idx - 1]->type == NODE_VAR_CONST) || (stack_exp[stack_exp_idx - 1]->type == NODE_VAR_EXP)) &&
-			(stack_exp[stack_exp_idx]->data_type == DT_INT) || (stack_exp[stack_exp_idx]->data_type == DT_FLOAT))
+			(stack_exp[stack_exp_idx]->data_type == DT_INT) || (stack_exp[stack_exp_idx]->data_type == DT_UINT) || (stack_exp[stack_exp_idx]->data_type == DT_FLOAT))
 			return true;
 		break;
 
@@ -217,8 +270,8 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 	case NODE_CONDITIONAL:
 	case NODE_COND_ELSE:
 		if (((stack_exp[stack_exp_idx - 1]->token_num < token_num) && (stack_exp[stack_exp_idx]->token_num > token_num)) &&
-			((stack_exp[stack_exp_idx - 1]->data_type == DT_INT) || (stack_exp[stack_exp_idx - 1]->data_type == DT_FLOAT)) &&
-			(stack_exp[stack_exp_idx]->data_type == DT_INT) || (stack_exp[stack_exp_idx]->data_type == DT_FLOAT))
+			((stack_exp[stack_exp_idx - 1]->data_type == DT_INT) || (stack_exp[stack_exp_idx - 1]->data_type == DT_UINT) || (stack_exp[stack_exp_idx - 1]->data_type == DT_FLOAT)) &&
+			(stack_exp[stack_exp_idx]->data_type == DT_INT) || (stack_exp[stack_exp_idx]->data_type == DT_UINT) || (stack_exp[stack_exp_idx]->data_type == DT_FLOAT))
 			return true;
 		break;
 
@@ -240,7 +293,7 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 	case NODE_FLOOR:
 	case NODE_FABS:
 		if ((stack_exp[stack_exp_idx]->token_num > token_num) &&
-			(stack_exp[stack_exp_idx]->data_type == DT_INT) || (stack_exp[stack_exp_idx]->data_type == DT_FLOAT))
+			(stack_exp[stack_exp_idx]->data_type == DT_INT) || (stack_exp[stack_exp_idx]->data_type == DT_UINT) || (stack_exp[stack_exp_idx]->data_type == DT_FLOAT))
 			return true;
 		break;
 
@@ -250,8 +303,8 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 	case NODE_FMOD:
 	case NODE_GCD:
 		if (((stack_exp[stack_exp_idx - 1]->token_num > token_num) && (stack_exp[stack_exp_idx]->token_num > token_num)) &&
-			((stack_exp[stack_exp_idx - 1]->data_type == DT_INT) || (stack_exp[stack_exp_idx - 1]->data_type == DT_FLOAT)) &&
-			(stack_exp[stack_exp_idx]->data_type == DT_INT) || (stack_exp[stack_exp_idx]->data_type == DT_FLOAT))
+			((stack_exp[stack_exp_idx - 1]->data_type == DT_INT) || (stack_exp[stack_exp_idx - 1]->data_type == DT_UINT) || (stack_exp[stack_exp_idx - 1]->data_type == DT_FLOAT)) &&
+			(stack_exp[stack_exp_idx]->data_type == DT_INT) || (stack_exp[stack_exp_idx]->data_type == DT_UINT) || (stack_exp[stack_exp_idx]->data_type == DT_FLOAT))
 			return true;
 		break;
 
@@ -352,6 +405,9 @@ static NODE_TYPE get_node_type(SOURCE_TOKEN *token, int token_num) {
 	case TOKEN_FABS:			node_type = NODE_FABS;			break;
 	case TOKEN_FMOD:			node_type = NODE_FMOD; 			break;
 	case TOKEN_GCD:				node_type = NODE_GCD; 			break;
+	case TOKEN_ARRAY_INT:		node_type = NODE_ARRAY_INT; 	break;
+	case TOKEN_ARRAY_UINT:		node_type = NODE_ARRAY_UINT; 	break;
+	case TOKEN_ARRAY_FLOAT:		node_type = NODE_ARRAY_FLOAT; 	break;
 	case TOKEN_INIT_ONCE:		node_type = NODE_INIT_ONCE;		break;
 	default: return NODE_ERROR;
 	}
@@ -363,7 +419,9 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 	int i;
 	uint32_t val[2];
 	long long value = 0;
-	double fvalue = 0.0;
+	int32_t ivalue = 0;
+	uint32_t uvalue = 0;
+	int64_t fvalue = 0.0;
 	unsigned char *svalue = NULL;
 	NODE_TYPE node_type = NODE_ERROR;
 	ast *exp, *left = NULL, *right = NULL;
@@ -395,6 +453,11 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 
 				if (token->data_type == DT_INT) {
 
+					if (token->literal[0] == '-')
+						token->data_type = DT_INT;
+					else
+						token->data_type = DT_UINT;
+
 					// Check For Hex - If Found, Convert To Int
 					if ((strlen(token->literal) > 2) && (strlen(token->literal) <= 10) && (token->literal[0] == '0') && (token->literal[1] == 'x')) {
 							hex2ints(val, 1, token->literal + 2, strlen(token->literal) - 2);
@@ -408,13 +471,14 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 					}
 
 					else if ((strlen(token->literal) > 0) && (strlen(token->literal) <= 11)) {
-						value = (long long)strtod(token->literal, NULL);
-						fvalue = (double)strtod(token->literal, NULL);
+						if (token->data_type == DT_INT)
+							ivalue = (int32_t)strtod(token->literal, NULL);
+						else
+							uvalue = (uint32_t)strtod(token->literal, NULL);
 					}
 				}
 				else if (token->data_type == DT_FLOAT) {
 					if (strlen(token->literal) <= 18) {
-						value = (long long)strtod(token->literal, NULL);
 						fvalue = (double)strtod(token->literal, NULL);
 					}
 				}
@@ -433,8 +497,9 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 
 			// Remove Expression For Variables w/ Constant ID
 			if (node_type == NODE_VAR_CONST) {
-				value = left->value;
-				fvalue = left->fvalue;
+//				value = left->value;
+				uvalue = left->uvalue;
+//				fvalue = left->fvalue;
 				left = NULL;
 			}
 		}
@@ -473,14 +538,14 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 		if (token->inputs > 0) {
 			// First Paramater
 			left = pop_exp();
-			exp = add_exp(NODE_PARAM, EXP_EXPRESSION, 0, 0.0, NULL, 0, 0, DT_NONE, left, NULL);
+			exp = add_exp(NODE_PARAM, EXP_EXPRESSION, 0, 0, 0.0, NULL, 0, 0, DT_NONE, left, NULL);
 			push_exp(exp);
 
 			// Remaining Paramaters
 			for (i = 1; i < token->inputs; i++) {
 				right = pop_exp();
 				left = pop_exp();
-				exp = add_exp(NODE_PARAM, EXP_EXPRESSION, 0, 0.0, NULL, 0, 0, DT_NONE, left, right);
+				exp = add_exp(NODE_PARAM, EXP_EXPRESSION, 0, 0, 0.0, NULL, 0, 0, DT_NONE, left, right);
 				push_exp(exp);
 			}
 			left = NULL;
@@ -492,7 +557,7 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 		}
 	}
 
-	exp = add_exp(node_type, token->exp, (int32_t)value, fvalue, svalue, token_num, token->line_num, token->data_type, left, right);
+	exp = add_exp(node_type, token->exp, ivalue, uvalue, fvalue, svalue, token_num, token->line_num, token->data_type, left, right);
 
 	// Update The "End Statement" Indicator For If/Else/Repeat/Block
 	if ((exp->type == NODE_IF) || (exp->type == NODE_ELSE) || (exp->type == NODE_REPEAT) || (exp->type == NODE_BLOCK) || (exp->type == NODE_INIT_ONCE))
@@ -519,10 +584,23 @@ static bool validate_exp_list() {
 		return false;
 	}
 
-	for (i = 0; i < stack_exp_idx; i++) {
+	if ((stack_exp[0]->type != NODE_ARRAY_INT) && (stack_exp[0]->type != NODE_ARRAY_UINT) && (stack_exp[0]->type != NODE_ARRAY_FLOAT)) {
+		applog(LOG_ERR, "Syntax Error - Line: %d 'int', 'uint', or 'float' must be defined at beginning of program", stack_exp[0]->line_num);
+		return false;
+	}
+
+	for (i = 1; i < stack_exp_idx; i++) {
+		if (((stack_exp[i]->type == NODE_ARRAY_INT) || (stack_exp[i]->type == NODE_ARRAY_UINT) || (stack_exp[i]->type == NODE_ARRAY_FLOAT)) &&
+			(stack_exp[i - 1]->type != NODE_ARRAY_INT) && (stack_exp[i - 1]->type != NODE_ARRAY_UINT) && (stack_exp[i - 1]->type != NODE_ARRAY_FLOAT)) {
+			applog(LOG_ERR, "Syntax Error - Line: %d 'int', 'uint', or 'float' must be defined at beginning of program", stack_exp[i]->line_num);
+			return false;
+		}
+	}
+
+	for (i = 1; i < stack_exp_idx; i++) {
 		if (stack_exp[i]->type == NODE_INIT_ONCE) {
-			if (i > 0) {
-				applog(LOG_ERR, "Syntax Error - Line: %d Init_Once must be first statement", stack_exp[i]->line_num);
+			if ((i > 0) && (stack_exp[i - 1]->type != NODE_ARRAY_INT) && (stack_exp[i - 1]->type != NODE_ARRAY_UINT) && (stack_exp[i - 1]->type != NODE_ARRAY_FLOAT)) {
+				applog(LOG_ERR, "Syntax Error - Line: %d Init_Once must be first statement after viable declaration", stack_exp[i]->line_num);
 				return false;
 			}
 
