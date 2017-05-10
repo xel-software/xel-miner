@@ -201,8 +201,8 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 				}
 			}
 
-			if ((max_vm_ints + max_vm_uints + max_vm_floats) > MAX_VM_MEMORY_SIZE) {
-				applog(LOG_ERR, "Syntax Error - Requested VM Memory (%d bytes) exceeds allowable (%d bytes)", (max_vm_ints + max_vm_uints + max_vm_floats), MAX_VM_MEMORY_SIZE);
+			if (((max_vm_ints * 4) + (max_vm_uints * 4) + (max_vm_floats * 8)) > MAX_VM_MEMORY_SIZE) {
+				applog(LOG_ERR, "Syntax Error - Requested VM Memory (%d bytes) exceeds allowable (%d bytes)", ((max_vm_ints * 4) + (max_vm_uints * 4) + (max_vm_floats * 8)), MAX_VM_MEMORY_SIZE);
 				return false;
 			}
 
