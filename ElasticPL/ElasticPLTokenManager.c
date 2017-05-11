@@ -34,9 +34,12 @@ struct EXP_TOKEN_LIST epl_token[] = {
 	{ "}",							1,	TOKEN_BLOCK_END,	EXP_STATEMENT,	2,	1,	DT_NONE },
 	{ "(",							1,	TOKEN_OPEN_PAREN,	EXP_NONE,		0,	1,	DT_INT },
 	{ ")",							1,	TOKEN_CLOSE_PAREN,	EXP_NONE,		0,	1,	DT_INT },
-	{ "uint",						4,	TOKEN_ARRAY_UINT,	EXP_STATEMENT,	1,	0,	DT_NONE },
-	{ "int",						3,	TOKEN_ARRAY_INT,	EXP_STATEMENT,	1,	0,	DT_NONE },
-	{ "float",						5,	TOKEN_ARRAY_FLOAT,	EXP_STATEMENT,	1,	0,	DT_NONE },
+	{ "array_int",					9,	TOKEN_ARRAY_INT,	EXP_STATEMENT,	1,	0,	DT_NONE },
+	{ "array_uint",					10,	TOKEN_ARRAY_UINT,	EXP_STATEMENT,	1,	0,	DT_NONE },
+	{ "array_long",					10,	TOKEN_ARRAY_LONG,	EXP_STATEMENT,	1,	0,	DT_NONE },
+	{ "array_ulong",				11,	TOKEN_ARRAY_ULONG,	EXP_STATEMENT,	1,	0,	DT_NONE },
+	{ "array_float",				11,	TOKEN_ARRAY_FLOAT,	EXP_STATEMENT,	1,	0,	DT_NONE },
+	{ "array_double",				12,	TOKEN_ARRAY_DOUBLE,	EXP_STATEMENT,	1,	0,	DT_NONE },
 	{ "init_once",					9,	TOKEN_INIT_ONCE,	EXP_STATEMENT,	1,	2,	DT_NONE },
 	{ "verify",						6,	TOKEN_VERIFY,		EXP_STATEMENT,	1,	2,	DT_NONE },
 	{ "repeat",						6,	TOKEN_REPEAT,		EXP_STATEMENT,	3,	2,	DT_NONE },
@@ -47,8 +50,11 @@ struct EXP_TOKEN_LIST epl_token[] = {
 
 	{ "i[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_INT },
 	{ "u[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_UINT },
-	{ "m[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_INT },
+	{ "l[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_LONG },
+	{ "ul[",						3,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_ULONG },
 	{ "f[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_FLOAT },
+	{ "d[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_DOUBLE },
+	{ "m[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_INT },
 	{ "]",							1,	TOKEN_VAR_END,		EXP_EXPRESSION,	1,	4,	DT_INT },
 
 	{ "++",							2,	TOKEN_INCREMENT,	EXP_EXPRESSION,	1,	13,	DT_INT },	// Increment
@@ -489,12 +495,12 @@ static void dump_token_list(SOURCE_TOKEN_LIST *token_list)
 {
 	int i;
 
-	fprintf(stdout, "\nNum\tLine\tToken\tToken ID\n");
-	printf("--------------------------------\n");
+	fprintf(stdout, "\nNum\tLine\tToken\t\tToken ID\n");
+	printf("----------------------------------------\n");
 	for (i = 0; i < token_list->num; i++) {
 		if (token_list->token[i].type == TOKEN_LITERAL)
-			fprintf(stdout, "%d:\t%d\t%s\t%d\n", i, token_list->token[i].line_num, token_list->token[i].literal, token_list->token[i].type);
+			fprintf(stdout, "%d:\t%d\t%s\t\t%d\n", i, token_list->token[i].line_num, token_list->token[i].literal, token_list->token[i].type);
 		else
-			fprintf(stdout, "%d:\t%d\t%s\t%d\n", i, token_list->token[i].line_num, epl_token[token_list->token[i].token_id].str, token_list->token[i].type);
+			fprintf(stdout, "%d:\t%d\t%s\t\t%d\n", i, token_list->token[i].line_num, epl_token[token_list->token[i].token_id].str, token_list->token[i].type);
 	}
 }

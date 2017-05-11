@@ -15,22 +15,45 @@
 
 int num_exp = 0;
 
-static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, int32_t ivalue, uint32_t uvalue, int64_t fvalue, unsigned char *svalue, int token_num, int line_num, DATA_TYPE data_type, ast* left, ast* right) {
+static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_32bit, bool is_signed, bool is_float, int64_t val_int64, uint64_t val_uint64, double val_double, unsigned char *svalue, int token_num, int line_num, DATA_TYPE data_type, ast* left, ast* right) {
 	ast* e = calloc(1, sizeof(ast));
 	if (e) {
 		e->type = node_type;
 		e->exp = exp_type;
-		e->ivalue = ivalue;
-		e->uvalue = uvalue;
-		e->fvalue = fvalue;
+		e->is_32bit = is_32bit;
+		e->is_signed = is_signed;
+		e->is_float = is_float;
 		e->svalue = svalue;
 		e->token_num = token_num;
 		e->line_num = line_num;
 		e->end_stmnt = false;
 		e->data_type = data_type;
-		e->is_float = (data_type == DT_FLOAT);
 		e->left = left;
 		e->right = right;
+
+		// Map Value To Corresponding Data Type In The Union
+		if (is_float) {
+			if (is_32bit)
+				e->val.f = (float)val_double;
+			else
+				e->val.d = val_double;
+		}
+		else {
+			if (is_32bit)
+				if (is_signed)
+					e->val.i = (int32_t)val_int64;
+				else
+					e->val.u = (uint32_t)val_uint64;
+			else
+				if (is_signed)
+					e->val.l = val_int64;
+				else
+					e->val.ul = val_uint64;
+		}
+
+
+		if (node_type == NODE_VAR_CONST)
+			e->val.u = (uint32_t)val_uint64;
 
 		if (left)
 			e->left->parent = e;
@@ -105,6 +128,70 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 	// Validate The Inputs Are The Correct Type
 	switch (node_type) {
 
+	// VM Memory Declarations
+	case NODE_ARRAY_INT:
+	case NODE_ARRAY_UINT:
+	case NODE_ARRAY_LONG:
+	case NODE_ARRAY_ULONG:
+	case NODE_ARRAY_FLOAT:
+	case NODE_ARRAY_DOUBLE:
+		if ((stack_exp[stack_exp_idx]->token_num > token_num) && stack_exp[stack_exp_idx]->is_32bit &&
+			!stack_exp[stack_exp_idx]->is_signed && !stack_exp[stack_exp_idx]->is_float) {
+
+			switch (node_type) {
+			case NODE_ARRAY_INT:
+				if (max_vm_ints != 0) {
+					applog(LOG_ERR, "Syntax Error - Line: %d  Int array already declared", token->line_num);
+					return false;
+				}
+				max_vm_ints = stack_exp[stack_exp_idx]->val.u;
+				break;
+			case NODE_ARRAY_UINT:
+				if (max_vm_uints != 0) {
+					applog(LOG_ERR, "Syntax Error - Line: %d  Unsigned Int array already declared", token->line_num);
+					return false;
+				}
+				max_vm_uints = stack_exp[stack_exp_idx]->val.u;
+				break;
+			case NODE_ARRAY_LONG:
+				if (max_vm_longs != 0) {
+					applog(LOG_ERR, "Syntax Error - Line: %d  Long array already declared", token->line_num);
+					return false;
+				}
+				max_vm_longs = stack_exp[stack_exp_idx]->val.u;
+				break;
+			case NODE_ARRAY_ULONG:
+				if (max_vm_ulongs != 0) {
+					applog(LOG_ERR, "Syntax Error - Line: %d  Unsigned Long array already declared", token->line_num);
+					return false;
+				}
+				max_vm_ulongs = stack_exp[stack_exp_idx]->val.u;
+				break;
+			case NODE_ARRAY_FLOAT:
+				if (max_vm_floats != 0) {
+					applog(LOG_ERR, "Syntax Error - Line: %d  Float array already declared", token->line_num);
+					return false;
+				}
+				max_vm_floats = stack_exp[stack_exp_idx]->val.u;
+				break;
+			case NODE_ARRAY_DOUBLE:
+				if (max_vm_doubles != 0) {
+					applog(LOG_ERR, "Syntax Error - Line: %d  Double array already declared", token->line_num);
+					return false;
+				}
+				max_vm_doubles = stack_exp[stack_exp_idx]->val.u;
+				break;
+			}
+
+			if ((((max_vm_ints + max_vm_uints + max_vm_floats) * 4) + ((max_vm_longs + max_vm_ulongs + max_vm_doubles) * 8)) > MAX_VM_MEMORY_SIZE) {
+				applog(LOG_ERR, "Syntax Error - Requested VM Memory (%d bytes) exceeds allowable (%d bytes)", (((max_vm_ints + max_vm_uints + max_vm_floats) * 4) + ((max_vm_longs + max_vm_ulongs + max_vm_doubles) * 8)), MAX_VM_MEMORY_SIZE);
+				return false;
+			}
+
+			return true;
+		}
+		break;
+
 	// Expressions w/ 1 Statement
 	case NODE_INIT_ONCE:
 		if (stack_exp[stack_exp_idx]->end_stmnt == true)
@@ -161,51 +248,46 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 	// Expressions w/ 1 Unsigned Int (Right Operand)
 	case NODE_VAR_CONST:
 	case NODE_VAR_EXP:
-		if ((stack_exp[stack_exp_idx]->token_num < token_num) &&
-			(stack_exp[stack_exp_idx]->data_type == DT_UINT))
-			return true;
-		break;
+		if ((stack_exp[stack_exp_idx]->token_num < token_num) && (stack_exp[stack_exp_idx]->data_type == DT_INT)) {
 
-
-	// VM Memory Declarations
-	case NODE_ARRAY_INT:
-	case NODE_ARRAY_UINT:
-	case NODE_ARRAY_FLOAT:
-		if ((stack_exp[stack_exp_idx]->token_num > token_num) && (stack_exp[stack_exp_idx]->data_type == DT_UINT)) {
-
-			if (node_type == NODE_ARRAY_INT) {
+			switch (token->data_type) {
+			case DT_INT:
 				if (max_vm_ints == 0) {
-					max_vm_ints = stack_exp[stack_exp_idx]->uvalue;
-				}
-				else {
-					applog(LOG_ERR, "Syntax Error - Line: %d  Int array already declared", token->line_num);
+					applog(LOG_ERR, "Syntax Error - Line: %d  Int array not declared", token->line_num);
 					return false;
 				}
-			}
-			else if (node_type == NODE_ARRAY_UINT) {
+				break;
+			case DT_UINT:
 				if (max_vm_uints == 0) {
-					max_vm_uints = stack_exp[stack_exp_idx]->uvalue;
-				}
-				else {
-					applog(LOG_ERR, "Syntax Error - Line: %d  Unsigned Int array already declared", token->line_num);
+					applog(LOG_ERR, "Syntax Error - Line: %d  Unsigned Int array not declared", token->line_num);
 					return false;
 				}
-			}
-			else {
+				break;
+			case DT_LONG:
+				if (max_vm_longs == 0) {
+					applog(LOG_ERR, "Syntax Error - Line: %d  Long array not declared", token->line_num);
+					return false;
+				}
+				break;
+			case DT_ULONG:
+				if (max_vm_ulongs == 0) {
+					applog(LOG_ERR, "Syntax Error - Line: %d  Unsigned Long array not declared", token->line_num);
+					return false;
+				}
+				break;
+			case DT_FLOAT:
 				if (max_vm_floats == 0) {
-					max_vm_floats = stack_exp[stack_exp_idx]->uvalue;
-				}
-				else {
-					applog(LOG_ERR, "Syntax Error - Line: %d  Float array already declared", token->line_num);
+					applog(LOG_ERR, "Syntax Error - Line: %d  Float array not declared", token->line_num);
 					return false;
 				}
+				break;
+			case DT_DOUBLE:
+				if (max_vm_doubles == 0) {
+					applog(LOG_ERR, "Syntax Error - Line: %d  Double array not declared", token->line_num);
+					return false;
+				}
+				break;
 			}
-
-			if (((max_vm_ints * 4) + (max_vm_uints * 4) + (max_vm_floats * 8)) > MAX_VM_MEMORY_SIZE) {
-				applog(LOG_ERR, "Syntax Error - Requested VM Memory (%d bytes) exceeds allowable (%d bytes)", ((max_vm_ints * 4) + (max_vm_uints * 4) + (max_vm_floats * 8)), MAX_VM_MEMORY_SIZE);
-				return false;
-			}
-
 			return true;
 		}
 		break;
@@ -407,7 +489,10 @@ static NODE_TYPE get_node_type(SOURCE_TOKEN *token, int token_num) {
 	case TOKEN_GCD:				node_type = NODE_GCD; 			break;
 	case TOKEN_ARRAY_INT:		node_type = NODE_ARRAY_INT; 	break;
 	case TOKEN_ARRAY_UINT:		node_type = NODE_ARRAY_UINT; 	break;
+	case TOKEN_ARRAY_LONG:		node_type = NODE_ARRAY_LONG; 	break;
+	case TOKEN_ARRAY_ULONG:		node_type = NODE_ARRAY_ULONG; 	break;
 	case TOKEN_ARRAY_FLOAT:		node_type = NODE_ARRAY_FLOAT; 	break;
+	case TOKEN_ARRAY_DOUBLE:	node_type = NODE_ARRAY_DOUBLE; 	break;
 	case TOKEN_INIT_ONCE:		node_type = NODE_INIT_ONCE;		break;
 	default: return NODE_ERROR;
 	}
@@ -418,10 +503,14 @@ static NODE_TYPE get_node_type(SOURCE_TOKEN *token, int token_num) {
 static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 	int i;
 	uint32_t val[2];
-	long long value = 0;
-	int32_t ivalue = 0;
-	uint32_t uvalue = 0;
-	int64_t fvalue = 0.0;
+	uint32_t len;
+	bool is_32bit = true;
+	bool is_signed = false;
+	bool is_float = false;
+	int64_t val_int64 = 0;
+	uint64_t val_uint64 = 0;
+	double val_double = 0.0;
+	double value = 0.0;
 	unsigned char *svalue = NULL;
 	NODE_TYPE node_type = NODE_ERROR;
 	ast *exp, *left = NULL, *right = NULL;
@@ -445,43 +534,116 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 		// Constant Expressions
 		if (token->inputs == 0) {
 
-			if (token->type == TOKEN_TRUE)
-				value = 1;
-			else if (token->type == TOKEN_FALSE)
-				value = 0;
+			if (token->type == TOKEN_TRUE) {
+				val_uint64 = 1.0;
+				is_32bit = true;
+				is_signed = false;
+				is_float = false;
+			}
+			else if (token->type == TOKEN_FALSE) {
+				val_uint64 = 0.0;
+				is_32bit = true;
+				is_signed = false;
+				is_float = false;
+			}
 			else if (node_type == NODE_CONSTANT) {
+
+				if (token->literal[0] == '-')
+					is_signed = true;
+				else
+					is_signed = false;
+
+				len = strlen(token->literal);
 
 				if (token->data_type == DT_INT) {
 
-					if (token->literal[0] == '-')
-						token->data_type = DT_INT;
-					else
-						token->data_type = DT_UINT;
+					is_float = false;
 
-					// Check For Hex - If Found, Convert To Int
-					if ((strlen(token->literal) > 2) && (strlen(token->literal) <= 10) && (token->literal[0] == '0') && (token->literal[1] == 'x')) {
-							hex2ints(val, 1, token->literal + 2, strlen(token->literal) - 2);
-						sprintf(token->literal, "%d", val[0]);
-					}
-
-					// Check For Binary - If Found, Convert To Decimal String
-					else if ((strlen(token->literal) > 2) && (strlen(token->literal) <= 34) && (token->literal[0] == '0') && (token->literal[1] == 'b')) {
-						val[0] = bin2int(token->literal + 2);
-						sprintf(token->literal, "%d", val[0]);
-					}
-
-					else if ((strlen(token->literal) > 0) && (strlen(token->literal) <= 11)) {
-						if (token->data_type == DT_INT)
-							ivalue = (int32_t)strtod(token->literal, NULL);
+					// Convert Hex Numbers
+					if ((len > 2) && (token->literal[0] == '0') && (token->literal[1] == 'x')) {
+						if (len > 18) {
+							applog(LOG_ERR, "Syntax Error - Line: %d  Hex value exceeds 64 bits", token->line_num);
+							return false;
+						}
+						else if (len < 11)
+							is_32bit = true;
 						else
-							uvalue = (uint32_t)strtod(token->literal, NULL);
+							is_32bit = false;
+
+						val_uint64 = strtoull(&token->literal[2], NULL, 16);
 					}
-				}
-				else if (token->data_type == DT_FLOAT) {
-					if (strlen(token->literal) <= 18) {
-						fvalue = (double)strtod(token->literal, NULL);
+
+					// Convert Binary Numbers
+					else if ((len > 2) && (token->literal[0] == '0') && (token->literal[1] == 'b')) {
+						if (len > 66) {
+							applog(LOG_ERR, "Syntax Error - Line: %d  Binary value exceeds 64 bits", token->line_num);
+							return false;
+						}
+						else if (len < 35)
+							is_32bit = true;
+						else
+							is_32bit = false;
+
+						val_uint64 = strtoull(&token->literal[2], NULL, 2);
 					}
+
+					// Convert Integer Numbers
+					else if (len > 0) {
+						if (is_signed)
+							val_int64 = strtoll(&token->literal[0], NULL, 10);
+						else
+							val_uint64 = strtoull(&token->literal[0], NULL, 10);
+
+						if (errno) {
+							applog(LOG_ERR, "Syntax Error - Line: %d  Integer value exceeds 64 bits", token->line_num);
+							return false;
+						}
+
+						if (is_signed) {
+							if ((val_int64 >= INT32_MIN) && (val_int64 <= INT32_MAX))
+								is_32bit = true;
+							else
+								is_32bit = false;
+						}
+						else {
+							if (val_uint64 <= UINT32_MAX)
+								is_32bit = true;
+							else
+								is_32bit = false;
+						}
+					}
+
+					// Check If Conversion Failed
+
+					//// Check For Hex - If Found, Convert To Int
+					//if ((strlen(token->literal) > 2) && (strlen(token->literal) <= 10) && (token->literal[0] == '0') && (token->literal[1] == 'x')) {
+					//		hex2ints(val, 1, token->literal + 2, strlen(token->literal) - 2);
+					//	sprintf(token->literal, "%ll", val[0]);
+					//}
+
+					//// Check For Binary - If Found, Convert To Decimal String
+					//else if ((strlen(token->literal) > 2) && (strlen(token->literal) <= 34) && (token->literal[0] == '0') && (token->literal[1] == 'b')) {
+					//	val[0] = bin2int(token->literal + 2);
+					//	sprintf(token->literal, "%ll", val[0]);
+					//}
+
+					//// Convert Literal To Corresponding Integer Data Type
+					//if (strlen(token->literal) > 0)
+
+					//else if ((strlen(token->literal) > 0) && (strlen(token->literal) <= 11)) {
+					//	UINT32_MAX;
+					//	INT32_MAX;
+					//	if (token->data_type == DT_INT)
+					//		ivalue = (int32_t)strtod(token->literal, NULL);
+					//	else
+					//		uvalue = (uint32_t)strtod(token->literal, NULL);
+					//}
 				}
+				//else if (token->data_type == DT_FLOAT) {
+				//	if (strlen(token->literal) <= 18) {
+				//		fvalue = (double)strtod(token->literal, NULL);
+				//	}
+				//}
 				else {
 					svalue = calloc(1, strlen(token->literal) + 1);
 					if (!svalue)
@@ -495,12 +657,45 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 
 			left = pop_exp();
 
-			// Remove Expression For Variables w/ Constant ID
+			// Remove Expression For Variables w/ Constant Index
 			if (node_type == NODE_VAR_CONST) {
-//				value = left->value;
-				uvalue = left->uvalue;
-//				fvalue = left->fvalue;
+				val_uint64 = left->val.u;
 				left = NULL;
+			}
+
+			if ((node_type == NODE_VAR_CONST) || (node_type == NODE_VAR_EXP)) {
+				switch (token->data_type) {
+				case DT_INT:
+					is_32bit = true;
+					is_signed = true;
+					is_float = false;
+					break;
+				case DT_UINT:
+					is_32bit = true;
+					is_signed = false;
+					is_float = false;
+					break;
+				case DT_LONG:
+					is_32bit = false;
+					is_signed = true;
+					is_float = false;
+					break;
+				case DT_ULONG:
+					is_32bit = true;
+					is_signed = false;
+					is_float = false;
+					break;
+				case DT_FLOAT:
+					is_32bit = true;
+					is_signed = true;
+					is_float = true;
+					break;
+				case DT_DOUBLE:
+					is_32bit = false;
+					is_signed = true;
+					is_float = true;
+					break;
+				}
 			}
 		}
 		// Binary Expressions
@@ -538,14 +733,14 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 		if (token->inputs > 0) {
 			// First Paramater
 			left = pop_exp();
-			exp = add_exp(NODE_PARAM, EXP_EXPRESSION, 0, 0, 0.0, NULL, 0, 0, DT_NONE, left, NULL);
+			exp = add_exp(NODE_PARAM, EXP_EXPRESSION, true, false, false, 0, 0, 0.0, NULL, 0, 0, DT_NONE, left, NULL);
 			push_exp(exp);
 
 			// Remaining Paramaters
 			for (i = 1; i < token->inputs; i++) {
 				right = pop_exp();
 				left = pop_exp();
-				exp = add_exp(NODE_PARAM, EXP_EXPRESSION, 0, 0, 0.0, NULL, 0, 0, DT_NONE, left, right);
+				exp = add_exp(NODE_PARAM, EXP_EXPRESSION, true, false, false, 0, 0, 0.0, NULL, 0, 0, DT_NONE, left, right);
 				push_exp(exp);
 			}
 			left = NULL;
@@ -557,7 +752,7 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 		}
 	}
 
-	exp = add_exp(node_type, token->exp, ivalue, uvalue, fvalue, svalue, token_num, token->line_num, token->data_type, left, right);
+	exp = add_exp(node_type, token->exp, is_32bit, is_signed, is_float, val_int64, val_uint64, val_double, svalue, token_num, token->line_num, token->data_type, left, right);
 
 	// Update The "End Statement" Indicator For If/Else/Repeat/Block
 	if ((exp->type == NODE_IF) || (exp->type == NODE_ELSE) || (exp->type == NODE_REPEAT) || (exp->type == NODE_BLOCK) || (exp->type == NODE_INIT_ONCE))

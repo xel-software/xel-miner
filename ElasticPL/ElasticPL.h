@@ -25,7 +25,10 @@
 
 extern uint32_t max_vm_ints;
 extern uint32_t max_vm_uints;
+extern uint32_t max_vm_longs;
+extern uint32_t max_vm_ulongs;
 extern uint32_t max_vm_floats;
+extern uint32_t max_vm_doubles;
 
 typedef enum {
 	NODE_ERROR,
@@ -107,7 +110,10 @@ typedef enum {
 	NODE_GCD,
 	NODE_ARRAY_INT,
 	NODE_ARRAY_UINT,
+	NODE_ARRAY_LONG,
+	NODE_ARRAY_ULONG,
 	NODE_ARRAY_FLOAT,
+	NODE_ARRAY_DOUBLE,
 	NODE_INIT_ONCE
 } NODE_TYPE;
 
@@ -196,7 +202,10 @@ typedef enum {
 	TOKEN_GCD,
 	TOKEN_ARRAY_INT,
 	TOKEN_ARRAY_UINT,
+	TOKEN_ARRAY_LONG,
+	TOKEN_ARRAY_ULONG,
 	TOKEN_ARRAY_FLOAT,
+	TOKEN_ARRAY_DOUBLE,
 	TOKEN_INIT_ONCE
 } EPL_TOKEN_TYPE;
 
@@ -210,7 +219,10 @@ typedef enum {
 typedef enum {
 	DT_INT,
 	DT_UINT,
+	DT_LONG,
+	DT_ULONG,
 	DT_FLOAT,
+	DT_DOUBLE,
 	DT_STRING,
 	DT_NONE
 } DATA_TYPE;
@@ -247,15 +259,27 @@ struct EXP_TOKEN_LIST {
 typedef struct AST {
 	NODE_TYPE type;
 	EXP_TYPE exp;
+
+	union {
+		int32_t i;
+		uint32_t u;
+		int64_t l;
+		uint64_t ul;
+		float f;
+		double d;
+	} val;
+
 	int32_t value;
 	int32_t ivalue;
 	uint32_t uvalue;
-	int64_t fvalue;
+	double fvalue;
 	unsigned char *svalue;
 	int token_num;
 	int line_num;
 	bool end_stmnt;
 	DATA_TYPE data_type;
+	bool is_32bit;
+	bool is_signed;
 	bool is_float;
 	struct AST*	parent;
 	struct AST*	left;
@@ -292,7 +316,7 @@ static ast* pop_exp();
 static void push_exp(ast* exp);
 static int pop_op();
 static void push_op(int token_id);
-static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, int32_t ivalue, uint32_t uvalue, int64_t fvalue, unsigned char *svalue, int token_num, int line_num, DATA_TYPE data_type, ast* left, ast* right);
+static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_32bit, bool is_signed, bool is_float, int64_t val_int64, uint64_t val_uint64, double val_double, unsigned char *svalue, int token_num, int line_num, DATA_TYPE data_type, ast* left, ast* right);
 extern char* get_node_str(NODE_TYPE node_type);
 extern void dump_vm_ast(ast* root);
 static void print_node(ast* node);
