@@ -336,7 +336,10 @@ static void print_node(ast* node) {
 		}
 		break;
 	case NODE_FUNCTION:
-		printf("Type: %d,\t%s %s()\n", node->type, get_node_str(node->type), node->svalue);
+		printf("Type: %d,\t%s %s\n", node->type, get_node_str(node->type), node->svalue);
+		break;
+	case NODE_CALL_FUNCTION:
+		printf("Type: %d,\t%s()\n", node->type, node->svalue);
 		break;
 	default:
 		printf("Type: %d,\t%s\n", node->type, get_node_str(node->type));
@@ -356,6 +359,7 @@ extern char* get_node_str(NODE_TYPE node_type) {
 	case NODE_VAR_CONST:	return "array[]";
 	case NODE_VAR_EXP:		return "array[x]";
 	case NODE_FUNCTION:		return "function";
+	case NODE_CALL_FUNCTION:return "";
 	case NODE_VERIFY:		return "verify";
 	case NODE_ASSIGN:		return "=";
 	case NODE_OR:			return "||";

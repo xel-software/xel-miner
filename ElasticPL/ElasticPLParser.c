@@ -312,6 +312,11 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 			return true;
 		break;
 
+	case NODE_CALL_FUNCTION:
+		if ((stack_exp[stack_exp_idx]->type == NODE_CONSTANT) && stack_exp[stack_exp_idx]->svalue)
+			return true;
+		break;
+
 	// Expressions w/ 1 Int / Float & 1 If/Else/Repeat/Break/Continue Statement
 	case NODE_IF:
 		if (((stack_exp[stack_exp_idx - 1]->data_type == DT_INT) || (stack_exp[stack_exp_idx - 1]->data_type == DT_FLOAT)) &&
@@ -605,6 +610,7 @@ static NODE_TYPE get_node_type(SOURCE_TOKEN *token, int token_num) {
 	case TOKEN_ARRAY_FLOAT:		node_type = NODE_ARRAY_FLOAT; 	break;
 	case TOKEN_ARRAY_DOUBLE:	node_type = NODE_ARRAY_DOUBLE; 	break;
 	case TOKEN_FUNCTION:		node_type = NODE_FUNCTION;		break;
+	case TOKEN_CALL_FUNCTION:	node_type = NODE_CALL_FUNCTION;	break;
 	case TOKEN_INIT_ONCE:		node_type = NODE_INIT_ONCE;		break;
 	default: return NODE_ERROR;
 	}
@@ -859,6 +865,10 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 		// Unary Statements
 		if (token->inputs == 1) {
 			left = pop_exp();
+			if (node_type == NODE_CALL_FUNCTION) {
+				svalue = &left->svalue[0];
+				left = NULL;
+			}
 		}
 		// Binary Statements
 		else if (token->inputs == 2) {
@@ -869,10 +879,6 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 			left = pop_exp();
 
 			if (node_type == NODE_FUNCTION) {
-				//if (left->svalue) {
-				//	svalue = strdup(left->svalue);
-				//	free(left->svalue);
-				//}
 				svalue = &left->svalue[0];
 				left = NULL;
 			}

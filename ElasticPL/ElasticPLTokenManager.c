@@ -32,6 +32,7 @@ struct EXP_TOKEN_LIST epl_token[] = {
 	{ ",",							1,	TOKEN_COMMA,		EXP_NONE,		0,	0,	DT_NONE },
 	{ "{",							1,	TOKEN_BLOCK_BEGIN,	EXP_STATEMENT,	2,	1,	DT_NONE },
 	{ "}",							1,	TOKEN_BLOCK_END,	EXP_STATEMENT,	2,	1,	DT_NONE },
+	{ "()",							2,	TOKEN_CALL_FUNCTION,EXP_STATEMENT,	1,	2,	DT_NONE },
 	{ "(",							1,	TOKEN_OPEN_PAREN,	EXP_NONE,		0,	1,	DT_INT },
 	{ ")",							1,	TOKEN_CLOSE_PAREN,	EXP_NONE,		0,	1,	DT_INT },
 	{ "array_int",					9,	TOKEN_ARRAY_INT,	EXP_STATEMENT,	1,	0,	DT_NONE },
@@ -377,6 +378,9 @@ extern bool get_token_list(char *str, SOURCE_TOKEN_LIST *token_list) {
 					if (token_list->token[token_list->num - 1].type == TOKEN_FUNCTION) {
 						data_type = DT_STRING;
 					}
+					else if (token_list->token[token_list->num - 2].type == TOKEN_CALL_FUNCTION) {
+						data_type = DT_STRING;
+					}
 					else {
 						data_type = validate_literal(literal);
 						if (data_type == DT_NONE) {
@@ -462,10 +466,18 @@ extern bool get_token_list(char *str, SOURCE_TOKEN_LIST *token_list) {
 					token_list->num--;
 				}
 
-				data_type = validate_literal(literal);
-				if (data_type == DT_NONE) {
-					applog(LOG_ERR, "Syntax Error - Invalid Literal: '%s'  Line: %d", literal, line_num);
-					return false;
+				if (epl_token[token_id].type == TOKEN_CALL_FUNCTION) {
+					data_type = DT_STRING;
+				}
+				else if (token_list->token[token_list->num - 1].type == TOKEN_CALL_FUNCTION) {
+					data_type = DT_STRING;
+				}
+				else {
+					data_type = validate_literal(literal);
+					if (data_type == DT_NONE) {
+						applog(LOG_ERR, "Syntax Error - Invalid Literal: '%s'  Line: %d", literal, line_num);
+						return false;
+					}
 				}
 				add_token(token_list, -1, literal, data_type, line_num);
 				literal_idx = 0;
