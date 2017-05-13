@@ -114,6 +114,7 @@ typedef enum {
 	NODE_ARRAY_ULONG,
 	NODE_ARRAY_FLOAT,
 	NODE_ARRAY_DOUBLE,
+	NODE_FUNCTION,
 	NODE_INIT_ONCE
 } NODE_TYPE;
 
@@ -206,6 +207,7 @@ typedef enum {
 	TOKEN_ARRAY_ULONG,
 	TOKEN_ARRAY_FLOAT,
 	TOKEN_ARRAY_DOUBLE,
+	TOKEN_FUNCTION,
 	TOKEN_INIT_ONCE
 } EPL_TOKEN_TYPE;
 
@@ -217,14 +219,14 @@ typedef enum {
 } EXP_TYPE;
 
 typedef enum {
+	DT_NONE,
 	DT_INT,
 	DT_UINT,
 	DT_LONG,
 	DT_ULONG,
 	DT_FLOAT,
 	DT_DOUBLE,
-	DT_STRING,
-	DT_NONE
+	DT_STRING
 } DATA_TYPE;
 
 // Token Type / Literal Value From ElasticPL Source Code
@@ -259,26 +261,16 @@ struct EXP_TOKEN_LIST {
 typedef struct AST {
 	NODE_TYPE type;
 	EXP_TYPE exp;
-
-	union {
-		int32_t i;
-		uint32_t u;
-		int64_t l;
-		uint64_t ul;
-		float f;
-		double d;
-	} val;
-
 	int32_t value;
-	int32_t ivalue;
-	uint32_t uvalue;
+	int64_t ivalue;
+	uint64_t uvalue;
 	double fvalue;
 	unsigned char *svalue;
 	int token_num;
 	int line_num;
 	bool end_stmnt;
 	DATA_TYPE data_type;
-	bool is_32bit;
+	bool is_64bit;
 	bool is_signed;
 	bool is_float;
 	struct AST*	parent;
@@ -316,7 +308,7 @@ static ast* pop_exp();
 static void push_exp(ast* exp);
 static int pop_op();
 static void push_op(int token_id);
-static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_32bit, bool is_signed, bool is_float, int64_t val_int64, uint64_t val_uint64, double val_double, unsigned char *svalue, int token_num, int line_num, DATA_TYPE data_type, ast* left, ast* right);
+static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_64bit, bool is_signed, bool is_float, int64_t val_int64, uint64_t val_uint64, double val_double, unsigned char *svalue, int token_num, int line_num, DATA_TYPE data_type, ast* left, ast* right);
 extern char* get_node_str(NODE_TYPE node_type);
 extern void dump_vm_ast(ast* root);
 static void print_node(ast* node);

@@ -47,6 +47,7 @@ struct EXP_TOKEN_LIST epl_token[] = {
 	{ "else",						4,	TOKEN_ELSE,			EXP_STATEMENT,	2,	2,	DT_NONE },
 	{ "break",						5,	TOKEN_BREAK,		EXP_STATEMENT,	0,	2,	DT_NONE },
 	{ "continue",					8,	TOKEN_CONTINUE,		EXP_STATEMENT,	0,	2,	DT_NONE },
+	{ "function",					8,	TOKEN_FUNCTION,		EXP_STATEMENT,	2,	2,	DT_NONE },
 
 	{ "i[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_INT },
 	{ "u[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_UINT },
@@ -373,10 +374,15 @@ extern bool get_token_list(char *str, SOURCE_TOKEN_LIST *token_list) {
 						token_list->num--;
 					}
 
-					data_type = validate_literal(literal);
-					if (data_type == DT_NONE) {
-						applog(LOG_ERR, "Syntax Error - Invalid Literal: '%s'  Line: %d", literal, line_num);
-						return false;
+					if (token_list->token[token_list->num - 1].type == TOKEN_FUNCTION) {
+						data_type = DT_STRING;
+					}
+					else {
+						data_type = validate_literal(literal);
+						if (data_type == DT_NONE) {
+							applog(LOG_ERR, "Syntax Error - Invalid Literal: '%s'  Line: %d", literal, line_num);
+							return false;
+						}
 					}
 					add_token(token_list, -1, literal, data_type, line_num);
 					literal_idx = 0;

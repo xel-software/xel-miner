@@ -173,6 +173,14 @@ extern bool create_epl_vm(char *source) {
 	vm_ast = calloc(vm_ast_cnt, sizeof(ast*));
 	memcpy(vm_ast, stack_exp, vm_ast_cnt * sizeof(ast*));
 
+	if (opt_debug_epl) {
+		fprintf(stdout, "--------------------------------\n");
+		for (i = 0; i<vm_ast_cnt; i++) {
+			dump_vm_ast(vm_ast[i]);
+			fprintf(stdout, "--------------------------------\n");
+		}
+	}
+
 	// Cleanup Stack Memory
 	for (i = 0; i < vm_ast_cnt; i++) {
 		if (stack_exp[i]->svalue)
@@ -184,14 +192,6 @@ extern bool create_epl_vm(char *source) {
 	if (!vm_ast) {
 		applog(LOG_ERR, "ERROR: ElasticPL Parser Failed!");
 		return false;
-	}
-
-	if (opt_debug_epl) {
-		fprintf(stdout, "--------------------------------\n");
-		for (i = 0; i<vm_ast_cnt; i++) {
-			dump_vm_ast(vm_ast[i]);
-			fprintf(stdout, "--------------------------------\n");
-		}
 	}
 
 	return true;
@@ -282,57 +282,46 @@ static void print_node(ast* node) {
 	switch (node->type) {
 	case NODE_CONSTANT:
 		if (node->is_float) {
-			if (node->is_32bit)
-				printf("Type: %d,\t%f\n", node->type, node->val.f);
-			else
-				printf("Type: %d,\t%d\n", node->type, node->val.d);
+			printf("Type: %d,\t%f\n", node->type, node->fvalue);
 		}
 		else {
-			if (node->is_32bit) {
-				if (node->is_signed)
-					printf("Type: %d,\t%i\n", node->type, node->val.i);
-				else
-					printf("Type: %d,\t%u\n", node->type, node->val.u);
-			}
-			else {
-				if (node->is_signed)
-					printf("Type: %d,\t%l\n", node->type, node->val.l);
-				else
-					printf("Type: %d,\t%ul\n", node->type, node->val.ul);
-			}
+			if (node->is_signed)
+				printf("Type: %d,\t%lld\n", node->type, node->ivalue);
+			else
+				printf("Type: %d,\t%llu\n", node->type, node->uvalue);
 		}
 		break;
 	case NODE_VAR_CONST:
 		if (node->is_float) {
-			if (node->is_32bit)
-				printf("Type: %d,\tf[%ld]\n", node->type, node->val.u);
+			if (node->is_64bit)
+				printf("Type: %d,\td[%llu]\n", node->type, node->uvalue);
 			else
-				printf("Type: %d,\td[%ld]\n", node->type, node->val.u);
+				printf("Type: %d,\tf[%llu]\n", node->type, node->uvalue);
 		}
 		else {
-			if (node->is_32bit) {
+			if (node->is_64bit) {
 				if (node->is_signed)
-					printf("Type: %d,\ti[%ld]\n", node->type, node->val.u);
+					printf("Type: %d,\tl[%llu]\n", node->type, node->uvalue);
 				else
-					printf("Type: %d,\tu[%ld]\n", node->type, node->val.u);
+					printf("Type: %d,\tul[%llu]\n", node->type, node->uvalue);
 			}
 			else {
 				if (node->is_signed)
-					printf("Type: %d,\tl[%ld]\n", node->type, node->val.u);
+					printf("Type: %d,\ti[%llu]\n", node->type, node->uvalue);
 				else
-					printf("Type: %d,\tul[%ld]\n", node->type, node->val.u);
+					printf("Type: %d,\tu[%llu]\n", node->type, node->uvalue);
 			}
 		}
 		break;
 	case NODE_VAR_EXP:
 		if (node->is_float) {
-			if (node->is_32bit)
+			if (node->is_64bit)
 				printf("Type: %d,\tf[x]\n", node->type);
 			else
 				printf("Type: %d,\td[x]\n", node->type);
 		}
 		else {
-			if (node->is_32bit) {
+			if (node->is_64bit) {
 				if (node->is_signed)
 					printf("Type: %d,\ti[x]\n", node->type);
 				else
@@ -345,6 +334,9 @@ static void print_node(ast* node) {
 					printf("Type: %d,\tul[x]\n", node->type);
 			}
 		}
+		break;
+	case NODE_FUNCTION:
+		printf("Type: %d,\t%s %s()\n", node->type, get_node_str(node->type), node->svalue);
 		break;
 	default:
 		printf("Type: %d,\t%s\n", node->type, get_node_str(node->type));
@@ -363,6 +355,7 @@ extern char* get_node_str(NODE_TYPE node_type) {
 	case NODE_CONSTANT:		return "";
 	case NODE_VAR_CONST:	return "array[]";
 	case NODE_VAR_EXP:		return "array[x]";
+	case NODE_FUNCTION:		return "function";
 	case NODE_VERIFY:		return "verify";
 	case NODE_ASSIGN:		return "=";
 	case NODE_OR:			return "||";

@@ -96,10 +96,11 @@ static uint32_t calc_weight(ast* root, uint32_t *ast_depth) {
 			}
 		}
 
-		if (block_level >= 0)
-			block_weight[block_level] += weight;
-		else
-			total_weight += (total_weight < (0xFFFFFFFF - weight) ? weight : 0);
+// BROKEN
+		//if (block_level >= 0)
+		//	block_weight[block_level] += weight;
+		//else
+		//	total_weight += (total_weight < (0xFFFFFFFF - weight) ? weight : 0);
 
 		// Get Total weight For The "Repeat" Block
 		if ((block_level >= 0) && (new_ptr->type == NODE_REPEAT)) {
