@@ -1,0 +1,138 @@
+OVERVIEW
+-----------
+
+	The ElasticPL programming language allows Elastic job authors to express
+	complex algorithms to be solved for bounties.
+	
+	The language is loosely based on the C programming language incorporating
+	many of the	basic operators / functions.
+	
+	There are no FOR, WHILE, or DO loops in ElasticPL in order to ensure that
+	programs will not run indefinitely.  Instead, job authors will use the 
+	ElasticPL REPEAT function.
+
+	
+PROGRAM LAYOUT
+--------------
+
+	An ElasticPL program consists of:
+		- 1 or more Global Variable arrays
+		- "main" Function
+		- "verify" Function
+		- User-Defined Functions (Optional)
+
+		
+GLOBAL VARIABLES
+----------------
+
+	The ElasticPL VM performs all storage using Global Variables based on the
+	standard 32bit and 64bit data types (int32_t, uint32_t, int64_t, uint64_t,
+	float, double). Local storage is not supported.
+	
+	Named variables are not allowed, instead data is stored in an array which
+	represents the data type.  The arrays are declared as follows:
+	
+		array_int    XXXX;
+		array_uint   XXXX;
+		array_long   XXXX;
+		array_ulong  XXXX;
+		array_float  XXXX;
+		array_double XXXX;
+	
+		Note 1: XXXX represents the number of elements in the array.
+		Note 2: Only 1 instance of each data type can be declared.
+		Note 3: The maximim combined storage size of all Global Variables can
+		        not exceed (TBD - need to determine max memory)
+
+	All global arrays need to be declared as the first lines in the program,
+	prior to any functions.
+
+	Array variables are accessed using the prefix i, u, l, ul, f, or d followed
+	by square brackets that include the zero based array index.  For example:
+	
+		i[0] = 100;
+		u[5] = u[3] * 10;
+		d[6] = u[5] / i[5];
+	
+		Note 1: XXXX represents the number of elements in the array.
+		Note 2: Only 1 instance of each data type can be declared.
+		Note 3: The maximim combined storage size of all Global Variables can
+		        not exceed (TBD - need to determine max memory)
+
+				
+	If an array variable is combined with a variable or constant of a different
+	data type.  The values being combined will be cast based on	the following
+	precedence:
+	
+		int32_t -> uint32_t -> int64_t -> uint64_t -> float -> double
+
+	If a value assigned to an array variable has a different data type, the
+	value will be cast to the same type as the array variable.
+
+		
+FUNCTIONS
+---------
+
+	All ElasticPL statements (except declaring global variable arrays) must
+	be contained within functions.
+	
+	No functions within ElasticPL are allowed to call "main" or "verify".
+	
+	Recursive function calls are not allowed.
+	
+	Function names can be made up of numbers (0-9), letters (a-z), and
+	underscores (_).  However, names cannot begin with any reserved word
+	in the ElasticPL language.
+	
+	Functions are declared as follows:
+	
+		function name_of_function {
+			<statement1>;
+			<statement2>;
+			etc...
+		}
+		
+		Note: Statements must be enclosed in {} brackets.
+	
+	To call a function, use the function name and parenthesis as follows:
+	
+		name_of_function();
+	
+	Functions can appear in any order within the program.
+	
+	All programs must have a "main" and "verify" function; however, these
+	functions can only be called by external programs.
+	
+	The "main" function is called by the Elastic miner to search for
+	solutions to the algorithm.
+	
+	The "verify" function is called by both the Elastic miner as well as 
+	SuperNodes to validate that the solution meets the criteria established
+	by the job author.
+	
+	The last statement in a "verify" function must be the "result" operators
+	which evalutes a statement as True or False.  For example:
+	
+		function verify {
+			<statement1>;
+			<statement2>;
+			etc...
+			
+			result (i[0] == 0)
+		}
+		
+		The result of this function is True if i[0] == 0; otherwise, it's false
+	
+	
+ELASTICPL OPERATORS
+-------------------
+
+	To be completed later...
+	
+	
+ELASTICPL BUILT_IN FUNCTIONS
+----------------------------
+
+	To be completed later...
+	
+		
