@@ -18,6 +18,7 @@
 #define MAX_LITERAL_SIZE 260
 #define TOKEN_LIST_SIZE 4096
 #define PARSE_STACK_SIZE 24000
+#define CALL_STACK_SIZE 256
 
 #define MAX_VM_MEMORY_SIZE	100000		// Maximum Number Of Bytes That Can Be Used By VM Memory Model
 #define VM_MEMORY_SIZE	64000			// Number Of Integers Supported By ElasticPL

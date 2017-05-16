@@ -939,44 +939,43 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 }
 
 
-static bool check_for_recursion(ast* root, uint32_t idx_main, uint32_t idx_verify, uint32_t function_num) {
-	size_t i, function_idx, level = 0;
-	uint32_t depth = 0;
+static bool validate_function_calls(uint32_t idx_main, uint32_t idx_verify) {
+	size_t i, call_idx;
 	bool downward = true;
+	ast *root = NULL;
 	ast *new_ptr = NULL;
 	ast *old_ptr = NULL;
-	ast *function_list[100];
+	ast *call_stack[CALL_STACK_SIZE];
 
-	if (!root)
-		return false;
+	// Set Root To Main Function
+	root = stack_exp[idx_main];
 
-	function_idx = 0;
-	function_list[function_idx++] = root;
+	call_idx = 0;
+	call_stack[call_idx++] = root;
 
 	new_ptr = root;
-	depth = 1;
 
 	while (new_ptr) {
 		old_ptr = new_ptr;
 
 		// Navigate Down The Tree
 		if (downward) {
+
 			// Navigate To Lowest Left Parent Node
 			while (new_ptr->left) {
 				if (!new_ptr->left->left)
 					break;
 				new_ptr = new_ptr->left;
-				//				if (++depth > *ast_depth) *ast_depth = depth;
 			}
 
+			// Switch To Root Of Called Function
 			if ((new_ptr->type == NODE_CALL_FUNCTION) || (new_ptr->left && (new_ptr->left->type == NODE_CALL_FUNCTION))) {
 				if (new_ptr->left)
 					new_ptr = new_ptr->left;
-				//			if (new_ptr->left) {
 
-				//				if (new_ptr->left->type == NODE_CALL_FUNCTION) {
 				printf("Call '%s()'\n", new_ptr->svalue);
 
+				// Get AST Index For The Function
 				if (!new_ptr->uvalue) {
 
 					for (i = 0; i <= stack_exp_idx; i++) {
@@ -998,36 +997,36 @@ static bool check_for_recursion(ast* root, uint32_t idx_main, uint32_t idx_verif
 				}
 
 				// Validate That Functions Is Not Recursively Called
-				for (i = 0; i < function_idx; i++) {
-					if (new_ptr->uvalue == function_list[i]->uvalue) {
+				for (i = 0; i < call_idx; i++) {
+					if (new_ptr->uvalue == call_stack[i]->uvalue) {
 						applog(LOG_ERR, "Syntax Error: Line: %d - Illegal recursive function call", new_ptr->line_num);
 						return false;
 					}
 				}
 
-				// Update How Nested The Functional Call Is
+				// Store The Lowest Level In Call Stack For The Function
 				// Needed To Determine Order Of Processing Functions During WCET Calc
-				if (function_idx > stack_exp[new_ptr->uvalue]->uvalue)
-					stack_exp[new_ptr->uvalue]->uvalue = function_idx;
+				if (call_idx > stack_exp[new_ptr->uvalue]->uvalue)
+					stack_exp[new_ptr->uvalue]->uvalue = call_idx;
 
-				function_list[function_idx++] = new_ptr;
-				//					new_ptr = stack_exp[new_ptr->left->uvalue]->right;
+				call_stack[call_idx++] = new_ptr;
 				new_ptr = stack_exp[new_ptr->uvalue];
 
-			}
-			depth++;
+				if (call_idx >= CALL_STACK_SIZE) {
+						applog(LOG_ERR, "Syntax Error: Line: %d - Functions can only be nested up to %d levels", new_ptr->line_num, CALL_STACK_SIZE);
+					return false;
+				}
 
-			// Switch To Right Node
+			}
+
 			if (new_ptr->right) {
+				// Switch To Right Node
 				new_ptr = new_ptr->right;
-//				if (++depth > *ast_depth) *ast_depth = depth;
 			}
 			else {
 				// Navigate Back Up The Tree
-				if (old_ptr != root) {
+				if (old_ptr != root)
 					new_ptr = old_ptr->parent;
-					depth--;
-				}
 				downward = false;
 			}
 		}
@@ -1038,18 +1037,11 @@ static bool check_for_recursion(ast* root, uint32_t idx_main, uint32_t idx_verif
 			if (new_ptr == root)
 				break;
 
-			// Top Of Called Functions - Return To Calling Function
+			// Return To Calling Function When We Reach The Root Of Called Function
 			if (new_ptr->parent->type == NODE_FUNCTION) {
-//			if (!new_ptr->parent) {
-					printf("Return From '%s()'\n", function_list[function_idx-1]->svalue);
-				function_list[function_idx--] = 0;
-				new_ptr = function_list[function_idx];
-				//if (new_ptr = function_list[function_idx]->parent->type == NODE_ELSE) {
-				//	new_ptr = function_list[function_idx]->parent->right;
-				//	downward = true;
-				//}
-				//else
-				//	new_ptr = function_list[function_idx]->parent;
+				call_stack[call_idx--] = 0;
+				new_ptr = call_stack[call_idx];
+				printf("Return From '%s()'\n", call_stack[call_idx]->svalue);
 			}
 			else {
 				// Check If We Need To Navigate Back Down A Right Branch
@@ -1059,12 +1051,10 @@ static bool check_for_recursion(ast* root, uint32_t idx_main, uint32_t idx_verif
 				}
 				else {
 					new_ptr = old_ptr->parent;
-					depth--;
 				}
 			}
 		}
 	}
-
 	return true;
 }
 
@@ -1124,7 +1114,7 @@ static bool validate_functions(int idx) {
 	}
 
 	// Check For Recursive Calls To Functions
-	if (!check_for_recursion(stack_exp[idx_main], idx_main, idx_verify, idx_main))
+	if (!validate_function_calls(idx_main, idx_verify))
 		return false;
 
 	return true;
