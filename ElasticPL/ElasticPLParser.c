@@ -319,9 +319,10 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 
 	// Expressions w/ 1 Int / Float & 1 If/Else/Repeat/Break/Continue Statement
 	case NODE_IF:
-		if (((stack_exp[stack_exp_idx - 1]->data_type == DT_INT) || (stack_exp[stack_exp_idx - 1]->data_type == DT_FLOAT)) &&
-				((stack_exp[stack_exp_idx]->end_stmnt == true) || (stack_exp[stack_exp_idx]->type == NODE_IF) || (stack_exp[stack_exp_idx]->type == NODE_ELSE) || (stack_exp[stack_exp_idx]->type == NODE_REPEAT) || (stack_exp[stack_exp_idx]->type == NODE_BREAK) || (stack_exp[stack_exp_idx]->type == NODE_CONTINUE)))
-				return true;
+//		if (((stack_exp[stack_exp_idx - 1]->data_type == DT_INT) || (stack_exp[stack_exp_idx - 1]->data_type == DT_FLOAT)) &&
+		if ((stack_exp[stack_exp_idx - 1]->data_type != DT_NONE) &&
+			((stack_exp[stack_exp_idx]->end_stmnt == true) || (stack_exp[stack_exp_idx]->type == NODE_IF) || (stack_exp[stack_exp_idx]->type == NODE_ELSE) || (stack_exp[stack_exp_idx]->type == NODE_REPEAT) || (stack_exp[stack_exp_idx]->type == NODE_BREAK) || (stack_exp[stack_exp_idx]->type == NODE_CONTINUE)))
+			return true;
 		break;
 
 	// Expressions w/ 1 Int, 1 Constant Int & 1 Block
@@ -965,53 +966,56 @@ static bool check_for_recursion(ast* root, uint32_t idx_main, uint32_t idx_verif
 				if (!new_ptr->left->left)
 					break;
 				new_ptr = new_ptr->left;
-//				if (++depth > *ast_depth) *ast_depth = depth;
+				//				if (++depth > *ast_depth) *ast_depth = depth;
 			}
 
-			if (new_ptr->left) {
-				if (new_ptr->left->type == NODE_CALL_FUNCTION) {
-					printf("function %s\n", new_ptr->left->svalue);
+			if ((new_ptr->type == NODE_CALL_FUNCTION) || (new_ptr->left && (new_ptr->left->type == NODE_CALL_FUNCTION))) {
+				if (new_ptr->left)
+					new_ptr = new_ptr->left;
+				//			if (new_ptr->left) {
 
-					if (!new_ptr->left->uvalue) {
+				//				if (new_ptr->left->type == NODE_CALL_FUNCTION) {
+				printf("Call '%s()'\n", new_ptr->svalue);
 
-						for (i = 0; i <= stack_exp_idx; i++) {
-							if ((stack_exp[i]->type == NODE_FUNCTION) && !strcmp(stack_exp[i]->svalue, new_ptr->left->svalue))
-								new_ptr->left->uvalue = i;
-						}
+				if (!new_ptr->uvalue) {
+
+					for (i = 0; i <= stack_exp_idx; i++) {
+						if ((stack_exp[i]->type == NODE_FUNCTION) && !strcmp(stack_exp[i]->svalue, new_ptr->svalue))
+							new_ptr->uvalue = i;
 					}
-
-					// Validate Function Exists
-					if (!new_ptr->left->uvalue) {
-						applog(LOG_ERR, "Syntax Error: Line: %d - Function '%s' not found", new_ptr->left->line_num, new_ptr->left->svalue);
-						return false;
-					}
-
-					// Validate That "main" & "verify" Functions Are Not Called
-					if ((new_ptr->left->uvalue == idx_main) || (new_ptr->left->uvalue == idx_verify)) {
-						applog(LOG_ERR, "Syntax Error: Line: %d - Illegal function call", new_ptr->left->line_num);
-						return false;
-					}
-
-					// Validate That Functions Is Not Recursively Called
-					for (i = 0; i < function_idx; i++) {
-						if (new_ptr->left->uvalue == function_list[i]->uvalue) {
-							applog(LOG_ERR, "Syntax Error: Line: %d - Illegal recursive function call", new_ptr->left->line_num);
-							return false;
-						}
-					}
-
-					// Update How Nested The Functional Call Is
-					// Needed To Determine Order Of Processing Functions During WCET Calc
-					if (function_idx > stack_exp[new_ptr->left->uvalue]->uvalue)
-						stack_exp[new_ptr->left->uvalue]->uvalue = function_idx;
-
-					function_list[function_idx++] = new_ptr->left;
-					new_ptr = stack_exp[new_ptr->left->uvalue]->right;
-
-
 				}
-				depth++;
+
+				// Validate Function Exists
+				if (!new_ptr->uvalue) {
+					applog(LOG_ERR, "Syntax Error: Line: %d - Function '%s' not found", new_ptr->line_num, new_ptr->svalue);
+					return false;
+				}
+
+				// Validate That "main" & "verify" Functions Are Not Called
+				if ((new_ptr->uvalue == idx_main) || (new_ptr->uvalue == idx_verify)) {
+					applog(LOG_ERR, "Syntax Error: Line: %d - Illegal function call", new_ptr->line_num);
+					return false;
+				}
+
+				// Validate That Functions Is Not Recursively Called
+				for (i = 0; i < function_idx; i++) {
+					if (new_ptr->uvalue == function_list[i]->uvalue) {
+						applog(LOG_ERR, "Syntax Error: Line: %d - Illegal recursive function call", new_ptr->line_num);
+						return false;
+					}
+				}
+
+				// Update How Nested The Functional Call Is
+				// Needed To Determine Order Of Processing Functions During WCET Calc
+				if (function_idx > stack_exp[new_ptr->uvalue]->uvalue)
+					stack_exp[new_ptr->uvalue]->uvalue = function_idx;
+
+				function_list[function_idx++] = new_ptr;
+				//					new_ptr = stack_exp[new_ptr->left->uvalue]->right;
+				new_ptr = stack_exp[new_ptr->uvalue];
+
 			}
+			depth++;
 
 			// Switch To Right Node
 			if (new_ptr->right) {
@@ -1035,10 +1039,17 @@ static bool check_for_recursion(ast* root, uint32_t idx_main, uint32_t idx_verif
 				break;
 
 			// Top Of Called Functions - Return To Calling Function
-			if (!new_ptr->parent) {
-				printf("Return from '%s()'\n", function_list[function_idx-1]->svalue);
+			if (new_ptr->parent->type == NODE_FUNCTION) {
+//			if (!new_ptr->parent) {
+					printf("Return From '%s()'\n", function_list[function_idx-1]->svalue);
 				function_list[function_idx--] = 0;
 				new_ptr = function_list[function_idx];
+				//if (new_ptr = function_list[function_idx]->parent->type == NODE_ELSE) {
+				//	new_ptr = function_list[function_idx]->parent->right;
+				//	downward = true;
+				//}
+				//else
+				//	new_ptr = function_list[function_idx]->parent;
 			}
 			else {
 				// Check If We Need To Navigate Back Down A Right Branch
@@ -1058,42 +1069,45 @@ static bool check_for_recursion(ast* root, uint32_t idx_main, uint32_t idx_verif
 }
 
 
-static bool validate_functions() {
+static bool validate_functions(int idx) {
 	size_t i;
-	uint32_t idx_main = 0, idx_verify = 0, idx_current = 0, level = 0;
+	uint32_t idx_main = 0, idx_verify = 0;
 
-	for (i = 0; i <= stack_exp_idx; i++) {
-		if (stack_exp[i]->type == NODE_FUNCTION) {
+	for (i = idx; i <= stack_exp_idx; i++) {
 
-			// Validate That Only One Instance Of "Main" Function Exists
-			if (!strcmp(stack_exp[i]->svalue, ("main"))) {
-				if (idx_main > 0) {
-					applog(LOG_ERR, "Syntax Error: Line: %d - \"main\" function already declared", stack_exp[i]->line_num);
-					return false;
-				}
-				idx_main = i;
-			}
+		if (stack_exp[i]->type != NODE_FUNCTION) {
+			applog(LOG_ERR, "Syntax Error: Line: %d - Statements must be contained in functions", stack_exp[i]->line_num);
+			return false;
+		}
 
-			// Validate That Only One Instance Of "Verify" Function Exists
-			else if (!strcmp(stack_exp[i]->svalue, ("verify"))) {
-				if (idx_verify > 0) {
-					applog(LOG_ERR, "Syntax Error: Line: %d - \"verify\" function already declared", stack_exp[i]->line_num);
-					return false;
-				}
-				idx_verify = i;
-			}
-
-			// Validate Function Has Brackets
-			if (!stack_exp[i]->right) {
-				applog(LOG_ERR, "Syntax Error: Line: %d - Function missing {} brackets", stack_exp[i]->line_num);
+		// Validate That Only One Instance Of "Main" Function Exists
+		if (!strcmp(stack_exp[i]->svalue, ("main"))) {
+			if (idx_main > 0) {
+				applog(LOG_ERR, "Syntax Error: Line: %d - \"main\" function already declared", stack_exp[i]->line_num);
 				return false;
 			}
+			idx_main = i;
+		}
 
-			// Validate Function Has At Least One Statement
-			if (!stack_exp[i]->right->left) {
-				applog(LOG_ERR, "Syntax Error: Line: %d - Functions must have at least one statement", stack_exp[i]->line_num);
+		// Validate That Only One Instance Of "Verify" Function Exists
+		else if (!strcmp(stack_exp[i]->svalue, ("verify"))) {
+			if (idx_verify > 0) {
+				applog(LOG_ERR, "Syntax Error: Line: %d - \"verify\" function already declared", stack_exp[i]->line_num);
 				return false;
 			}
+			idx_verify = i;
+		}
+
+		// Validate Function Has Brackets
+		if (!stack_exp[i]->right) {
+			applog(LOG_ERR, "Syntax Error: Line: %d - Function missing {} brackets", stack_exp[i]->line_num);
+			return false;
+		}
+
+		// Validate Function Has At Least One Statement
+		if (!stack_exp[i]->right->left) {
+			applog(LOG_ERR, "Syntax Error: Line: %d - Functions must have at least one statement", stack_exp[i]->line_num);
+			return false;
 		}
 	}
 
@@ -1110,64 +1124,39 @@ static bool validate_functions() {
 	}
 
 	// Check For Recursive Calls To Functions
-	check_for_recursion(stack_exp[idx_main], idx_main, idx_verify, idx_main);
+	if (!check_for_recursion(stack_exp[idx_main], idx_main, idx_verify, idx_main))
+		return false;
 
+	return true;
 }
 
-static bool validate_exp_list() {
-	int i;
+static bool validate_ast() {
+	int i, func_idx = 0;
 
-	if (stack_exp_idx < 0) {
-		applog(LOG_ERR, "Syntax Error - Invalid Source File");
+	if ((stack_exp_idx < 0) || (stack_op_idx >= 0)) {
+		applog(LOG_ERR, "Fatal Error: Unable to parse source into ElasticPL");
 		return false;
 	}
 
-	//if (stack_exp[stack_exp_idx]->type != NODE_VERIFY) {
-	//	applog(LOG_ERR, "Syntax Error - Missing Verify Statement");
-	//	return false;
-	//}
-
-	if ((stack_exp[0]->type != NODE_ARRAY_INT) && (stack_exp[0]->type != NODE_ARRAY_UINT) && (stack_exp[0]->type != NODE_ARRAY_FLOAT)) {
-		applog(LOG_ERR, "Syntax Error: Line: %d -'int', 'uint', or 'float' must be defined at beginning of program", stack_exp[0]->line_num);
-		return false;
-	}
-
-	for (i = 1; i < stack_exp_idx; i++) {
-		if (((stack_exp[i]->type == NODE_ARRAY_INT) || (stack_exp[i]->type == NODE_ARRAY_UINT) || (stack_exp[i]->type == NODE_ARRAY_FLOAT)) &&
-			(stack_exp[i - 1]->type != NODE_ARRAY_INT) && (stack_exp[i - 1]->type != NODE_ARRAY_UINT) && (stack_exp[i - 1]->type != NODE_ARRAY_FLOAT)) {
-			applog(LOG_ERR, "Syntax Error: Line: %d -'int', 'uint', or 'float' must be defined at beginning of program", stack_exp[i]->line_num);
-			return false;
+	for (i = 0; i < stack_exp_idx; i++) {
+		if ((stack_exp[i]->type != NODE_ARRAY_INT) && (stack_exp[i]->type != NODE_ARRAY_UINT) && (stack_exp[i]->type != NODE_ARRAY_LONG) && (stack_exp[i]->type != NODE_ARRAY_ULONG) && (stack_exp[i]->type != NODE_ARRAY_FLOAT) && (stack_exp[i]->type != NODE_ARRAY_DOUBLE)) {
+			break;
 		}
+		func_idx++;
 	}
 
-	for (i = 1; i < stack_exp_idx; i++) {
-		//if (stack_exp[i]->type == NODE_INIT_ONCE) {
-		//	if ((i > 0) && (stack_exp[i - 1]->type != NODE_ARRAY_INT) && (stack_exp[i - 1]->type != NODE_ARRAY_UINT) && (stack_exp[i - 1]->type != NODE_ARRAY_FLOAT)) {
-		//		applog(LOG_ERR, "Syntax Error: Line: %d -Init_Once must be first statement after viable declaration", stack_exp[i]->line_num);
-		//		return false;
-		//	}
+	if (func_idx == 0) {
+		applog(LOG_ERR, "Syntax Error: Line: %d - At least one variable array must be declared", stack_exp[0]->line_num);
+		return false;
+	}
 
-		//	if (stack_exp[i]->left->type != NODE_BLOCK) {
-		//		applog(LOG_ERR, "Syntax Error: Line: %d -Init_Once Statement Missing {}", stack_exp[i]->line_num);
-		//		return false;
-		//	}
+		//if (!stack_exp[i]->end_stmnt) {
+		//	applog(LOG_ERR, "Syntax Error: Line: %d - Invalid Statement", stack_exp[i]->line_num);
+		//	return false;
 		//}
 
-		if (stack_exp[i]->type == NODE_VERIFY) {
-			applog(LOG_ERR, "Syntax Error: Line: %d -Invalid Verify Statement", stack_exp[i]->line_num);
-			return false;
-		}
-
-		if (!stack_exp[i]->end_stmnt) {
-			applog(LOG_ERR, "Syntax Error: Line: %d - Invalid Statement", stack_exp[i]->line_num);
-			return false;
-		}
-	}
-
-	if (stack_op_idx >= 0) {
-		applog(LOG_ERR, "Syntax Error - Unable To Clear Operator Stack");
+	if (!validate_functions(func_idx))
 		return false;
-	}
 
 	return true;
 }
@@ -1428,11 +1417,7 @@ extern bool parse_token_list(SOURCE_TOKEN_LIST *token_list) {
 		}
 	}
 
-	if (!validate_functions())
-		return false;
-
-
-	if (!validate_exp_list())
+	if (!validate_ast())
 		return false;
 
 	return true;
