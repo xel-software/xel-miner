@@ -347,6 +347,13 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 			return true;
 		break;
 
+	// Expressions w/ 1 Int/Uint (Right Operand)
+	case NODE_RESULT:
+//		TOKEN_ASSIGN
+		if ((stack_exp[stack_exp_idx]->token_num > token_num) && (stack_exp[stack_exp_idx]->data_type != DT_NONE))
+			return true;
+		break;
+
 	// Expressions w/ 1 Variable (Left Operand)
 	case NODE_INCREMENT_R:
 	case NODE_DECREMENT_R:
@@ -611,6 +618,7 @@ static NODE_TYPE get_node_type(SOURCE_TOKEN *token, int token_num) {
 	case TOKEN_ARRAY_DOUBLE:	node_type = NODE_ARRAY_DOUBLE; 	break;
 	case TOKEN_FUNCTION:		node_type = NODE_FUNCTION;		break;
 	case TOKEN_CALL_FUNCTION:	node_type = NODE_CALL_FUNCTION;	break;
+	case TOKEN_RESULT:			node_type = NODE_RESULT;		break;
 	case TOKEN_INIT_ONCE:		node_type = NODE_INIT_ONCE;		break;
 	default: return NODE_ERROR;
 	}
@@ -879,7 +887,7 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 			left = pop_exp();
 
 			if (node_type == NODE_FUNCTION) {
-				svalue = &left->svalue[0];
+				svalue = left->svalue;
 				left = NULL;
 			}
 		}
@@ -929,6 +937,183 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 	return true;
 }
 
+
+static bool check_for_recursion(ast* root, uint32_t idx_main, uint32_t idx_verify, uint32_t function_num) {
+	size_t i, function_idx, level = 0;
+	uint32_t depth = 0;
+	bool downward = true;
+	ast *new_ptr = NULL;
+	ast *old_ptr = NULL;
+	ast *function_list[100];
+
+	if (!root)
+		return false;
+
+	function_idx = 0;
+	function_list[function_idx++] = root;
+
+	new_ptr = root;
+	depth = 1;
+
+	while (new_ptr) {
+		old_ptr = new_ptr;
+
+		// Navigate Down The Tree
+		if (downward) {
+			// Navigate To Lowest Left Parent Node
+			while (new_ptr->left) {
+				if (!new_ptr->left->left)
+					break;
+				new_ptr = new_ptr->left;
+//				if (++depth > *ast_depth) *ast_depth = depth;
+			}
+
+			if (new_ptr->left) {
+				if (new_ptr->left->type == NODE_CALL_FUNCTION) {
+					printf("function %s\n", new_ptr->left->svalue);
+
+					if (!new_ptr->left->uvalue) {
+
+						for (i = 0; i <= stack_exp_idx; i++) {
+							if ((stack_exp[i]->type == NODE_FUNCTION) && !strcmp(stack_exp[i]->svalue, new_ptr->left->svalue))
+								new_ptr->left->uvalue = i;
+						}
+					}
+
+					// Validate Function Exists
+					if (!new_ptr->left->uvalue) {
+						applog(LOG_ERR, "Syntax Error: Line: %d - Function '%s' not found", new_ptr->left->line_num, new_ptr->left->svalue);
+						return false;
+					}
+
+					// Validate That "main" & "verify" Functions Are Not Called
+					if ((new_ptr->left->uvalue == idx_main) || (new_ptr->left->uvalue == idx_verify)) {
+						applog(LOG_ERR, "Syntax Error: Line: %d - Illegal function call", new_ptr->left->line_num);
+						return false;
+					}
+
+					// Validate That Functions Is Not Recursively Called
+					for (i = 0; i < function_idx; i++) {
+						if (new_ptr->left->uvalue == function_list[i]->uvalue) {
+							applog(LOG_ERR, "Syntax Error: Line: %d - Illegal recursive function call", new_ptr->left->line_num);
+							return false;
+						}
+					}
+
+					// Update How Nested The Functional Call Is
+					// Needed To Determine Order Of Processing Functions During WCET Calc
+					if (function_idx > stack_exp[new_ptr->left->uvalue]->uvalue)
+						stack_exp[new_ptr->left->uvalue]->uvalue = function_idx;
+
+					function_list[function_idx++] = new_ptr->left;
+					new_ptr = stack_exp[new_ptr->left->uvalue]->right;
+
+
+				}
+				depth++;
+			}
+
+			// Switch To Right Node
+			if (new_ptr->right) {
+				new_ptr = new_ptr->right;
+//				if (++depth > *ast_depth) *ast_depth = depth;
+			}
+			else {
+				// Navigate Back Up The Tree
+				if (old_ptr != root) {
+					new_ptr = old_ptr->parent;
+					depth--;
+				}
+				downward = false;
+			}
+		}
+
+		// Navigate Back Up The Tree
+		else {
+			// Quit When We Reach The Root Of Main Function
+			if (new_ptr == root)
+				break;
+
+			// Top Of Called Functions - Return To Calling Function
+			if (!new_ptr->parent) {
+				printf("Return from '%s()'\n", function_list[function_idx-1]->svalue);
+				function_list[function_idx--] = 0;
+				new_ptr = function_list[function_idx];
+			}
+			else {
+				// Check If We Need To Navigate Back Down A Right Branch
+				if ((new_ptr == new_ptr->parent->left) && (new_ptr->parent->right)) {
+					new_ptr = new_ptr->parent->right;
+					downward = true;
+				}
+				else {
+					new_ptr = old_ptr->parent;
+					depth--;
+				}
+			}
+		}
+	}
+
+	return true;
+}
+
+
+static bool validate_functions() {
+	size_t i;
+	uint32_t idx_main = 0, idx_verify = 0, idx_current = 0, level = 0;
+
+	for (i = 0; i <= stack_exp_idx; i++) {
+		if (stack_exp[i]->type == NODE_FUNCTION) {
+
+			// Validate That Only One Instance Of "Main" Function Exists
+			if (!strcmp(stack_exp[i]->svalue, ("main"))) {
+				if (idx_main > 0) {
+					applog(LOG_ERR, "Syntax Error: Line: %d - \"main\" function already declared", stack_exp[i]->line_num);
+					return false;
+				}
+				idx_main = i;
+			}
+
+			// Validate That Only One Instance Of "Verify" Function Exists
+			else if (!strcmp(stack_exp[i]->svalue, ("verify"))) {
+				if (idx_verify > 0) {
+					applog(LOG_ERR, "Syntax Error: Line: %d - \"verify\" function already declared", stack_exp[i]->line_num);
+					return false;
+				}
+				idx_verify = i;
+			}
+
+			// Validate Function Has Brackets
+			if (!stack_exp[i]->right) {
+				applog(LOG_ERR, "Syntax Error: Line: %d - Function missing {} brackets", stack_exp[i]->line_num);
+				return false;
+			}
+
+			// Validate Function Has At Least One Statement
+			if (!stack_exp[i]->right->left) {
+				applog(LOG_ERR, "Syntax Error: Line: %d - Functions must have at least one statement", stack_exp[i]->line_num);
+				return false;
+			}
+		}
+	}
+
+	// Validate That "Main" Function Exists
+	if (idx_main == 0) {
+		applog(LOG_ERR, "Syntax Error: \"main\" function not declared");
+		return false;
+	}
+
+	// Validate That "Verify" Function Exists
+	if (idx_verify == 0) {
+		applog(LOG_ERR, "Syntax Error: \"verify\" function not declared");
+		return false;
+	}
+
+	// Check For Recursive Calls To Functions
+	check_for_recursion(stack_exp[idx_main], idx_main, idx_verify, idx_main);
+
+}
+
 static bool validate_exp_list() {
 	int i;
 
@@ -937,10 +1122,10 @@ static bool validate_exp_list() {
 		return false;
 	}
 
-	if (stack_exp[stack_exp_idx]->type != NODE_VERIFY) {
-		applog(LOG_ERR, "Syntax Error - Missing Verify Statement");
-		return false;
-	}
+	//if (stack_exp[stack_exp_idx]->type != NODE_VERIFY) {
+	//	applog(LOG_ERR, "Syntax Error - Missing Verify Statement");
+	//	return false;
+	//}
 
 	if ((stack_exp[0]->type != NODE_ARRAY_INT) && (stack_exp[0]->type != NODE_ARRAY_UINT) && (stack_exp[0]->type != NODE_ARRAY_FLOAT)) {
 		applog(LOG_ERR, "Syntax Error: Line: %d -'int', 'uint', or 'float' must be defined at beginning of program", stack_exp[0]->line_num);
@@ -1217,12 +1402,22 @@ extern bool parse_token_list(SOURCE_TOKEN_LIST *token_list) {
 			}
 			break;
 
-		case TOKEN_VERIFY:
-			// Validate That "Verify" Is Not Embeded In A Block
-			if (stack_op_idx >= 0) {
-				applog(LOG_ERR, "Syntax Error: Line: %d - Invalid Verify Statement\n", stack_exp[stack_exp_idx]->line_num);
-				return false;
-			}
+		//case TOKEN_VERIFY:
+		//	// Validate That "Verify" Is Not Embeded In A Block
+		//	if (stack_op_idx >= 0) {
+		//		applog(LOG_ERR, "Syntax Error: Line: %d - Invalid Verify Statement\n", stack_exp[stack_exp_idx]->line_num);
+		//		return false;
+		//	}
+
+		//	push_op(i);
+		//	break;
+
+		case TOKEN_RESULT:
+			// Validate That "Result" Is Not Embeded In A Block
+			//if (stack_op_idx >= 0) {
+			//	applog(LOG_ERR, "Syntax Error: Line: %d - Invalid Verify Statement\n", stack_exp[stack_exp_idx]->line_num);
+			//	return false;
+			//}
 
 			push_op(i);
 			break;
@@ -1232,6 +1427,10 @@ extern bool parse_token_list(SOURCE_TOKEN_LIST *token_list) {
 			break;
 		}
 	}
+
+	if (!validate_functions())
+		return false;
+
 
 	if (!validate_exp_list())
 		return false;

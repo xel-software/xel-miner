@@ -42,13 +42,14 @@ struct EXP_TOKEN_LIST epl_token[] = {
 	{ "array_float",				11,	TOKEN_ARRAY_FLOAT,	EXP_STATEMENT,	1,	0,	DT_NONE },
 	{ "array_double",				12,	TOKEN_ARRAY_DOUBLE,	EXP_STATEMENT,	1,	0,	DT_NONE },
 	{ "init_once",					9,	TOKEN_INIT_ONCE,	EXP_STATEMENT,	1,	2,	DT_NONE },
-	{ "verify",						6,	TOKEN_VERIFY,		EXP_STATEMENT,	1,	2,	DT_NONE },
+//	{ "verify",						6,	TOKEN_VERIFY,		EXP_STATEMENT,	1,	2,	DT_NONE },
 	{ "repeat",						6,	TOKEN_REPEAT,		EXP_STATEMENT,	3,	2,	DT_NONE },
 	{ "if",							2,	TOKEN_IF,			EXP_STATEMENT,	2,	2,	DT_NONE },
 	{ "else",						4,	TOKEN_ELSE,			EXP_STATEMENT,	2,	2,	DT_NONE },
 	{ "break",						5,	TOKEN_BREAK,		EXP_STATEMENT,	0,	2,	DT_NONE },
 	{ "continue",					8,	TOKEN_CONTINUE,		EXP_STATEMENT,	0,	2,	DT_NONE },
 	{ "function",					8,	TOKEN_FUNCTION,		EXP_STATEMENT,	2,	2,	DT_NONE },
+	{ "result",						6,	TOKEN_RESULT,		EXP_STATEMENT,	1,	2,	DT_NONE },
 
 	{ "i[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_INT },
 	{ "u[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_UINT },
@@ -355,8 +356,19 @@ extern bool get_token_list(char *str, SOURCE_TOKEN_LIST *token_list) {
 		c = str[idx];
 
 		// When An Unescaped Quote Is Found, Everthing In Between Is a Literal String
-		if ((idx > 0) && (str[idx] == '\"') && (str[idx - 1] != '\\'))
-			quote = !quote;
+//		if ((idx > 0) && (str[idx] == '\"') && (str[idx - 1] != '\\'))
+//			quote = !quote;
+////		else if ((token_list->token[token_list->num - 1].type == TOKEN_FUNCTION))
+////			idx = idx;
+////			quote = !quote;
+//		else if (!quote && (literal_idx > 0))
+
+		if (literal_idx > 0) {
+			if ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))
+				quote = true;
+			else
+				quote = false;
+		}
 		
 		if (!quote) {
 

@@ -22,7 +22,7 @@
 #define MAX_AST_DEPTH 1000
 
 static uint32_t calc_weight(ast* root, uint32_t *ast_depth) {
-	uint32_t depth, weight, total_weight = 0;
+	uint32_t depth = 0, weight = 0, total_weight = 0;
 	uint32_t block_weight[MAX_NESTED_REPEAT];
 	int block_level = -1;
 	bool downward = true;
@@ -96,11 +96,10 @@ static uint32_t calc_weight(ast* root, uint32_t *ast_depth) {
 			}
 		}
 
-// BROKEN
-		//if (block_level >= 0)
-		//	block_weight[block_level] += weight;
-		//else
-		//	total_weight += (total_weight < (0xFFFFFFFF - weight) ? weight : 0);
+		if (block_level >= 0)
+			block_weight[block_level] += weight;
+		else
+			total_weight += (total_weight < (0xFFFFFFFF - weight) ? weight : 0);
 
 		// Get Total weight For The "Repeat" Block
 		if ((block_level >= 0) && (new_ptr->type == NODE_REPEAT)) {
