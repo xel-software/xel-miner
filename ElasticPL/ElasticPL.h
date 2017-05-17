@@ -317,6 +317,9 @@ static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_64bit, bool 
 extern char* get_node_str(NODE_TYPE node_type);
 extern void dump_vm_ast(ast* root);
 static void print_node(ast* node);
+static bool validate_ast();
+static bool validate_functions(int idx);
+static bool validate_function_calls(uint32_t idx_main, uint32_t idx_verify);
 
 extern char* convert_ast_to_c();
 static char* convert(ast* exp);

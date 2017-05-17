@@ -226,7 +226,7 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 	// Validate That There Are Enough Expressions / Statements On The Stack
 	if (node_type == NODE_FUNCTION) {
 		if (stack_exp_idx < 0) {
-			applog(LOG_ERR, "Syntax Error: Line: %d - Invalid number of inputs ", token->line_num);
+				applog(LOG_ERR, "Syntax Error: Line: %d - Invalid number of inputs ", token->line_num);
 			return false;
 		}
 	}
@@ -241,7 +241,7 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 		return false;
 	}
 
-	// Validate The Inputs Are The Correct Type
+	// Validate The Inputs For Each Node Type Are The Correct Type
 	switch (node_type) {
 
 	// VM Memory Declarations
@@ -253,6 +253,7 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 	case NODE_ARRAY_DOUBLE:
 		if ((stack_exp[stack_exp_idx]->token_num > token_num) && !stack_exp[stack_exp_idx]->is_signed && !stack_exp[stack_exp_idx]->is_float) {
 
+			// Check That There Is Only One Instance Of Each Data Type Array
 			switch (node_type) {
 			case NODE_ARRAY_INT:
 				if (max_vm_ints != 0) {
@@ -298,6 +299,7 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 				break;
 			}
 
+			// Check If Total Allocated VM Memory Is Less Than Max Allowed
 			if ((((max_vm_ints + max_vm_uints + max_vm_floats) * 4) + ((max_vm_longs + max_vm_ulongs + max_vm_doubles) * 8)) > MAX_VM_MEMORY_SIZE) {
 				applog(LOG_ERR, "Syntax Error - Requested VM Memory (%d bytes) exceeds allowable (%d bytes)", (((max_vm_ints + max_vm_uints + max_vm_floats) * 4) + ((max_vm_longs + max_vm_ulongs + max_vm_doubles) * 8)), MAX_VM_MEMORY_SIZE);
 				return false;
@@ -306,72 +308,13 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 		}
 		break;
 
-	// Expressions w/ 1 Literal & 1 Block
-	case NODE_FUNCTION:
-		if ((stack_exp[stack_exp_idx - 1]->type == NODE_CONSTANT) && (stack_exp[stack_exp_idx]->type == NODE_BLOCK))
+	// CONSTANT Declaration (1 Number)
+	case NODE_CONSTANT:
+		if ((stack_exp[stack_exp_idx]->token_num < token_num) && (stack_exp[stack_exp_idx]->data_type != DT_NONE))
 			return true;
 		break;
 
-	case NODE_CALL_FUNCTION:
-		if ((stack_exp[stack_exp_idx]->type == NODE_CONSTANT) && stack_exp[stack_exp_idx]->svalue)
-			return true;
-		break;
-
-	// Expressions w/ 1 Int / Float & 1 If/Else/Repeat/Break/Continue Statement
-	case NODE_IF:
-//		if (((stack_exp[stack_exp_idx - 1]->data_type == DT_INT) || (stack_exp[stack_exp_idx - 1]->data_type == DT_FLOAT)) &&
-		if ((stack_exp[stack_exp_idx - 1]->data_type != DT_NONE) &&
-			((stack_exp[stack_exp_idx]->end_stmnt == true) || (stack_exp[stack_exp_idx]->type == NODE_IF) || (stack_exp[stack_exp_idx]->type == NODE_ELSE) || (stack_exp[stack_exp_idx]->type == NODE_REPEAT) || (stack_exp[stack_exp_idx]->type == NODE_BREAK) || (stack_exp[stack_exp_idx]->type == NODE_CONTINUE)))
-			return true;
-		break;
-
-	// Expressions w/ 1 Int, 1 Constant Int & 1 Block
-	case NODE_REPEAT:
-		if ((stack_exp_idx > 1) &&
-			(stack_exp[stack_exp_idx - 2]->data_type == DT_INT) &&
-			(stack_exp[stack_exp_idx - 1]->type == NODE_CONSTANT) &&
-			(stack_exp[stack_exp_idx - 1]->value > 0) &&
-			(!stack_exp[stack_exp_idx - 1]->is_float) &&
-			(stack_exp[stack_exp_idx]->type == NODE_BLOCK))
-			return true;
-		break;
-
-	case NODE_ELSE:
-		if ((stack_exp[stack_exp_idx - 1]->end_stmnt == true) && (stack_exp[stack_exp_idx]->end_stmnt == true))
-			return true;
-		break;
-
-	// Expressions w/ 1 Int/Uint (Right Operand)
-	case NODE_ABS:
-	case NODE_VERIFY:
-		if ((stack_exp[stack_exp_idx]->token_num > token_num) && (stack_exp[stack_exp_idx]->data_type != DT_NONE))
-			return true;
-		break;
-
-	// Expressions w/ 1 Int/Uint (Right Operand)
-	case NODE_RESULT:
-//		TOKEN_ASSIGN
-		if ((stack_exp[stack_exp_idx]->token_num > token_num) && (stack_exp[stack_exp_idx]->data_type != DT_NONE))
-			return true;
-		break;
-
-	// Expressions w/ 1 Variable (Left Operand)
-	case NODE_INCREMENT_R:
-	case NODE_DECREMENT_R:
-		if ((stack_exp[stack_exp_idx]->token_num > token_num) &&
-			((stack_exp[stack_exp_idx]->type == NODE_VAR_CONST) || (stack_exp[stack_exp_idx]->type == NODE_VAR_EXP)))
-			return true;
-		break;
-
-	// Expressions w/ 1 Variable (Right Operand)
-	case NODE_INCREMENT_L:
-	case NODE_DECREMENT_L:
-		if ((stack_exp[stack_exp_idx]->token_num < token_num) &&
-			((stack_exp[stack_exp_idx]->type == NODE_VAR_CONST) || (stack_exp[stack_exp_idx]->type == NODE_VAR_EXP)))
-				return true;
-		break;
-
-	// Expressions w/ 1 Unsigned Int/Long (Right Operand)
+	// Variable Declaration (1 Unsigned Int/Long)
 	case NODE_VAR_CONST:
 	case NODE_VAR_EXP:
 		if ((stack_exp[stack_exp_idx]->token_num < token_num) &&
@@ -419,27 +362,87 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 		}
 		break;
 
-	// Expressions w/ Any 1 Number (Right Operand)
-	case NODE_CONSTANT:
-		if ((stack_exp[stack_exp_idx]->token_num < token_num) && (stack_exp[stack_exp_idx]->data_type != DT_NONE))
+	// Function Declarations (1 Constant & 1 Block)
+	case NODE_FUNCTION:
+		if ((stack_exp[stack_exp_idx - 1]->type == NODE_CONSTANT) && (stack_exp[stack_exp_idx]->type == NODE_BLOCK))
 			return true;
 		break;
 
-	// Expressions w/ 1 Int or Float (Left Operand)
-	case NODE_COMPL:
+	// Function Call Declarations (1 Constant)
+	case NODE_CALL_FUNCTION:
+		if ((stack_exp[stack_exp_idx]->type == NODE_CONSTANT) && stack_exp[stack_exp_idx]->svalue)
+			return true;
+		break;
+
+	// IF Statement (1 Number & 1 Statement)
+	case NODE_IF:
+		if ((stack_exp[stack_exp_idx - 1]->data_type != DT_NONE) &&
+			((stack_exp[stack_exp_idx]->end_stmnt == true) || (stack_exp[stack_exp_idx]->type == NODE_IF) || (stack_exp[stack_exp_idx]->type == NODE_ELSE) || (stack_exp[stack_exp_idx]->type == NODE_REPEAT) || (stack_exp[stack_exp_idx]->type == NODE_BREAK) || (stack_exp[stack_exp_idx]->type == NODE_CONTINUE)))
+			return true;
+		break;
+
+	// ELSE Statement (2 Statements)
+	case NODE_ELSE:
+		if ((stack_exp[stack_exp_idx - 1]->end_stmnt == true) && (stack_exp[stack_exp_idx]->end_stmnt == true))
+			return true;
+		break;
+
+	// REPEAT Statement (1 Usigned Int/Long & 1 Constant Unsigned Int/Long & 1 Block)
+	case NODE_REPEAT:
+		if ((stack_exp_idx > 1) &&
+			(stack_exp[stack_exp_idx - 2]->data_type == DT_NONE) &&
+			(!stack_exp[stack_exp_idx - 2]->is_signed) &&
+			(stack_exp[stack_exp_idx - 1]->type == NODE_CONSTANT) &&
+			(!stack_exp[stack_exp_idx - 1]->is_signed) &&
+			(stack_exp[stack_exp_idx]->type == NODE_BLOCK))
+			return true;
+		break;
+
+	// Expressions w/ 1 Number (Right Operand)
+	case NODE_RESULT:
 	case NODE_NOT:
-	case NODE_NEG:
-		if ((stack_exp[stack_exp_idx]->token_num > token_num) &&
-			(stack_exp[stack_exp_idx]->data_type == DT_INT) || (stack_exp[stack_exp_idx]->data_type == DT_UINT) || (stack_exp[stack_exp_idx]->data_type == DT_FLOAT))
+		if ((stack_exp[stack_exp_idx]->token_num > token_num) && (stack_exp[stack_exp_idx]->data_type != DT_NONE))
 			return true;
 		break;
 
-	// Expressions w/ 1 Variable (Left Operand) & 1 Int or Float (Right Operand)
+	// Expressions w/ 1 Int/Uint/Long/ULong (Right Operand)
+	case NODE_COMPL:
+	case NODE_ABS:
+		if ((stack_exp[stack_exp_idx]->token_num > token_num) &&
+			(stack_exp[stack_exp_idx]->data_type != DT_NONE) &&
+			(!stack_exp[stack_exp_idx]->is_float))
+			return true;
+		break;
+
+	// Expressions w/ 1 Variable (Left Operand)
+	case NODE_INCREMENT_R:
+	case NODE_DECREMENT_R:
+		if ((stack_exp[stack_exp_idx]->token_num > token_num) &&
+			((stack_exp[stack_exp_idx]->type == NODE_VAR_CONST) || (stack_exp[stack_exp_idx]->type == NODE_VAR_EXP)))
+			return true;
+		break;
+
+	// Expressions w/ 1 Variable (Right Operand)
+	case NODE_INCREMENT_L:
+	case NODE_DECREMENT_L:
+		if ((stack_exp[stack_exp_idx]->token_num < token_num) &&
+			((stack_exp[stack_exp_idx]->type == NODE_VAR_CONST) || (stack_exp[stack_exp_idx]->type == NODE_VAR_EXP)))
+				return true;
+		break;
+
+	// Expressions w/ 1 Variable (Left Operand) & 1 Number (Right Operand)
 	case NODE_ASSIGN:
 	case NODE_ADD_ASSIGN:
 	case NODE_SUB_ASSIGN:
 	case NODE_MUL_ASSIGN:
 	case NODE_DIV_ASSIGN:
+		if (((stack_exp[stack_exp_idx - 1]->token_num < token_num) && (stack_exp[stack_exp_idx]->token_num > token_num)) &&
+			((stack_exp[stack_exp_idx - 1]->type == NODE_VAR_CONST) || (stack_exp[stack_exp_idx - 1]->type == NODE_VAR_EXP)) &&
+			(stack_exp[stack_exp_idx]->data_type != DT_NONE))
+			return true;
+		break;
+
+	// Expressions w/ 1 Int/Uint/Long/Ulong Variable (Left Operand) & 1 Int/Uint/Long/Ulong (Right Operand)
 	case NODE_MOD_ASSIGN:
 	case NODE_LSHFT_ASSIGN:
 	case NODE_RSHFT_ASSIGN:
@@ -448,40 +451,51 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 	case NODE_OR_ASSIGN:
 		if (((stack_exp[stack_exp_idx - 1]->token_num < token_num) && (stack_exp[stack_exp_idx]->token_num > token_num)) &&
 			((stack_exp[stack_exp_idx - 1]->type == NODE_VAR_CONST) || (stack_exp[stack_exp_idx - 1]->type == NODE_VAR_EXP)) &&
-			(stack_exp[stack_exp_idx]->data_type != DT_NONE))
+			(!stack_exp[stack_exp_idx - 1]->is_float) &&
+			(stack_exp[stack_exp_idx]->data_type != DT_NONE) &&
+			(!stack_exp[stack_exp_idx]->is_float))
 			return true;
 		break;
 
-	// Expressions w/ 2 Ints or Floats
+	// Expressions w/ 2 Numbers
 	case NODE_MUL:
 	case NODE_DIV:
 	case NODE_MOD:
 	case NODE_ADD:
 	case NODE_SUB:
-	case NODE_LROT:
-	case NODE_LSHIFT:
-	case NODE_RROT:
-	case NODE_RSHIFT:
 	case NODE_LE:
 	case NODE_GE:
 	case NODE_LT:
 	case NODE_GT:
 	case NODE_EQ:
 	case NODE_NE:
-	case NODE_BITWISE_AND:
-	case NODE_BITWISE_XOR:
-	case NODE_BITWISE_OR:
 	case NODE_AND:
 	case NODE_OR:
 	case NODE_CONDITIONAL:
 	case NODE_COND_ELSE:
 		if (((stack_exp[stack_exp_idx - 1]->token_num < token_num) && (stack_exp[stack_exp_idx]->token_num > token_num)) &&
-			((stack_exp[stack_exp_idx - 1]->data_type == DT_INT) || (stack_exp[stack_exp_idx - 1]->data_type == DT_UINT) || (stack_exp[stack_exp_idx - 1]->data_type == DT_FLOAT)) &&
-			(stack_exp[stack_exp_idx]->data_type == DT_INT) || (stack_exp[stack_exp_idx]->data_type == DT_UINT) || (stack_exp[stack_exp_idx]->data_type == DT_FLOAT))
+			((stack_exp[stack_exp_idx - 1]->data_type != DT_NONE)) &&
+			(stack_exp[stack_exp_idx]->data_type != DT_NONE))
 			return true;
 		break;
 
-	// Functions w/ 1 Int or Float
+	// Expressions w/ 2 Ints/Uints/Longs/Ulongs
+	case NODE_LROT:
+	case NODE_LSHIFT:
+	case NODE_RROT:
+	case NODE_RSHIFT:
+	case NODE_BITWISE_AND:
+	case NODE_BITWISE_XOR:
+	case NODE_BITWISE_OR:
+		if (((stack_exp[stack_exp_idx - 1]->token_num < token_num) && (stack_exp[stack_exp_idx]->token_num > token_num)) &&
+			(stack_exp[stack_exp_idx - 1]->data_type != DT_NONE) &&
+			(!stack_exp[stack_exp_idx - 1]->is_float) &&
+			(stack_exp[stack_exp_idx]->data_type != DT_NONE) &&
+			(!stack_exp[stack_exp_idx]->is_float))
+			return true;
+		break;
+
+	// Built-in Functions w/ 1 Number
 	case NODE_SIN:
 	case NODE_COS:
 	case NODE_TAN:
@@ -499,18 +513,18 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 	case NODE_FLOOR:
 	case NODE_FABS:
 		if ((stack_exp[stack_exp_idx]->token_num > token_num) &&
-			(stack_exp[stack_exp_idx]->data_type == DT_INT) || (stack_exp[stack_exp_idx]->data_type == DT_UINT) || (stack_exp[stack_exp_idx]->data_type == DT_FLOAT))
+			(stack_exp[stack_exp_idx]->data_type != DT_NONE))
 			return true;
 		break;
 
-	// Functions w/ 2 Ints or Floats
+	// Built-in Functions w/ 2 Numbers
 	case NODE_ATAN2:
 	case NODE_POW:
 	case NODE_FMOD:
 	case NODE_GCD:
 		if (((stack_exp[stack_exp_idx - 1]->token_num > token_num) && (stack_exp[stack_exp_idx]->token_num > token_num)) &&
-			((stack_exp[stack_exp_idx - 1]->data_type == DT_INT) || (stack_exp[stack_exp_idx - 1]->data_type == DT_UINT) || (stack_exp[stack_exp_idx - 1]->data_type == DT_FLOAT)) &&
-			(stack_exp[stack_exp_idx]->data_type == DT_INT) || (stack_exp[stack_exp_idx]->data_type == DT_UINT) || (stack_exp[stack_exp_idx]->data_type == DT_FLOAT))
+			((stack_exp[stack_exp_idx - 1]->data_type != DT_NONE)) &&
+			(stack_exp[stack_exp_idx]->data_type != DT_NONE))
 			return true;
 		break;
 
@@ -938,219 +952,6 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 	return true;
 }
 
-
-static bool validate_function_calls(uint32_t idx_main, uint32_t idx_verify) {
-	size_t i, call_idx;
-	bool downward = true;
-	ast *root = NULL;
-	ast *new_ptr = NULL;
-	ast *old_ptr = NULL;
-	ast *call_stack[CALL_STACK_SIZE];
-
-	// Set Root To Main Function
-	root = stack_exp[idx_main];
-
-	call_idx = 0;
-	call_stack[call_idx++] = root;
-
-	new_ptr = root;
-
-	while (new_ptr) {
-		old_ptr = new_ptr;
-
-		// Navigate Down The Tree
-		if (downward) {
-
-			// Navigate To Lowest Left Parent Node
-			while (new_ptr->left) {
-				if (!new_ptr->left->left)
-					break;
-				new_ptr = new_ptr->left;
-			}
-
-			// Switch To Root Of Called Function
-			if ((new_ptr->type == NODE_CALL_FUNCTION) || (new_ptr->left && (new_ptr->left->type == NODE_CALL_FUNCTION))) {
-				if (new_ptr->left)
-					new_ptr = new_ptr->left;
-
-				printf("Call '%s()'\n", new_ptr->svalue);
-
-				// Get AST Index For The Function
-				if (!new_ptr->uvalue) {
-
-					for (i = 0; i <= stack_exp_idx; i++) {
-						if ((stack_exp[i]->type == NODE_FUNCTION) && !strcmp(stack_exp[i]->svalue, new_ptr->svalue))
-							new_ptr->uvalue = i;
-					}
-				}
-
-				// Validate Function Exists
-				if (!new_ptr->uvalue) {
-					applog(LOG_ERR, "Syntax Error: Line: %d - Function '%s' not found", new_ptr->line_num, new_ptr->svalue);
-					return false;
-				}
-
-				// Validate That "main" & "verify" Functions Are Not Called
-				if ((new_ptr->uvalue == idx_main) || (new_ptr->uvalue == idx_verify)) {
-					applog(LOG_ERR, "Syntax Error: Line: %d - Illegal function call", new_ptr->line_num);
-					return false;
-				}
-
-				// Validate That Functions Is Not Recursively Called
-				for (i = 0; i < call_idx; i++) {
-					if (new_ptr->uvalue == call_stack[i]->uvalue) {
-						applog(LOG_ERR, "Syntax Error: Line: %d - Illegal recursive function call", new_ptr->line_num);
-						return false;
-					}
-				}
-
-				// Store The Lowest Level In Call Stack For The Function
-				// Needed To Determine Order Of Processing Functions During WCET Calc
-				if (call_idx > stack_exp[new_ptr->uvalue]->uvalue)
-					stack_exp[new_ptr->uvalue]->uvalue = call_idx;
-
-				call_stack[call_idx++] = new_ptr;
-				new_ptr = stack_exp[new_ptr->uvalue];
-
-				if (call_idx >= CALL_STACK_SIZE) {
-						applog(LOG_ERR, "Syntax Error: Line: %d - Functions can only be nested up to %d levels", new_ptr->line_num, CALL_STACK_SIZE);
-					return false;
-				}
-
-			}
-
-			if (new_ptr->right) {
-				// Switch To Right Node
-				new_ptr = new_ptr->right;
-			}
-			else {
-				// Navigate Back Up The Tree
-				if (old_ptr != root)
-					new_ptr = old_ptr->parent;
-				downward = false;
-			}
-		}
-
-		// Navigate Back Up The Tree
-		else {
-			// Quit When We Reach The Root Of Main Function
-			if (new_ptr == root)
-				break;
-
-			// Return To Calling Function When We Reach The Root Of Called Function
-			if (new_ptr->parent->type == NODE_FUNCTION) {
-				call_stack[call_idx--] = 0;
-				new_ptr = call_stack[call_idx];
-				printf("Return From '%s()'\n", call_stack[call_idx]->svalue);
-			}
-			else {
-				// Check If We Need To Navigate Back Down A Right Branch
-				if ((new_ptr == new_ptr->parent->left) && (new_ptr->parent->right)) {
-					new_ptr = new_ptr->parent->right;
-					downward = true;
-				}
-				else {
-					new_ptr = old_ptr->parent;
-				}
-			}
-		}
-	}
-	return true;
-}
-
-
-static bool validate_functions(int idx) {
-	size_t i;
-	uint32_t idx_main = 0, idx_verify = 0;
-
-	for (i = idx; i <= stack_exp_idx; i++) {
-
-		if (stack_exp[i]->type != NODE_FUNCTION) {
-			applog(LOG_ERR, "Syntax Error: Line: %d - Statements must be contained in functions", stack_exp[i]->line_num);
-			return false;
-		}
-
-		// Validate That Only One Instance Of "Main" Function Exists
-		if (!strcmp(stack_exp[i]->svalue, ("main"))) {
-			if (idx_main > 0) {
-				applog(LOG_ERR, "Syntax Error: Line: %d - \"main\" function already declared", stack_exp[i]->line_num);
-				return false;
-			}
-			idx_main = i;
-		}
-
-		// Validate That Only One Instance Of "Verify" Function Exists
-		else if (!strcmp(stack_exp[i]->svalue, ("verify"))) {
-			if (idx_verify > 0) {
-				applog(LOG_ERR, "Syntax Error: Line: %d - \"verify\" function already declared", stack_exp[i]->line_num);
-				return false;
-			}
-			idx_verify = i;
-		}
-
-		// Validate Function Has Brackets
-		if (!stack_exp[i]->right) {
-			applog(LOG_ERR, "Syntax Error: Line: %d - Function missing {} brackets", stack_exp[i]->line_num);
-			return false;
-		}
-
-		// Validate Function Has At Least One Statement
-		if (!stack_exp[i]->right->left) {
-			applog(LOG_ERR, "Syntax Error: Line: %d - Functions must have at least one statement", stack_exp[i]->line_num);
-			return false;
-		}
-	}
-
-	// Validate That "Main" Function Exists
-	if (idx_main == 0) {
-		applog(LOG_ERR, "Syntax Error: \"main\" function not declared");
-		return false;
-	}
-
-	// Validate That "Verify" Function Exists
-	if (idx_verify == 0) {
-		applog(LOG_ERR, "Syntax Error: \"verify\" function not declared");
-		return false;
-	}
-
-	// Check For Recursive Calls To Functions
-	if (!validate_function_calls(idx_main, idx_verify))
-		return false;
-
-	return true;
-}
-
-static bool validate_ast() {
-	int i, func_idx = 0;
-
-	if ((stack_exp_idx < 0) || (stack_op_idx >= 0)) {
-		applog(LOG_ERR, "Fatal Error: Unable to parse source into ElasticPL");
-		return false;
-	}
-
-	for (i = 0; i < stack_exp_idx; i++) {
-		if ((stack_exp[i]->type != NODE_ARRAY_INT) && (stack_exp[i]->type != NODE_ARRAY_UINT) && (stack_exp[i]->type != NODE_ARRAY_LONG) && (stack_exp[i]->type != NODE_ARRAY_ULONG) && (stack_exp[i]->type != NODE_ARRAY_FLOAT) && (stack_exp[i]->type != NODE_ARRAY_DOUBLE)) {
-			break;
-		}
-		func_idx++;
-	}
-
-	if (func_idx == 0) {
-		applog(LOG_ERR, "Syntax Error: Line: %d - At least one variable array must be declared", stack_exp[0]->line_num);
-		return false;
-	}
-
-		//if (!stack_exp[i]->end_stmnt) {
-		//	applog(LOG_ERR, "Syntax Error: Line: %d - Invalid Statement", stack_exp[i]->line_num);
-		//	return false;
-		//}
-
-	if (!validate_functions(func_idx))
-		return false;
-
-	return true;
-}
-
 extern bool parse_token_list(SOURCE_TOKEN_LIST *token_list) {
 
 	int i, j, token_id;
@@ -1229,25 +1030,6 @@ extern bool parse_token_list(SOURCE_TOKEN_LIST *token_list) {
 
 			if (!create_exp(&token_list->token[i], i)) return false;
 //			stack_exp[stack_exp_idx]->data_type = token_list->token[i].data_type;
-			// Map Data Type
-			//if (stack_exp[stack_exp_idx]->is_float) {
-			//	if (stack_exp[stack_exp_idx]->is_64bit)
-			//		stack_exp[stack_exp_idx]->data_type = DT_FLOAT;
-			//	else
-			//		stack_exp[stack_exp_idx]->data_type = DT_DOUBLE;
-			//}
-			//else {
-			//	if (stack_exp[stack_exp_idx]->is_64bit)
-			//		if (stack_exp[stack_exp_idx]->is_signed)
-			//			stack_exp[stack_exp_idx]->data_type = DT_INT;
-			//		else
-			//			stack_exp[stack_exp_idx]->data_type = DT_UINT;
-			//	else
-			//		if (stack_exp[stack_exp_idx]->is_signed)
-			//			stack_exp[stack_exp_idx]->data_type = DT_LONG;
-			//		else
-			//			stack_exp[stack_exp_idx]->data_type = DT_ULONG;
-			//}
 			break;
 
 		case TOKEN_END_STATEMENT:
@@ -1412,3 +1194,215 @@ extern bool parse_token_list(SOURCE_TOKEN_LIST *token_list) {
 
 	return true;
 }
+
+static bool validate_ast() {
+	int i, func_idx = 0;
+
+	if ((stack_exp_idx < 0) || (stack_op_idx >= 0)) {
+		applog(LOG_ERR, "Fatal Error: Unable to parse source into ElasticPL");
+		return false;
+	}
+
+	for (i = 0; i < stack_exp_idx; i++) {
+		if ((stack_exp[i]->type != NODE_ARRAY_INT) && (stack_exp[i]->type != NODE_ARRAY_UINT) && (stack_exp[i]->type != NODE_ARRAY_LONG) && (stack_exp[i]->type != NODE_ARRAY_ULONG) && (stack_exp[i]->type != NODE_ARRAY_FLOAT) && (stack_exp[i]->type != NODE_ARRAY_DOUBLE)) {
+			break;
+		}
+		func_idx++;
+	}
+
+	if (func_idx == 0) {
+		applog(LOG_ERR, "Syntax Error: Line: %d - At least one variable array must be declared", stack_exp[0]->line_num);
+		return false;
+	}
+
+	//if (!stack_exp[i]->end_stmnt) {
+	//	applog(LOG_ERR, "Syntax Error: Line: %d - Invalid Statement", stack_exp[i]->line_num);
+	//	return false;
+	//}
+
+	if (!validate_functions(func_idx))
+		return false;
+
+	return true;
+}
+
+static bool validate_functions(int idx) {
+	size_t i;
+	uint32_t idx_main = 0, idx_verify = 0;
+
+	for (i = idx; i <= stack_exp_idx; i++) {
+
+		if (stack_exp[i]->type != NODE_FUNCTION) {
+			applog(LOG_ERR, "Syntax Error: Line: %d - Statements must be contained in functions", stack_exp[i]->line_num);
+			return false;
+		}
+
+		// Validate That Only One Instance Of "Main" Function Exists
+		if (!strcmp(stack_exp[i]->svalue, ("main"))) {
+			if (idx_main > 0) {
+				applog(LOG_ERR, "Syntax Error: Line: %d - \"main\" function already declared", stack_exp[i]->line_num);
+				return false;
+			}
+			idx_main = i;
+		}
+
+		// Validate That Only One Instance Of "Verify" Function Exists
+		else if (!strcmp(stack_exp[i]->svalue, ("verify"))) {
+			if (idx_verify > 0) {
+				applog(LOG_ERR, "Syntax Error: Line: %d - \"verify\" function already declared", stack_exp[i]->line_num);
+				return false;
+			}
+			idx_verify = i;
+		}
+
+		// Validate Function Has Brackets
+		if (!stack_exp[i]->right) {
+			applog(LOG_ERR, "Syntax Error: Line: %d - Function missing {} brackets", stack_exp[i]->line_num);
+			return false;
+		}
+
+		// Validate Function Has At Least One Statement
+		if (!stack_exp[i]->right->left) {
+			applog(LOG_ERR, "Syntax Error: Line: %d - Functions must have at least one statement", stack_exp[i]->line_num);
+			return false;
+		}
+	}
+
+	// Validate That "Main" Function Exists
+	if (idx_main == 0) {
+		applog(LOG_ERR, "Syntax Error: \"main\" function not declared");
+		return false;
+	}
+
+	// Validate That "Verify" Function Exists
+	if (idx_verify == 0) {
+		applog(LOG_ERR, "Syntax Error: \"verify\" function not declared");
+		return false;
+	}
+
+	// Check For Recursive Calls To Functions
+	if (!validate_function_calls(idx_main, idx_verify))
+		return false;
+
+	return true;
+}
+
+static bool validate_function_calls(uint32_t idx_main, uint32_t idx_verify) {
+	size_t i, call_idx;
+	bool downward = true;
+	ast *root = NULL;
+	ast *new_ptr = NULL;
+	ast *old_ptr = NULL;
+	ast *call_stack[CALL_STACK_SIZE];
+
+	// Set Root To Main Function
+	root = stack_exp[idx_main];
+
+	call_idx = 0;
+	call_stack[call_idx++] = root;
+
+	new_ptr = root;
+
+	while (new_ptr) {
+		old_ptr = new_ptr;
+
+		// Navigate Down The Tree
+		if (downward) {
+
+			// Navigate To Lowest Left Parent Node
+			while (new_ptr->left) {
+				if (!new_ptr->left->left)
+					break;
+				new_ptr = new_ptr->left;
+			}
+
+			// Switch To Root Of Called Function
+			if ((new_ptr->type == NODE_CALL_FUNCTION) || (new_ptr->left && (new_ptr->left->type == NODE_CALL_FUNCTION))) {
+				if (new_ptr->left)
+					new_ptr = new_ptr->left;
+
+				printf("Call '%s()'\n", new_ptr->svalue);
+
+				// Get AST Index For The Function
+				if (!new_ptr->uvalue) {
+
+					for (i = 0; i <= stack_exp_idx; i++) {
+						if ((stack_exp[i]->type == NODE_FUNCTION) && !strcmp(stack_exp[i]->svalue, new_ptr->svalue))
+							new_ptr->uvalue = i;
+					}
+				}
+
+				// Validate Function Exists
+				if (!new_ptr->uvalue) {
+					applog(LOG_ERR, "Syntax Error: Line: %d - Function '%s' not found", new_ptr->line_num, new_ptr->svalue);
+					return false;
+				}
+
+				// Validate That "main" & "verify" Functions Are Not Called
+				if ((new_ptr->uvalue == idx_main) || (new_ptr->uvalue == idx_verify)) {
+					applog(LOG_ERR, "Syntax Error: Line: %d - Illegal function call", new_ptr->line_num);
+					return false;
+				}
+
+				// Validate That Functions Is Not Recursively Called
+				for (i = 0; i < call_idx; i++) {
+					if (new_ptr->uvalue == call_stack[i]->uvalue) {
+						applog(LOG_ERR, "Syntax Error: Line: %d - Illegal recursive function call", new_ptr->line_num);
+						return false;
+					}
+				}
+
+				// Store The Lowest Level In Call Stack For The Function
+				// Needed To Determine Order Of Processing Functions During WCET Calc
+				if (call_idx > stack_exp[new_ptr->uvalue]->uvalue)
+					stack_exp[new_ptr->uvalue]->uvalue = call_idx;
+
+				call_stack[call_idx++] = new_ptr;
+				new_ptr = stack_exp[new_ptr->uvalue];
+
+				if (call_idx >= CALL_STACK_SIZE) {
+					applog(LOG_ERR, "Syntax Error: Line: %d - Functions can only be nested up to %d levels", new_ptr->line_num, CALL_STACK_SIZE);
+					return false;
+				}
+
+			}
+
+			if (new_ptr->right) {
+				// Switch To Right Node
+				new_ptr = new_ptr->right;
+			}
+			else {
+				// Navigate Back Up The Tree
+				new_ptr = old_ptr->parent;
+				downward = false;
+			}
+		}
+
+		// Navigate Back Up The Tree
+		else {
+
+			// Quit When We Reach The Root Of Main Function
+			if (new_ptr == root)
+				break;
+
+			// Return To Calling Function When We Reach The Root Of Called Function
+			if (new_ptr->parent->type == NODE_FUNCTION) {
+				call_stack[call_idx--] = 0;
+				new_ptr = call_stack[call_idx];
+				printf("Return From '%s()'\n", call_stack[call_idx]->svalue);
+			}
+			else {
+				// Check If We Need To Navigate Back Down A Right Branch
+				if ((new_ptr == new_ptr->parent->left) && (new_ptr->parent->right)) {
+					new_ptr = new_ptr->parent->right;
+					downward = true;
+				}
+				else {
+					new_ptr = old_ptr->parent;
+				}
+			}
+		}
+	}
+	return true;
+}
+
