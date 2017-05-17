@@ -174,10 +174,10 @@ extern bool create_epl_vm(char *source) {
 	memcpy(vm_ast, stack_exp, vm_ast_cnt * sizeof(ast*));
 
 	if (opt_debug_epl) {
-		fprintf(stdout, "--------------------------------\n");
+		fprintf(stdout, "*********************************************************\n");
 		for (i = 0; i<vm_ast_cnt; i++) {
 			dump_vm_ast(vm_ast[i]);
-			fprintf(stdout, "--------------------------------\n");
+			fprintf(stdout, "*********************************************************\n");
 		}
 	}
 
@@ -222,6 +222,11 @@ extern void dump_vm_ast(ast* root) {
 		return;
 	new_ptr = root;
 
+	if (root->type == NODE_FUNCTION) {
+		printf("FUNCTION '%s'\n", root->svalue);
+		printf("---------------------------------------------------------\n");
+	}
+
 	while (new_ptr) {
 		old_ptr = new_ptr;
 
@@ -258,7 +263,12 @@ extern void dump_vm_ast(ast* root) {
 				break;
 
 			// Print Parent Node
-			print_node(new_ptr);
+			if (new_ptr->type != NODE_BLOCK) {
+				print_node(new_ptr);
+
+				if ((new_ptr->parent->type == NODE_BLOCK) && (new_ptr->parent->right))
+					printf("\t-------------------------------------------------\n");
+			}
 
 			// Check If We Need To Navigate Back Down A Right Branch
 			if ((new_ptr == new_ptr->parent->left) && (new_ptr->parent->right)) {
@@ -272,7 +282,8 @@ extern void dump_vm_ast(ast* root) {
 	}
 
 	// Display Root Node
-	print_node(new_ptr);
+	if (root->type != NODE_FUNCTION)
+		print_node(new_ptr);
 }
 
 static void print_node(ast* node) {
@@ -282,67 +293,94 @@ static void print_node(ast* node) {
 	switch (node->type) {
 	case NODE_CONSTANT:
 		if (node->is_float) {
-			printf("Type: %d,\t%f\n", node->type, node->fvalue);
+			printf("\tType: %d,\t%f", node->type, node->fvalue);
 		}
 		else {
 			if (node->is_signed)
-				printf("Type: %d,\t%lld\n", node->type, node->ivalue);
+				printf("\tType: %d,\t%lld", node->type, node->ivalue);
 			else
-				printf("Type: %d,\t%llu\n", node->type, node->uvalue);
+				printf("\tType: %d,\t%llu", node->type, node->uvalue);
 		}
 		break;
 	case NODE_VAR_CONST:
 		if (node->is_float) {
 			if (node->is_64bit)
-				printf("Type: %d,\td[%llu]\n", node->type, node->uvalue);
+				printf("\tType: %d,\td[%llu]", node->type, node->uvalue);
 			else
-				printf("Type: %d,\tf[%llu]\n", node->type, node->uvalue);
+				printf("\tType: %d,\tf[%llu]", node->type, node->uvalue);
 		}
 		else {
 			if (node->is_64bit) {
 				if (node->is_signed)
-					printf("Type: %d,\tl[%llu]\n", node->type, node->uvalue);
+					printf("\tType: %d,\tl[%llu]", node->type, node->uvalue);
 				else
-					printf("Type: %d,\tul[%llu]\n", node->type, node->uvalue);
+					printf("\tType: %d,\tul[%llu]", node->type, node->uvalue);
 			}
 			else {
 				if (node->is_signed)
-					printf("Type: %d,\ti[%llu]\n", node->type, node->uvalue);
+					printf("\tType: %d,\ti[%llu]", node->type, node->uvalue);
 				else
-					printf("Type: %d,\tu[%llu]\n", node->type, node->uvalue);
+					printf("\tType: %d,\tu[%llu]", node->type, node->uvalue);
 			}
 		}
 		break;
 	case NODE_VAR_EXP:
 		if (node->is_float) {
 			if (node->is_64bit)
-				printf("Type: %d,\tf[x]\n", node->type);
+				printf("\tType: %d,\tf[x]", node->type);
 			else
-				printf("Type: %d,\td[x]\n", node->type);
+				printf("\tType: %d,\td[x]", node->type);
 		}
 		else {
 			if (node->is_64bit) {
 				if (node->is_signed)
-					printf("Type: %d,\ti[x]\n", node->type);
+					printf("\tType: %d,\ti[x]", node->type);
 				else
-					printf("Type: %d,\tu[x]\n", node->type);
+					printf("\tType: %d,\tu[x]", node->type);
 			}
 			else {
 				if (node->is_signed)
-					printf("Type: %d,\tl[x]\n", node->type);
+					printf("\tType: %d,\tl[x]", node->type);
 				else
-					printf("Type: %d,\tul[x]\n", node->type);
+					printf("\tType: %d,\tul[x]", node->type);
 			}
 		}
 		break;
 	case NODE_FUNCTION:
-		printf("Type: %d,\t%s %s\n", node->type, get_node_str(node->type), node->svalue);
+		printf("\tType: %d,\t%s %s", node->type, get_node_str(node->type), node->svalue);
 		break;
 	case NODE_CALL_FUNCTION:
-		printf("Type: %d,\t%s()\n", node->type, node->svalue);
+		printf("\tType: %d,\t%s()", node->type, node->svalue);
 		break;
 	default:
-		printf("Type: %d,\t%s\n", node->type, get_node_str(node->type));
+		printf("\tType: %d,\t%s", node->type, get_node_str(node->type));
+		break;
+	}
+
+	switch (node->data_type) {
+	case DT_INT:
+		printf("\t\t\t(int)\n");
+		break;
+	case DT_UINT:
+		printf("\t\t\t(uint)\n");
+		break;
+	case DT_LONG:
+		printf("\t\t\t(long)\n");
+		break;
+	case DT_ULONG:
+		printf("\t\t\t(ulong)\n");
+		break;
+	case DT_FLOAT:
+		printf("\t\t\t(float)\n");
+		break;
+	case DT_DOUBLE:
+		printf("\t\t\t(double)\n");
+		break;
+	case DT_STRING:
+		printf("\t\t\t(string)\n");
+		break;
+	default:
+		printf("\t\t\t(N/A)\n");
 		break;
 	}
 }

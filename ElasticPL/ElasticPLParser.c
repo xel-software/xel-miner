@@ -20,7 +20,9 @@ ast *d_stack_exp[10];	// DEBUG
 
 
 static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_64bit, bool is_signed, bool is_float, int64_t val_int64, uint64_t val_uint64, double val_double, unsigned char *svalue, int token_num, int line_num, DATA_TYPE data_type, ast* left, ast* right) {
+	DATA_TYPE dt_l, dt_r;
 	ast* e = calloc(1, sizeof(ast));
+
 	if (e) {
 		e->type = node_type;
 		e->exp = exp_type;
@@ -38,61 +40,48 @@ static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_64bit, bool 
 		e->left = left;
 		e->right = right;
 
-		// ElasticPL Operator Nones Inherit Data Type From Child Nodes
+		// ElasticPL Operator Nodes Inherit Data Type From Child Nodes
 		if ((data_type != DT_NONE) && (node_type != NODE_VAR_CONST) && (node_type != NODE_VAR_EXP) && (node_type != NODE_CONSTANT)) {
-			e->is_64bit = (left ? left->is_64bit : false) | (right ? right->is_64bit : false);
-			e->is_signed = (left ? left->is_signed : false) | (right ? right->is_signed : false);
-			e->is_float = (left ? left->is_float : false) | (right ? right->is_float : false);
+			dt_l = left ? left->data_type : DT_NONE;
+			dt_r = right ? right->data_type : DT_NONE;
 
-			// Map Data Type Based On Indicators
-			if (e->is_float) {
-				if (e->is_64bit)
-					e->data_type = DT_DOUBLE;
-				else
-					e->data_type = DT_FLOAT;
+			if ((dt_l == DT_DOUBLE) || (dt_r == DT_DOUBLE)) {
+				e->data_type = DT_DOUBLE;
+				e->is_64bit = true;
+				e->is_signed = true;
+				e->is_float = true;
+			}
+			else if ((dt_l == DT_FLOAT) || (dt_r == DT_FLOAT)) {
+				e->data_type = DT_FLOAT;
+				e->is_64bit = false;
+				e->is_signed = true;
+				e->is_float = true;
+			}
+			else if ((dt_l == DT_ULONG) || (dt_r == DT_ULONG)) {
+				e->data_type = DT_ULONG;
+				e->is_64bit = true;
+				e->is_signed = false;
+				e->is_float = false;
+			}
+			else if ((dt_l == DT_LONG) || (dt_r == DT_LONG)) {
+				e->data_type = DT_LONG;
+				e->is_64bit = true;
+				e->is_signed = true;
+				e->is_float = false;
+			}
+			else if ((dt_l == DT_UINT) || (dt_r == DT_UINT)) {
+				e->data_type = DT_UINT;
+				e->is_64bit = false;
+				e->is_signed = false;
+				e->is_float = false;
 			}
 			else {
-				if (e->is_64bit) {
-					if (e->is_signed)
-						e->data_type = DT_LONG;
-					else
-						e->data_type = DT_ULONG;
-				}
-				else {
-					if (e->is_signed)
-						e->data_type = DT_INT;
-					else
-						e->data_type = DT_UINT;
-				}
+				e->data_type = DT_INT;
+				e->is_64bit = false;
+				e->is_signed = true;
+				e->is_float = false;
 			}
 		}
-
-
-		// Map Constants Based On Indicators
-		//if (node_type == NODE_CONSTANT) {
-		//	if (e->is_float) {
-		//		if (e->is_64bit)
-		//			e->val.d = val_double;
-		//		else
-		//			e->val.f = (float)val_double;
-		//	}
-		//	else {
-		//		if (e->is_64bit) {
-		//			if (e->is_signed)
-		//				e->val.l = val_int64;
-		//			else
-		//				e->val.ul = val_uint64;
-		//		}
-		//		else {
-		//			if (e->is_signed)
-		//				e->val.i = (int32_t)val_int64;
-		//			else
-		//				e->val.u = (int32_t)val_uint64;
-		//		}
-		//	}
-		//}
-		//else if (node_type == NODE_VAR_CONST)
-		//	e->val.u = (uint32_t)val_uint64;
 
 		if (left)
 			e->left->parent = e;
@@ -100,7 +89,7 @@ static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_64bit, bool 
 			e->right->parent = e;
 	}
 	return e;
-};
+}
 
 /*
 static void push_op(int token_id) {
