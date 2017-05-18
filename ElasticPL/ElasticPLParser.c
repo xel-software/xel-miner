@@ -1224,7 +1224,9 @@ extern bool parse_token_list(SOURCE_TOKEN_LIST *token_list) {
 }
 
 static bool validate_ast() {
-	int i, func_idx = 0;
+	int i;
+	
+	ast_func_idx = 0;
 
 	if ((stack_exp_idx < 0) || (stack_op_idx >= 0)) {
 		applog(LOG_ERR, "Fatal Error: Unable to parse source into ElasticPL");
@@ -1235,10 +1237,10 @@ static bool validate_ast() {
 		if ((stack_exp[i]->type != NODE_ARRAY_INT) && (stack_exp[i]->type != NODE_ARRAY_UINT) && (stack_exp[i]->type != NODE_ARRAY_LONG) && (stack_exp[i]->type != NODE_ARRAY_ULONG) && (stack_exp[i]->type != NODE_ARRAY_FLOAT) && (stack_exp[i]->type != NODE_ARRAY_DOUBLE)) {
 			break;
 		}
-		func_idx++;
+		ast_func_idx++;
 	}
 
-	if (func_idx == 0) {
+	if (ast_func_idx == 0) {
 		applog(LOG_ERR, "Syntax Error: Line: %d - At least one variable array must be declared", stack_exp[0]->line_num);
 		return false;
 	}
@@ -1248,17 +1250,19 @@ static bool validate_ast() {
 	//	return false;
 	//}
 
-	if (!validate_functions(func_idx))
+	if (!validate_functions())
 		return false;
 
 	return true;
 }
 
-static bool validate_functions(int idx) {
+static bool validate_functions() {
 	size_t i;
-	uint32_t idx_main = 0, idx_verify = 0;
 
-	for (i = idx; i <= stack_exp_idx; i++) {
+	ast_main_idx = 0;
+	ast_verify_idx = 0;
+
+	for (i = ast_func_idx; i <= stack_exp_idx; i++) {
 
 		if (stack_exp[i]->type != NODE_FUNCTION) {
 			applog(LOG_ERR, "Syntax Error: Line: %d - Statements must be contained in functions", stack_exp[i]->line_num);
@@ -1267,20 +1271,20 @@ static bool validate_functions(int idx) {
 
 		// Validate That Only One Instance Of "Main" Function Exists
 		if (!strcmp(stack_exp[i]->svalue, ("main"))) {
-			if (idx_main > 0) {
+			if (ast_main_idx > 0) {
 				applog(LOG_ERR, "Syntax Error: Line: %d - \"main\" function already declared", stack_exp[i]->line_num);
 				return false;
 			}
-			idx_main = i;
+			ast_main_idx = i;
 		}
 
 		// Validate That Only One Instance Of "Verify" Function Exists
 		else if (!strcmp(stack_exp[i]->svalue, ("verify"))) {
-			if (idx_verify > 0) {
+			if (ast_verify_idx > 0) {
 				applog(LOG_ERR, "Syntax Error: Line: %d - \"verify\" function already declared", stack_exp[i]->line_num);
 				return false;
 			}
-			idx_verify = i;
+			ast_verify_idx = i;
 		}
 
 		// Validate Function Has Brackets
@@ -1297,25 +1301,25 @@ static bool validate_functions(int idx) {
 	}
 
 	// Validate That "Main" Function Exists
-	if (idx_main == 0) {
+	if (ast_main_idx == 0) {
 		applog(LOG_ERR, "Syntax Error: \"main\" function not declared");
 		return false;
 	}
 
 	// Validate That "Verify" Function Exists
-	if (idx_verify == 0) {
+	if (ast_verify_idx == 0) {
 		applog(LOG_ERR, "Syntax Error: \"verify\" function not declared");
 		return false;
 	}
 
 	// Check For Recursive Calls To Functions
-	if (!validate_function_calls(idx_main, idx_verify))
+	if (!validate_function_calls(ast_main_idx, ast_verify_idx))
 		return false;
 
 	return true;
 }
 
-static bool validate_function_calls(uint32_t idx_main, uint32_t idx_verify) {
+static bool validate_function_calls() {
 	size_t i, call_idx;
 	bool downward = true;
 	ast *root = NULL;
@@ -1330,7 +1334,7 @@ static bool validate_function_calls(uint32_t idx_main, uint32_t idx_verify) {
 	}
 
 	// Set Root To Main Function
-	root = stack_exp[idx_main];
+	root = stack_exp[ast_main_idx];
 
 	call_idx = 0;
 	call_stack[call_idx++] = root;
@@ -1371,7 +1375,7 @@ static bool validate_function_calls(uint32_t idx_main, uint32_t idx_verify) {
 				}
 
 				// Validate That "main" & "verify" Functions Are Not Called
-				if ((ast_ptr->uvalue == idx_main) || (ast_ptr->uvalue == idx_verify)) {
+				if ((ast_ptr->uvalue == ast_main_idx) || (ast_ptr->uvalue == ast_verify_idx)) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Illegal function call", ast_ptr->line_num);
 					return false;
 				}

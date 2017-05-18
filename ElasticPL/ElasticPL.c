@@ -184,12 +184,12 @@ extern bool create_epl_vm(char *source) {
 	}
 
 	// Cleanup Stack Memory
-	for (i = 0; i < vm_ast_cnt; i++) {
-		if (stack_exp[i]->svalue)
-			free(stack_exp[i]->svalue);
-	}
-	free(stack_exp);
-	free(stack_op);
+	//for (i = 0; i < vm_ast_cnt; i++) {
+	//	if (stack_exp[i]->svalue)
+	//		free(stack_exp[i]->svalue);
+	//}
+	//free(stack_exp);
+	//free(stack_op);
 
 	if (!vm_ast) {
 		applog(LOG_ERR, "ERROR: ElasticPL Parser Failed!");

@@ -15,6 +15,11 @@
 #include <stdint.h>
 #include <string.h>
 
+#ifndef MAX
+	#define MAX(a,b) ((a) > (b) ? a : b)
+	#define MIN(a,b) ((a) < (b) ? a : b)
+#endif
+
 #define MAX_LITERAL_SIZE 260
 #define TOKEN_LIST_SIZE 4096
 #define PARSE_STACK_SIZE 24000
@@ -30,6 +35,11 @@ extern uint32_t max_vm_longs;
 extern uint32_t max_vm_ulongs;
 extern uint32_t max_vm_floats;
 extern uint32_t max_vm_doubles;
+
+// Index Value Of Main & Verify Functions In AST Array
+uint32_t ast_func_idx;
+uint32_t ast_main_idx;
+uint32_t ast_verify_idx;
 
 typedef enum {
 	NODE_ERROR,
@@ -225,13 +235,13 @@ typedef enum {
 
 typedef enum {
 	DT_NONE,
+	DT_STRING,
 	DT_INT,
 	DT_UINT,
 	DT_LONG,
 	DT_ULONG,
 	DT_FLOAT,
-	DT_DOUBLE,
-	DT_STRING
+	DT_DOUBLE
 } DATA_TYPE;
 
 // Token Type / Literal Value From ElasticPL Source Code
@@ -318,8 +328,8 @@ extern char* get_node_str(NODE_TYPE node_type);
 extern void dump_vm_ast(ast* root);
 static void print_node(ast* node);
 static bool validate_ast();
-static bool validate_functions(int idx);
-static bool validate_function_calls(uint32_t idx_main, uint32_t idx_verify);
+static bool validate_functions();
+static bool validate_function_calls();
 
 extern char* convert_ast_to_c();
 static char* convert(ast* exp);

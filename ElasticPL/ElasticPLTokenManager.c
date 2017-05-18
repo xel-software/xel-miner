@@ -60,60 +60,60 @@ struct EXP_TOKEN_LIST epl_token[] = {
 	{ "m[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_INT },
 	{ "]",							1,	TOKEN_VAR_END,		EXP_EXPRESSION,	1,	4,	DT_INT },
 
-	{ "++",							2,	TOKEN_INCREMENT,	EXP_EXPRESSION,	1,	13,	DT_INT },	// Increment
-	{ "--",							2,	TOKEN_DECREMENT,	EXP_EXPRESSION,	1,	13,	DT_INT },	// Decrement
+	{ "++",							2,	TOKEN_INCREMENT,	EXP_EXPRESSION,	1,	5,	DT_INT },	// Increment
+	{ "--",							2,	TOKEN_DECREMENT,	EXP_EXPRESSION,	1,	5,	DT_INT },	// Decrement
 
-	{ "+=",							2,	TOKEN_ADD_ASSIGN,	EXP_STATEMENT,	2,	13,	DT_INT },	// Assignment
-	{ "-=",							2,	TOKEN_SUB_ASSIGN,	EXP_STATEMENT,	2,	13,	DT_INT },	// Assignment
-	{ "*=",							2,	TOKEN_MUL_ASSIGN,	EXP_STATEMENT,	2,	13,	DT_INT },	// Assignment
-	{ "/=",							2,	TOKEN_DIV_ASSIGN,	EXP_STATEMENT,	2,	13,	DT_FLOAT },	// Assignment
-	{ "%=",							2,	TOKEN_MOD_ASSIGN,	EXP_STATEMENT,	2,	13,	DT_INT },	// Assignment
-	{ "<<=",						3,	TOKEN_LSHFT_ASSIGN,	EXP_STATEMENT,	2,	13,	DT_INT },	// Assignment
-	{ ">>=",						3,	TOKEN_RSHFT_ASSIGN,	EXP_STATEMENT,	2,	13,	DT_INT },	// Assignment
-	{ "&=",							2,	TOKEN_AND_ASSIGN,	EXP_STATEMENT,	2,	13,	DT_INT },	// Assignment
-	{ "^=",							2,	TOKEN_XOR_ASSIGN,	EXP_STATEMENT,	2,	13,	DT_INT },	// Assignment
-	{ "|=",							2,	TOKEN_OR_ASSIGN,	EXP_STATEMENT,	2,	13,	DT_INT },	// Assignment
+	{ "+=",							2,	TOKEN_ADD_ASSIGN,	EXP_STATEMENT,	2,	16,	DT_INT },	// Assignment
+	{ "-=",							2,	TOKEN_SUB_ASSIGN,	EXP_STATEMENT,	2,	16,	DT_INT },	// Assignment
+	{ "*=",							2,	TOKEN_MUL_ASSIGN,	EXP_STATEMENT,	2,	16,	DT_INT },	// Assignment
+	{ "/=",							2,	TOKEN_DIV_ASSIGN,	EXP_STATEMENT,	2,	16,	DT_FLOAT },	// Assignment
+	{ "%=",							2,	TOKEN_MOD_ASSIGN,	EXP_STATEMENT,	2,	16,	DT_INT },	// Assignment
+	{ "<<=",						3,	TOKEN_LSHFT_ASSIGN,	EXP_STATEMENT,	2,	16,	DT_INT },	// Assignment
+	{ ">>=",						3,	TOKEN_RSHFT_ASSIGN,	EXP_STATEMENT,	2,	16,	DT_INT },	// Assignment
+	{ "&=",							2,	TOKEN_AND_ASSIGN,	EXP_STATEMENT,	2,	16,	DT_INT },	// Assignment
+	{ "^=",							2,	TOKEN_XOR_ASSIGN,	EXP_STATEMENT,	2,	16,	DT_INT },	// Assignment
+	{ "|=",							2,	TOKEN_OR_ASSIGN,	EXP_STATEMENT,	2,	16,	DT_INT },	// Assignment
 
-	{ "+",							1,	TOKEN_ADD,			EXP_EXPRESSION,	2,	13,	DT_INT },	// Additive
-	{ "-",							1,	TOKEN_SUB,			EXP_EXPRESSION,	2,	13,	DT_INT },	// Additive
-	{ "-",							1,	TOKEN_NEG,			EXP_EXPRESSION,	1,	15,	DT_INT },	// Additive
+	{ "+",							1,	TOKEN_ADD,			EXP_EXPRESSION,	2,	7,	DT_INT },	// Additive
+	{ "-",							1,	TOKEN_SUB,			EXP_EXPRESSION,	2,	7,	DT_INT },	// Additive
+	{ "-",							1,	TOKEN_NEG,			EXP_EXPRESSION,	1,	5,	DT_INT },	// Additive
 
-	{ "*",							1,	TOKEN_MUL,			EXP_EXPRESSION,	2,	14,	DT_INT },	// Multiplicative
-	{ "/",							1,	TOKEN_DIV,			EXP_EXPRESSION,	2,	14,	DT_FLOAT },	// Multiplicative
-	{ "%",							1,	TOKEN_MOD,			EXP_EXPRESSION,	2,	14,	DT_INT },	// Multiplicative
+	{ "*",							1,	TOKEN_MUL,			EXP_EXPRESSION,	2,	6,	DT_INT },	// Multiplicative
+	{ "/",							1,	TOKEN_DIV,			EXP_EXPRESSION,	2,	6,	DT_FLOAT },	// Multiplicative
+	{ "%",							1,	TOKEN_MOD,			EXP_EXPRESSION,	2,	6,	DT_INT },	// Multiplicative
 
-	{ "<<<",						3,	TOKEN_LROT,			EXP_EXPRESSION,	2,	12,	DT_INT },	// Shift
-	{ "<<",							2,	TOKEN_LSHIFT,		EXP_EXPRESSION,	2,	12,	DT_INT },	// Shift
-	{ ">>>",						3,	TOKEN_RROT,			EXP_EXPRESSION,	2,	12,	DT_INT },	// Shift
-	{ ">>",							2,	TOKEN_RSHIFT,		EXP_EXPRESSION,	2,	12,	DT_INT },	// Shift
+	{ "<<<",						3,	TOKEN_LROT,			EXP_EXPRESSION,	2,	8,	DT_INT },	// Shift
+	{ "<<",							2,	TOKEN_LSHIFT,		EXP_EXPRESSION,	2,	8,	DT_INT },	// Shift
+	{ ">>>",						3,	TOKEN_RROT,			EXP_EXPRESSION,	2,	8,	DT_INT },	// Shift
+	{ ">>",							2,	TOKEN_RSHIFT,		EXP_EXPRESSION,	2,	8,	DT_INT },	// Shift
 
-	{ "<=",							2,	TOKEN_LE,			EXP_EXPRESSION,	2,	11,	DT_INT },	// Relational
-	{ ">=",							2,	TOKEN_GE,			EXP_EXPRESSION,	2,	11,	DT_INT },	// Relational
-	{ "<",							1,	TOKEN_LT,			EXP_EXPRESSION,	2,	11,	DT_INT },	// Relational
-	{ ">",							1,	TOKEN_GT,			EXP_EXPRESSION,	2,	11,	DT_INT },	// Relational
+	{ "<=",							2,	TOKEN_LE,			EXP_EXPRESSION,	2,	9,	DT_INT },	// Relational
+	{ ">=",							2,	TOKEN_GE,			EXP_EXPRESSION,	2,	9,	DT_INT },	// Relational
+	{ "<",							1,	TOKEN_LT,			EXP_EXPRESSION,	2,	9,	DT_INT },	// Relational
+	{ ">",							1,	TOKEN_GT,			EXP_EXPRESSION,	2,	9,	DT_INT },	// Relational
 
 	{ "==",							2,	TOKEN_EQ,			EXP_EXPRESSION,	2,	10,	DT_INT },	// Equality
 	{ "!=",							2,	TOKEN_NE,			EXP_EXPRESSION,	2,	10,	DT_INT },	// Equality
 
-	{ "&&",							2,	TOKEN_AND,			EXP_EXPRESSION,	2,	6,	DT_INT },	// Logical AND
-	{ "||",							2,	TOKEN_OR,			EXP_EXPRESSION,	2,	5,	DT_INT },	// Logical OR
+	{ "&&",							2,	TOKEN_AND,			EXP_EXPRESSION,	2,	14,	DT_INT },	// Logical AND
+	{ "||",							2,	TOKEN_OR,			EXP_EXPRESSION,	2,	15,	DT_INT },	// Logical OR
 
-	{ "&",							1,	TOKEN_BITWISE_AND,	EXP_EXPRESSION,	2,	9,	DT_INT },	// Bitwise AND
-	{ "and",						3,	TOKEN_BITWISE_AND,	EXP_EXPRESSION,	2,	9,	DT_INT },	// Bitwise AND
-	{ "^",							1,	TOKEN_BITWISE_XOR,	EXP_EXPRESSION,	2,	8,	DT_INT },	// Bitwise XOR
-	{ "xor",						3,	TOKEN_BITWISE_XOR,	EXP_EXPRESSION,	2,	8,	DT_INT },	// Bitwise XOR
-	{ "|",							1,	TOKEN_BITWISE_OR,	EXP_EXPRESSION,	2,	7,	DT_INT },	// Bitwise OR
-	{ "or",							2,	TOKEN_BITWISE_OR,	EXP_EXPRESSION,	2,	7,	DT_INT },	// Bitwise OR
+	{ "&",							1,	TOKEN_BITWISE_AND,	EXP_EXPRESSION,	2,	11,	DT_INT },	// Bitwise AND
+	{ "and",						3,	TOKEN_BITWISE_AND,	EXP_EXPRESSION,	2,	11,	DT_INT },	// Bitwise AND
+	{ "^",							1,	TOKEN_BITWISE_XOR,	EXP_EXPRESSION,	2,	12,	DT_INT },	// Bitwise XOR
+	{ "xor",						3,	TOKEN_BITWISE_XOR,	EXP_EXPRESSION,	2,	12,	DT_INT },	// Bitwise XOR
+	{ "|",							1,	TOKEN_BITWISE_OR,	EXP_EXPRESSION,	2,	13,	DT_INT },	// Bitwise OR
+	{ "or",							2,	TOKEN_BITWISE_OR,	EXP_EXPRESSION,	2,	13,	DT_INT },	// Bitwise OR
 
-	{ "=",							1,	TOKEN_ASSIGN,		EXP_STATEMENT,	2,	3,	DT_INT },	// Assignment
+	{ "=",							1,	TOKEN_ASSIGN,		EXP_STATEMENT,	2,	16,	DT_INT },	// Assignment
 
-	{ "?",							1,	TOKEN_CONDITIONAL,	EXP_STATEMENT,	2,	4,	DT_INT },	// Conditional
-	{ ":",							1,	TOKEN_COND_ELSE,	EXP_STATEMENT,	2,	5,	DT_INT },	// Conditional
+	{ "?",							1,	TOKEN_CONDITIONAL,	EXP_STATEMENT,	2,	17,	DT_INT },	// Conditional
+	{ ":",							1,	TOKEN_COND_ELSE,	EXP_STATEMENT,	2,	17,	DT_INT },	// Conditional
 
-	{ "~",							1,	TOKEN_COMPL,		EXP_EXPRESSION,	1,	15,	DT_INT },	// Unary Operator
-	{ "!",							1,	TOKEN_NOT,			EXP_EXPRESSION,	1,	15,	DT_INT },	// Unary Operator
-	{ "true",						4,	TOKEN_TRUE,			EXP_EXPRESSION,	0,	15,	DT_INT },	// Unary Operator
-	{ "false",						5,	TOKEN_FALSE,		EXP_EXPRESSION,	0,	15,	DT_INT },	// Unary Operator
+	{ "~",							1,	TOKEN_COMPL,		EXP_EXPRESSION,	1,	5,	DT_INT },	// Unary Operator
+	{ "!",							1,	TOKEN_NOT,			EXP_EXPRESSION,	1,	5,	DT_INT },	// Unary Operator
+	{ "true",						4,	TOKEN_TRUE,			EXP_EXPRESSION,	0,	40,	DT_INT },	// Unary Operator
+	{ "false",						5,	TOKEN_FALSE,		EXP_EXPRESSION,	0,	40,	DT_INT },	// Unary Operator
 
 	{ "sinh",						4,	TOKEN_SINH,			EXP_FUNCTION,	1,	50,	DT_FLOAT },	// Built In Math Functions
 	{ "sin",						3,	TOKEN_SIN,			EXP_FUNCTION,	1,	50,	DT_FLOAT },	// Built In Math Functions

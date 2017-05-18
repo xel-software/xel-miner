@@ -26,34 +26,38 @@ static uint32_t calc_weight(ast* root, uint32_t *ast_depth) {
 	uint32_t block_weight[MAX_NESTED_REPEAT];
 	int block_level = -1;
 	bool downward = true;
-	ast *new_ptr = NULL;
-	ast *old_ptr = NULL;
+	ast *ast_ptr = NULL;
 
 	if (!root)
 		return 0;
 
-	new_ptr = root;
+	ast_ptr = root;
 	depth = 1;
 
-	while (new_ptr) {
-		old_ptr = new_ptr;
+	while (ast_ptr) {
+		weight = 0;
 
 		// Navigate Down The Tree
 		if (downward) {
-			// Navigate To Lowest Left Parent Node
-			while (new_ptr->left) {
-				if (!new_ptr->left->left)
-					break;
-				new_ptr = new_ptr->left;
+
+			// Navigate To Lowest Left Node
+			while (ast_ptr->left) {
+				ast_ptr = ast_ptr->left;
 				if (++depth > *ast_depth) *ast_depth = depth;
 			}
 
-			// Get weight Of Left Node
-			if (new_ptr->left)
-				weight = get_node_weight(new_ptr->left);
+			// If There Is A Right Node, Switch To It
+			if (ast_ptr->right) {
+				ast_ptr = ast_ptr->right;
+			}
+			// Otherwise, Get Weight Of Current Node & Navigate Back Up The Tree
+			else {
+				weight = get_node_weight(ast_ptr);
+				downward = false;
+			}
 
 			// Check For "Repeat" Blocks
-			if (new_ptr->type == NODE_REPEAT) {
+			if (ast_ptr->type == NODE_REPEAT) {
 				total_weight += weight;
 				block_level++;
 				if (block_level >= MAX_NESTED_REPEAT)
@@ -61,37 +65,35 @@ static uint32_t calc_weight(ast* root, uint32_t *ast_depth) {
 				block_weight[block_level] = 0;
 			}
 
-			// Switch To Right Node
-			if (new_ptr->right) {
-				new_ptr = new_ptr->right;
-				if (++depth > *ast_depth) *ast_depth = depth;
-			}
-			else {
-				// Get Weight Of Right Node & Navigate Back Up The Tree
-				if (old_ptr != root) {
-					weight = get_node_weight(new_ptr);
-					new_ptr = old_ptr->parent;
-					depth--;
-				}
-				downward = false;
-			}
+			//// Switch To Right Node
+			//if (new_ptr->right) {
+			//	new_ptr = new_ptr->right;
+			//	if (++depth > *ast_depth) *ast_depth = depth;
+			//}
+			//else {
+			//	// Get Weight Of Right Node & Navigate Back Up The Tree
+			//	if (old_ptr != root) {
+			//		weight = get_node_weight(new_ptr);
+			//		new_ptr = old_ptr->parent;
+			//		depth--;
+			//	}
+			//	downward = false;
+			//}
 		}
 
 		// Navigate Back Up The Tree
 		else {
-			if (new_ptr == root)
+			if (ast_ptr == root)
 				break;
 
-			// Get weight Of Parent Node
-			weight = get_node_weight(new_ptr);
-
 			// Check If We Need To Navigate Back Down A Right Branch
-			if ((new_ptr == new_ptr->parent->left) && (new_ptr->parent->right)) {
-				new_ptr = new_ptr->parent->right;
+			if ((ast_ptr == ast_ptr->parent->left) && (ast_ptr->parent->right)) {
+				weight = get_node_weight(ast_ptr->parent);
+				ast_ptr = ast_ptr->parent->right;
 				downward = true;
 			}
 			else {
-				new_ptr = old_ptr->parent;
+				ast_ptr = ast_ptr->parent;
 				depth--;
 			}
 		}
@@ -102,17 +104,17 @@ static uint32_t calc_weight(ast* root, uint32_t *ast_depth) {
 			total_weight += (total_weight < (0xFFFFFFFF - weight) ? weight : 0);
 
 		// Get Total weight For The "Repeat" Block
-		if ((block_level >= 0) && (new_ptr->type == NODE_REPEAT)) {
+		if ((block_level >= 0) && (ast_ptr->type == NODE_REPEAT)) {
 			if (block_level == 0)
-				total_weight += (new_ptr->value * block_weight[block_level]);
+				total_weight += (ast_ptr->value * block_weight[block_level]);
 			else
-				block_weight[block_level - 1] += (new_ptr->value * block_weight[block_level]);
+				block_weight[block_level - 1] += (ast_ptr->value * block_weight[block_level]);
 			block_level--;
 		}
 	}
 
 	// Get weight Of Root Node
-	weight = get_node_weight(new_ptr);
+	weight = get_node_weight(ast_ptr);
 	total_weight += (total_weight < (0xFFFFFFFF - weight) ? weight : 0);
 
 	return total_weight;
@@ -240,6 +242,10 @@ static uint32_t get_node_weight(ast* node) {
 		case NODE_GCD:
 			return weight * 6;
 
+		// Function Calls (4 + Weight Of Called Function)
+		case NODE_CALL_FUNCTION:
+			return 4 + vm_ast[node->uvalue]->fvalue;
+
 		case NODE_BLOCK:
 		case NODE_PARAM:
 			break;
@@ -252,30 +258,58 @@ static uint32_t get_node_weight(ast* node) {
 }
 
 extern uint32_t calc_wcet() {
-	int i;
+	int i, call_depth = 0;
 	uint32_t ast_depth, wcet, total = 0;
 
-	for (i = 0; i < vm_ast_cnt; i++) {
-		ast_depth = 0;
-		wcet = calc_weight(vm_ast[i], &ast_depth);
-		applog(LOG_DEBUG, "DEBUG: Statement WCET = %lu,\tDepth = %lu", wcet, ast_depth);
-
-		if (ast_depth > MAX_AST_DEPTH) {
-			applog(LOG_ERR, "ERROR: Max allowed AST depth exceeded (%lu)", ast_depth);
-			return 0;
-		}
-
-		if (wcet >(0xFFFFFFFF - total)) {
-			total = 0xFFFFFFFF;
-			break;
-		}
-		else
-			total += wcet;
+	// Get Max Function Call Depth
+	for (i = ast_func_idx; i < vm_ast_cnt; i++) {
+		if (vm_ast[i]->uvalue > call_depth)
+			call_depth = vm_ast[i]->uvalue;
 	}
 
-	applog(LOG_DEBUG, "DEBUG: Total WCET = %lu", total);
+	// Calculate WCET For Each Function Beginning With The Lowest One In Call Stack
+	while (call_depth >= 0) {
+		for (i = ast_func_idx; i < vm_ast_cnt; i++) {
+			if (vm_ast[i]->uvalue == call_depth) {
+				ast_depth = 0;
+				wcet = calc_weight(vm_ast[i], &ast_depth);
+				applog(LOG_DEBUG, "DEBUG: Function '%s' WCET = %lu,\tDepth = %lu", vm_ast[i]->svalue, wcet, ast_depth);
 
-	return total;
+				if (ast_depth > MAX_AST_DEPTH) {
+					applog(LOG_ERR, "ERROR: Max allowed AST depth exceeded (%lu)", ast_depth);
+					return 0;
+				}
+
+				// Store WCET Value In Function's 'fvalue' Field
+				vm_ast[i]->fvalue = wcet;
+			}
+		}
+		call_depth--;
+	}
+
+
+	//for (i = 0; i < vm_ast_cnt; i++) {
+	//	ast_depth = 0;
+	//	wcet = calc_weight(vm_ast[i], &ast_depth);
+	//	applog(LOG_DEBUG, "DEBUG: Statement WCET = %lu,\tDepth = %lu", wcet, ast_depth);
+
+	//	if (ast_depth > MAX_AST_DEPTH) {
+	//		applog(LOG_ERR, "ERROR: Max allowed AST depth exceeded (%lu)", ast_depth);
+	//		return 0;
+	//	}
+
+	//	if (wcet >(0xFFFFFFFF - total)) {
+	//		total = 0xFFFFFFFF;
+	//		break;
+	//	}
+	//	else
+	//		total += wcet;
+	//}
+
+	//applog(LOG_DEBUG, "DEBUG: Total WCET = %lu", total);
+
+	return 1;
+//	return total;
 }
 
 extern int interpret_ast(bool first_run) {
