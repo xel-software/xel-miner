@@ -41,6 +41,13 @@ static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_64bit, bool 
 		e->right = right;
 
 		// ElasticPL Operator Nodes Inherit Data Type From Child Nodes
+		// Precedence Is Based On C99 Standard:
+		// double <- float <- uint64_t <- int64_t <- uint32_t <- int32_t
+		//if ((data_type != DT_NONE) && (node_type != NODE_VAR_CONST) && (node_type != NODE_VAR_EXP) && (node_type != NODE_CONSTANT)) {
+		//	dt_l = left ? left->data_type : DT_NONE;
+		//	dt_r = right ? right->data_type : DT_NONE;
+		//	e->data_type = MAX(dt_l, dt_r);
+		//}
 		if ((data_type != DT_NONE) && (node_type != NODE_VAR_CONST) && (node_type != NODE_VAR_EXP) && (node_type != NODE_CONSTANT)) {
 			dt_l = left ? left->data_type : DT_NONE;
 			dt_r = right ? right->data_type : DT_NONE;
@@ -424,6 +431,14 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 		if ((stack_exp[stack_exp_idx]->token_num > token_num) &&
 			(stack_exp[stack_exp_idx]->data_type != DT_NONE) &&
 			(!stack_exp[stack_exp_idx]->is_float))
+			return true;
+		break;
+
+	// Expressions w/ 1 Int/Long/Float/Double (Right Operand)
+	case NODE_NEG:
+		if ((stack_exp[stack_exp_idx]->token_num > token_num) &&
+			(stack_exp[stack_exp_idx]->data_type != DT_NONE) &&
+			(stack_exp[stack_exp_idx]->is_signed))
 			return true;
 		break;
 
@@ -1304,9 +1319,15 @@ static bool validate_function_calls(uint32_t idx_main, uint32_t idx_verify) {
 	size_t i, call_idx;
 	bool downward = true;
 	ast *root = NULL;
-	ast *new_ptr = NULL;
-	ast *old_ptr = NULL;
+	ast *ast_ptr = NULL;
 	ast *call_stack[CALL_STACK_SIZE];
+
+	if (opt_debug_epl) {
+		fprintf(stdout, "\n*********************************************************\n");
+		fprintf(stdout, "Function Calls\n");
+		fprintf(stdout, "*********************************************************\n");
+		fprintf(stdout, "Call Function: 'main()'\n");
+	}
 
 	// Set Root To Main Function
 	root = stack_exp[idx_main];
@@ -1314,79 +1335,78 @@ static bool validate_function_calls(uint32_t idx_main, uint32_t idx_verify) {
 	call_idx = 0;
 	call_stack[call_idx++] = root;
 
-	new_ptr = root;
+	ast_ptr = root;
 
-	while (new_ptr) {
-		old_ptr = new_ptr;
+	while (ast_ptr) {
 
 		// Navigate Down The Tree
 		if (downward) {
 
 			// Navigate To Lowest Left Parent Node
-			while (new_ptr->left) {
-				if (!new_ptr->left->left)
-					break;
-				new_ptr = new_ptr->left;
+			while (ast_ptr->left) {
+				ast_ptr = ast_ptr->left;
 			}
 
 			// Switch To Root Of Called Function
-			if ((new_ptr->type == NODE_CALL_FUNCTION) || (new_ptr->left && (new_ptr->left->type == NODE_CALL_FUNCTION))) {
-				if (new_ptr->left)
-					new_ptr = new_ptr->left;
+			if (ast_ptr->type == NODE_CALL_FUNCTION) {
+				if (ast_ptr->left)
+					ast_ptr = ast_ptr->left;
 
-				printf("Call '%s()'\n", new_ptr->svalue);
+				if (opt_debug_epl)
+					fprintf(stdout, "Call Function: '%s()'\n", ast_ptr->svalue);
 
 				// Get AST Index For The Function
-				if (!new_ptr->uvalue) {
+				if (!ast_ptr->uvalue) {
 
 					for (i = 0; i <= stack_exp_idx; i++) {
-						if ((stack_exp[i]->type == NODE_FUNCTION) && !strcmp(stack_exp[i]->svalue, new_ptr->svalue))
-							new_ptr->uvalue = i;
+						if ((stack_exp[i]->type == NODE_FUNCTION) && !strcmp(stack_exp[i]->svalue, ast_ptr->svalue))
+							ast_ptr->uvalue = i;
 					}
 				}
 
 				// Validate Function Exists
-				if (!new_ptr->uvalue) {
-					applog(LOG_ERR, "Syntax Error: Line: %d - Function '%s' not found", new_ptr->line_num, new_ptr->svalue);
+				if (!ast_ptr->uvalue) {
+					applog(LOG_ERR, "Syntax Error: Line: %d - Function '%s' not found", ast_ptr->line_num, ast_ptr->svalue);
 					return false;
 				}
 
 				// Validate That "main" & "verify" Functions Are Not Called
-				if ((new_ptr->uvalue == idx_main) || (new_ptr->uvalue == idx_verify)) {
-					applog(LOG_ERR, "Syntax Error: Line: %d - Illegal function call", new_ptr->line_num);
+				if ((ast_ptr->uvalue == idx_main) || (ast_ptr->uvalue == idx_verify)) {
+					applog(LOG_ERR, "Syntax Error: Line: %d - Illegal function call", ast_ptr->line_num);
 					return false;
 				}
 
 				// Validate That Functions Is Not Recursively Called
 				for (i = 0; i < call_idx; i++) {
-					if (new_ptr->uvalue == call_stack[i]->uvalue) {
-						applog(LOG_ERR, "Syntax Error: Line: %d - Illegal recursive function call", new_ptr->line_num);
+					if (ast_ptr->uvalue == call_stack[i]->uvalue) {
+						applog(LOG_ERR, "Syntax Error: Line: %d - Illegal recursive function call", ast_ptr->line_num);
 						return false;
 					}
 				}
 
 				// Store The Lowest Level In Call Stack For The Function
 				// Needed To Determine Order Of Processing Functions During WCET Calc
-				if (call_idx > stack_exp[new_ptr->uvalue]->uvalue)
-					stack_exp[new_ptr->uvalue]->uvalue = call_idx;
+				if (call_idx > stack_exp[ast_ptr->uvalue]->uvalue)
+					stack_exp[ast_ptr->uvalue]->uvalue = call_idx;
 
-				call_stack[call_idx++] = new_ptr;
-				new_ptr = stack_exp[new_ptr->uvalue];
+				call_stack[call_idx++] = ast_ptr;
+				ast_ptr = stack_exp[ast_ptr->uvalue];
 
 				if (call_idx >= CALL_STACK_SIZE) {
-					applog(LOG_ERR, "Syntax Error: Line: %d - Functions can only be nested up to %d levels", new_ptr->line_num, CALL_STACK_SIZE);
+					applog(LOG_ERR, "Syntax Error: Line: %d - Functions can only be nested up to %d levels", ast_ptr->line_num, CALL_STACK_SIZE);
 					return false;
 				}
 
 			}
 
-			if (new_ptr->right) {
-				// Switch To Right Node
-				new_ptr = new_ptr->right;
+			// If There Is A Right Node, Switch To It
+			if (ast_ptr->right) {
+				ast_ptr = ast_ptr->right;
 			}
+			// Otherwise, Print Current Node & Navigate Back Up The Tree
 			else {
-				// Navigate Back Up The Tree
-				new_ptr = old_ptr->parent;
+				if (ast_ptr->type == NODE_CALL_FUNCTION)
+					downward = false;
 				downward = false;
 			}
 		}
@@ -1395,23 +1415,24 @@ static bool validate_function_calls(uint32_t idx_main, uint32_t idx_verify) {
 		else {
 
 			// Quit When We Reach The Root Of Main Function
-			if (new_ptr == root)
+			if (ast_ptr == root)
 				break;
 
 			// Return To Calling Function When We Reach The Root Of Called Function
-			if (new_ptr->parent->type == NODE_FUNCTION) {
+			if (ast_ptr->parent->type == NODE_FUNCTION) {
 				call_stack[call_idx--] = 0;
-				new_ptr = call_stack[call_idx];
-				printf("Return From '%s()'\n", call_stack[call_idx]->svalue);
+				ast_ptr = call_stack[call_idx];
+				if (opt_debug_epl)
+					fprintf(stdout, "Return From:   '%s()'\n", call_stack[call_idx]->svalue);
 			}
 			else {
 				// Check If We Need To Navigate Back Down A Right Branch
-				if ((new_ptr == new_ptr->parent->left) && (new_ptr->parent->right)) {
-					new_ptr = new_ptr->parent->right;
+				if ((ast_ptr == ast_ptr->parent->left) && (ast_ptr->parent->right)) {
+					ast_ptr = ast_ptr->parent->right;
 					downward = true;
 				}
 				else {
-					new_ptr = old_ptr->parent;
+					ast_ptr = ast_ptr->parent;
 				}
 			}
 		}

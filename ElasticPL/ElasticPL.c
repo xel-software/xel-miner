@@ -174,10 +174,12 @@ extern bool create_epl_vm(char *source) {
 	memcpy(vm_ast, stack_exp, vm_ast_cnt * sizeof(ast*));
 
 	if (opt_debug_epl) {
+		fprintf(stdout, "\n*********************************************************\n");
+		fprintf(stdout, "AST Dump\n");
 		fprintf(stdout, "*********************************************************\n");
 		for (i = 0; i<vm_ast_cnt; i++) {
 			dump_vm_ast(vm_ast[i]);
-			fprintf(stdout, "*********************************************************\n");
+			fprintf(stdout, "---------------------------------------------------------\n");
 		}
 	}
 
@@ -215,75 +217,61 @@ static bool delete_epl_vm() {
 // Temporary - For Debugging Only
 extern void dump_vm_ast(ast* root) {
 	bool downward = true;
-	ast *new_ptr = NULL;
-	ast *old_ptr = NULL;
+	ast *ast_ptr = NULL;
 
 	if (!root)
 		return;
-	new_ptr = root;
+
+	ast_ptr = root;
 
 	if (root->type == NODE_FUNCTION) {
 		printf("FUNCTION '%s'\n", root->svalue);
 		printf("---------------------------------------------------------\n");
+		ast_ptr = root->right;
 	}
 
-	while (new_ptr) {
-		old_ptr = new_ptr;
+	while (ast_ptr) {
 
 		// Navigate Down The Tree
 		if (downward) {
-			// Navigate To Lowest Left Parent Node
-			while (new_ptr->left) {
-				if (!new_ptr->left->left)
-					break;
-				new_ptr = new_ptr->left;
+
+			// Navigate To Lowest Left Node
+			while (ast_ptr->left) {
+
+				// Print Left Node
+				if (!ast_ptr->right)
+					print_node(ast_ptr);
+
+				ast_ptr = ast_ptr->left;
 			}
 
-			// Print Left Node
-			if (new_ptr->left)
-				print_node(new_ptr->left);
-
-			// Switch To Right Node
-			if (new_ptr->right) {
-				new_ptr = new_ptr->right;
+			// If There Is A Right Node, Switch To It
+			if (ast_ptr->right) {
+				ast_ptr = ast_ptr->right;
 			}
+			// Otherwise, Print Current Node & Navigate Back Up The Tree
 			else {
-				// Print Right Node & Navigate Back Up The Tree
-				if (old_ptr != root) {
-					print_node(new_ptr);
-					new_ptr = old_ptr->parent;
-				}
+				print_node(ast_ptr);
 				downward = false;
 			}
 		}
 
 		// Navigate Back Up The Tree
 		else {
-			if (new_ptr == root)
+			if (ast_ptr == root)
 				break;
 
-			// Print Parent Node
-			if (new_ptr->type != NODE_BLOCK) {
-				print_node(new_ptr);
-
-				if ((new_ptr->parent->type == NODE_BLOCK) && (new_ptr->parent->right))
-					printf("\t-------------------------------------------------\n");
-			}
-
 			// Check If We Need To Navigate Back Down A Right Branch
-			if ((new_ptr == new_ptr->parent->left) && (new_ptr->parent->right)) {
-				new_ptr = new_ptr->parent->right;
+			if ((ast_ptr == ast_ptr->parent->left) && (ast_ptr->parent->right)) {
+				print_node(ast_ptr->parent);
+				ast_ptr = ast_ptr->parent->right;
 				downward = true;
 			}
 			else {
-				new_ptr = old_ptr->parent;
+				ast_ptr = ast_ptr->parent;
 			}
 		}
 	}
-
-	// Display Root Node
-	if (root->type != NODE_FUNCTION)
-		print_node(new_ptr);
 }
 
 static void print_node(ast* node) {
@@ -293,94 +281,106 @@ static void print_node(ast* node) {
 	switch (node->type) {
 	case NODE_CONSTANT:
 		if (node->is_float) {
-			printf("\tType: %d,\t%f", node->type, node->fvalue);
+			printf("\tType: %d,\t%f\t\t\t", node->type, node->fvalue);
 		}
 		else {
 			if (node->is_signed)
-				printf("\tType: %d,\t%lld", node->type, node->ivalue);
+				printf("\tType: %d,\t%lld\t\t\t", node->type, node->ivalue);
 			else
-				printf("\tType: %d,\t%llu", node->type, node->uvalue);
+				printf("\tType: %d,\t%llu\t\t\t", node->type, node->uvalue);
 		}
 		break;
 	case NODE_VAR_CONST:
 		if (node->is_float) {
 			if (node->is_64bit)
-				printf("\tType: %d,\td[%llu]", node->type, node->uvalue);
+				printf("\tType: %d,\td[%llu]\t\t\t", node->type, node->uvalue);
 			else
-				printf("\tType: %d,\tf[%llu]", node->type, node->uvalue);
+				printf("\tType: %d,\tf[%llu]\t\t\t", node->type, node->uvalue);
 		}
 		else {
 			if (node->is_64bit) {
 				if (node->is_signed)
-					printf("\tType: %d,\tl[%llu]", node->type, node->uvalue);
+					printf("\tType: %d,\tl[%llu]\t\t\t", node->type, node->uvalue);
 				else
-					printf("\tType: %d,\tul[%llu]", node->type, node->uvalue);
+					printf("\tType: %d,\tul[%llu]\t\t\t", node->type, node->uvalue);
 			}
 			else {
 				if (node->is_signed)
-					printf("\tType: %d,\ti[%llu]", node->type, node->uvalue);
+					printf("\tType: %d,\ti[%llu]\t\t\t", node->type, node->uvalue);
 				else
-					printf("\tType: %d,\tu[%llu]", node->type, node->uvalue);
+					printf("\tType: %d,\tu[%llu]\t\t\t", node->type, node->uvalue);
 			}
 		}
 		break;
 	case NODE_VAR_EXP:
 		if (node->is_float) {
 			if (node->is_64bit)
-				printf("\tType: %d,\tf[x]", node->type);
+				printf("\tType: %d,\td[x]\t\t\t", node->type);
 			else
-				printf("\tType: %d,\td[x]", node->type);
+				printf("\tType: %d,\tf[x]\t\t\t", node->type);
 		}
 		else {
 			if (node->is_64bit) {
 				if (node->is_signed)
-					printf("\tType: %d,\ti[x]", node->type);
+					printf("\tType: %d,\tl[x]\t\t\t", node->type);
 				else
-					printf("\tType: %d,\tu[x]", node->type);
+					printf("\tType: %d,\tul[x]\t\t\t", node->type);
 			}
 			else {
 				if (node->is_signed)
-					printf("\tType: %d,\tl[x]", node->type);
+					printf("\tType: %d,\ti[x]\t\t\t", node->type);
 				else
-					printf("\tType: %d,\tul[x]", node->type);
+					printf("\tType: %d,\tu[x]\t\t\t", node->type);
 			}
 		}
 		break;
 	case NODE_FUNCTION:
-		printf("\tType: %d,\t%s %s", node->type, get_node_str(node->type), node->svalue);
+		printf("\tType: %d,\t%s %s\t\t", node->type, get_node_str(node->type), node->svalue);
 		break;
 	case NODE_CALL_FUNCTION:
-		printf("\tType: %d,\t%s()", node->type, node->svalue);
+		printf("\tType: %d,\t%s()\t\t", node->type, node->svalue);
+		break;
+	case NODE_BLOCK:
+		if (node->parent->type != NODE_FUNCTION)
+			printf("\t-------------------------------------------------\n");
+		return;
+	case NODE_ARRAY_INT:
+	case NODE_ARRAY_UINT:
+	case NODE_ARRAY_LONG:
+	case NODE_ARRAY_ULONG:
+	case NODE_ARRAY_FLOAT:
+	case NODE_ARRAY_DOUBLE:
+		printf("\tType: %d,\t%s\t\t", node->type, get_node_str(node->type));
 		break;
 	default:
-		printf("\tType: %d,\t%s", node->type, get_node_str(node->type));
+		printf("\tType: %d,\t%s\t\t\t", node->type, get_node_str(node->type));
 		break;
 	}
 
 	switch (node->data_type) {
 	case DT_INT:
-		printf("\t\t\t(int)\n");
+		printf("(int)\n");
 		break;
 	case DT_UINT:
-		printf("\t\t\t(uint)\n");
+		printf("(uint)\n");
 		break;
 	case DT_LONG:
-		printf("\t\t\t(long)\n");
+		printf("(long)\n");
 		break;
 	case DT_ULONG:
-		printf("\t\t\t(ulong)\n");
+		printf("(ulong)\n");
 		break;
 	case DT_FLOAT:
-		printf("\t\t\t(float)\n");
+		printf("(float)\n");
 		break;
 	case DT_DOUBLE:
-		printf("\t\t\t(double)\n");
+		printf("(double)\n");
 		break;
 	case DT_STRING:
-		printf("\t\t\t(string)\n");
+		printf("(string)\n");
 		break;
 	default:
-		printf("\t\t\t(N/A)\n");
+		printf("(N/A)\n");
 		break;
 	}
 }
@@ -434,8 +434,8 @@ extern char* get_node_str(NODE_TYPE node_type) {
 	case NODE_MOD:			return "%";
 	case NODE_RSHIFT:		return ">>";
 	case NODE_LSHIFT:		return "<<";
-	case NODE_RROT:			return "<<<";
-	case NODE_LROT:			return ">>>";
+	case NODE_RROT:			return ">>>";
+	case NODE_LROT:			return "<<<";
 	case NODE_COMPL:		return "~";
 	case NODE_NOT:			return "!";
 	case NODE_TRUE:			return "true";
