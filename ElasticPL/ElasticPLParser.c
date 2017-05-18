@@ -1053,11 +1053,7 @@ extern bool parse_token_list(SOURCE_TOKEN_LIST *token_list) {
 		case TOKEN_LITERAL:
 		case TOKEN_TRUE:
 		case TOKEN_FALSE:
-			//if ((i > 0) && (token_list->token[i - 1].type == TOKEN_FUNCTION))
-			//	break;
-
 			if (!create_exp(&token_list->token[i], i)) return false;
-//			stack_exp[stack_exp_idx]->data_type = token_list->token[i].data_type;
 			break;
 
 		case TOKEN_END_STATEMENT:
@@ -1134,7 +1130,6 @@ extern bool parse_token_list(SOURCE_TOKEN_LIST *token_list) {
 			pop_op();
 
 			// Link Block To If/Repeat/Init Operator
-//			while ((top_op >= 0) && (token_list->token[top_op].type == TOKEN_IF || token_list->token[top_op].type == TOKEN_ELSE || token_list->token[top_op].type == TOKEN_REPEAT || token_list->token[top_op].type == TOKEN_INIT_ONCE)) {
 			while ((top_op >= 0) && (token_list->token[top_op].type == TOKEN_IF || token_list->token[top_op].type == TOKEN_ELSE || token_list->token[top_op].type == TOKEN_REPEAT || token_list->token[top_op].type == TOKEN_FUNCTION)) {
 					token_id = pop_op();
 				if (!create_exp(&token_list->token[token_id], token_id))
@@ -1191,27 +1186,26 @@ extern bool parse_token_list(SOURCE_TOKEN_LIST *token_list) {
 			}
 			break;
 
-		//case TOKEN_VERIFY:
-		//	// Validate That "Verify" Is Not Embeded In A Block
-		//	if (stack_op_idx >= 0) {
-		//		applog(LOG_ERR, "Syntax Error: Line: %d - Invalid Verify Statement\n", stack_exp[stack_exp_idx]->line_num);
-		//		return false;
-		//	}
-
-		//	push_op(i);
-		//	break;
-
-		case TOKEN_RESULT:
-			// Validate That "Result" Is Not Embeded In A Block
-			//if (stack_op_idx >= 0) {
-			//	applog(LOG_ERR, "Syntax Error: Line: %d - Invalid Verify Statement\n", stack_exp[stack_exp_idx]->line_num);
-			//	return false;
-			//}
-
-			push_op(i);
-			break;
-
 		default:
+			// Process Expressions Already In Stack Based On Precedence
+			while ((top_op >= 0) && (token_list->token[top_op].prec <= token_list->token[i].prec)) {
+
+				// The Following Operators Require Special Handling
+				if ((token_list->token[top_op].type == TOKEN_FUNCTION) ||
+					(token_list->token[top_op].type == TOKEN_OPEN_PAREN) ||
+					(token_list->token[top_op].type == TOKEN_BLOCK_BEGIN) ||
+					(token_list->token[top_op].type == TOKEN_VAR_BEGIN) ||
+					(token_list->token[top_op].type == TOKEN_IF) ||
+					(token_list->token[top_op].type == TOKEN_ELSE) ||
+					(token_list->token[top_op].type == TOKEN_REPEAT)) {
+					break;
+				}
+
+				token_id = pop_op();
+				if (!create_exp(&token_list->token[token_id], token_id))
+					return false;
+			}
+
 			push_op(i);
 			break;
 		}

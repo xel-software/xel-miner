@@ -29,17 +29,17 @@ extern char* convert_ast_to_c() {
 	int i, idx = 0;
 
 	tabs = 0;
-	use_elasticpl_init = false;
+//	use_elasticpl_init = false;
 	use_elasticpl_math = false;
 
 	// Check For "init_once", If Found Move Logic To Seperate Function
-	if (vm_ast[0]->type == NODE_INIT_ONCE) {
-		idx = 1;
-		use_elasticpl_init = true;
-		code1 = append_strings(code1, convert(vm_ast[0]->left));
-	}
+	//if (vm_ast[0]->type == NODE_INIT_ONCE) {
+	//	idx = 1;
+	//	use_elasticpl_init = true;
+	//	code1 = append_strings(code1, convert(vm_ast[0]->left));
+	//}
 
-	for (i = idx; i < vm_ast_cnt; i++) {
+	for (i = ast_func_idx; i < vm_ast_cnt; i++) {
 		code2 = append_strings(code2, convert(vm_ast[i]));
 	}
 
@@ -129,12 +129,64 @@ extern char* convert_ast_to_c() {
 	return code;
 }
 
+static void get_cast(char *lcast, char *rcast, DATA_TYPE ldata_type, DATA_TYPE rdata_type, bool right_only) {
+	lcast[0] = 0;
+	rcast[0] = 0;
+
+	if (ldata_type == rdata_type)
+		return;
+	else if (right_only || (rdata_type < ldata_type)) {
+		switch (ldata_type) {
+		case DT_UINT:
+			sprintf(rcast, "(uint32_t)");
+			break;
+		case DT_LONG:
+			sprintf(rcast, "(int64_t)");
+			break;
+		case DT_ULONG:
+			sprintf(rcast, "(uint64_t)");
+			break;
+		case DT_FLOAT:
+			sprintf(rcast, "(float)");
+			break;
+		case DT_DOUBLE:
+			sprintf(rcast, "(double)");
+			break;
+		}
+		return;
+	}
+	else {
+		switch (rdata_type) {
+		case DT_UINT:
+			sprintf(lcast, "(uint32_t)");
+			break;
+		case DT_LONG:
+			sprintf(lcast, "(int64_t)");
+			break;
+		case DT_ULONG:
+			sprintf(lcast, "(uint64_t)");
+			break;
+		case DT_FLOAT:
+			sprintf(lcast, "(float)");
+			break;
+		case DT_DOUBLE:
+			sprintf(lcast, "(double)");
+			break;
+		}
+		return;
+	}
+}
+
+
 // Use Post Order Traversal To Translate The Expressions In The AST to C
 static char* convert(ast* exp) {
+	uint32_t val;
 	char *lval = NULL;
 	char *rval = NULL;
 	char *tmp = NULL;
 	char *result = NULL;
+	char lcast[16];
+	char rcast[16];
 
 	bool l_is_float = false;
 	bool r_is_float = false;
@@ -169,47 +221,84 @@ static char* convert(ast* exp) {
 		result[0] = 0;
 
 		switch (exp->type) {
+		case NODE_FUNCTION:
+			sprintf(result, "void %s() {\n%s}\n\n", exp->svalue, rval);
+			break;
+		case NODE_CALL_FUNCTION:
+			sprintf(result, "%s()", exp->svalue);
+			break;
 		case NODE_CONSTANT:
-			if (exp->data_type == DT_INT)
-				sprintf(result, "%d", exp->value);
-			else if (exp->data_type == DT_FLOAT)
+			switch (exp->data_type) {
+			case DT_INT:
+			case DT_LONG:
+				sprintf(result, "%ll", exp->ivalue);
+				break;
+			case DT_UINT:
+			case DT_ULONG:
+				sprintf(result, "%llu", exp->uvalue);
+				break;
+			case DT_FLOAT:
+			case DT_DOUBLE:
 				sprintf(result, "%f", exp->fvalue);
-			else if (exp->data_type == DT_STRING)
-				sprintf(result, "%s", exp->svalue);
+				break;
+			default:
+				sprintf(result, "0");
+			}
 			break;
 		case NODE_VAR_CONST:
-			if (exp->value < 0 || exp->value > VM_MEMORY_SIZE) {
-				if (exp->data_type == DT_INT)
-					sprintf(result, "m[0]");
-				else if (exp->data_type == DT_FLOAT)
-					sprintf(result, "f[0]");
-				else
-					sprintf(result, "0");
-			}
-			else {
-				if (exp->data_type == DT_INT)
-					sprintf(result, "m[%lu]", exp->value);
-				else if (exp->data_type == DT_FLOAT)
-					sprintf(result, "f[%lu]", exp->value);
-				else
-					sprintf(result, "//");
+			switch (exp->data_type) {
+			case DT_INT:
+				sprintf(result, "i[%lu]", ((exp->uvalue >= max_vm_ints) ? 0 : exp->uvalue));
+				break;
+			case DT_UINT:
+				sprintf(result, "u[%lu]", ((exp->uvalue >= max_vm_uints) ? 0 : exp->uvalue));
+				break;
+			case DT_LONG:
+				sprintf(result, "l[%lu]", ((exp->uvalue >= max_vm_longs) ? 0 : exp->uvalue));
+				break;
+			case DT_ULONG:
+				sprintf(result, "ul[%lu]", ((exp->uvalue >= max_vm_ulongs) ? 0 : exp->uvalue));
+				break;
+			case DT_FLOAT:
+				sprintf(result, "f[%lu]", ((exp->uvalue >= max_vm_floats) ? 0 : exp->uvalue));
+				break;
+			case DT_DOUBLE:
+				sprintf(result, "d[%lu]", ((exp->uvalue >= max_vm_doubles) ? 0 : exp->uvalue));
+				break;
+			default:
+				sprintf(result, "0");
 			}
 			break;
 		case NODE_VAR_EXP:
-			if (exp->data_type == DT_INT)
-				sprintf(result, "m[%s]", lval);
-			else if (exp->data_type == DT_FLOAT)
+			switch (exp->data_type) {
+			case DT_INT:
+				sprintf(result, "i[%s]", lval);
+				break;
+			case DT_UINT:
+				sprintf(result, "u[%s]", lval);
+				break;
+			case DT_LONG:
+				sprintf(result, "l[%s]", lval);
+				break;
+			case DT_ULONG:
+				sprintf(result, "ul[%s]", lval);
+				break;
+			case DT_FLOAT:
 				sprintf(result, "f[%s]", lval);
-			else
+				break;
+			case DT_DOUBLE:
+				sprintf(result, "d[%s]", lval);
+				break;
+			default:
 				sprintf(result, "//");
+			}
 			break;
 		case NODE_ASSIGN:
-			if (l_is_float && !r_is_float)
-				sprintf(result, "%s = (double)(%s);\n%smangle_state((int)%s%s)", lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "%s = (int)(%s);\n%smangle_state(%s%s)", lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
+			if (rcast[0])
+				sprintf(result, "%s = %s(%s)", lval, rcast, rval);
 			else
-				sprintf(result, "%s = %s;\n%smangle_state(%s%s%s)", lval, rval, tab[tabs], (l_is_float ? "(int)" : ""), lval, (opt_opencl ? ", &vm_state[0]" : ""));
+				sprintf(result, "%s = %s", lval, rval);
 			break;
 		case NODE_IF:
 			if (tabs < 1) tabs = 1;
@@ -258,342 +347,274 @@ static char* convert(ast* exp) {
 				sprintf(result, "%s%s", lval, (rval ? rval : ""));
 			break;
 		case NODE_INCREMENT_R:
-			if (exp->end_stmnt) {
-				sprintf(result, "++%s;\n%smangle_state(%s%s%s)", lval, tab[tabs], (l_is_float ? "(int)" : ""), lval, (opt_opencl ? ", &vm_state[0]" : ""));
-			}
-			else
-				sprintf(result, "++%s", lval);
-			exp->is_float = l_is_float;
+			sprintf(result, "++%s", lval);
 			break;
 		case NODE_INCREMENT_L:
-			if (exp->end_stmnt) {
-				sprintf(result, "%s++;\n%smangle_state(%s%s%s)", lval, tab[tabs], (l_is_float ? "(int)" : ""), lval, (opt_opencl ? ", &vm_state[0]" : ""));
-			}
-			else
-				sprintf(result, "%s++", lval);
-			exp->is_float = l_is_float;
+			sprintf(result, "%s++", lval);
 			break;
 		case NODE_ADD:
-			if (l_is_float && !r_is_float)
-				sprintf(result, "(%s + (double)(%s))", lval, rval);
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "((double)(%s) + %s)", lval, rval);
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
+			if (lcast[0])
+				sprintf(result, "(%s)(%s) + %s", lcast, lval, rval);
+			else if (rcast[0])
+				sprintf(result, "%s + (%s)(%s)", lval, rcast, rval);
 			else
-				sprintf(result, "(%s + %s)", lval, rval);
-			exp->is_float = l_is_float | r_is_float;
+				sprintf(result, "%s + %s", lval, rval);
 			break;
 		case NODE_ADD_ASSIGN:
-			if (l_is_float && !r_is_float)
-				sprintf(result, "%s += (double)(%s);\n%smangle_state((int)%s%s)", lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "%s += (int)(%s);\n%smangle_state(%s%s)", lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
+			if (rcast[0])
+				sprintf(result, "%s += %s(%s)", lval, rcast, rval);
 			else
-				sprintf(result, "%s += %s;\n%smangle_state(%s%s%s)", lval, rval, tab[tabs], (l_is_float ? "(int)" : ""), lval, (opt_opencl ? ", &vm_state[0]" : ""));
+				sprintf(result, "%s += %s", lval, rval);
 			break;
 		case NODE_SUB_ASSIGN:
-			if (l_is_float && !r_is_float)
-				sprintf(result, "%s -= (double)(%s);\n%smangle_state((int)%s%s)", lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "%s -= (int)(%s);\n%smangle_state(%s%s)", lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
+			if (rcast[0])
+				sprintf(result, "%s -= %s(%s)", lval, rcast, rval);
 			else
-				sprintf(result, "%s -= %s;\n%smangle_state(%s%s%s)", lval, rval, tab[tabs], (l_is_float ? "(int)" : ""), lval, (opt_opencl ? ", &vm_state[0]" : ""));
+				sprintf(result, "%s -= %s", lval, rval);
 			break;
 		case NODE_MUL_ASSIGN:
-			if (l_is_float && !r_is_float)
-				sprintf(result, "%s *= (double)(%s);\n%smangle_state((int)%s%s)", lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "%s *= (int)(%s);\n%smangle_state(%s%s)", lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
+			if (rcast[0])
+				sprintf(result, "%s *= %s(%s)", lval, rcast, rval);
 			else
-				sprintf(result, "%s *= %s;\n%smangle_state(%s%s%s)", lval, rval, tab[tabs], (l_is_float ? "(int)" : ""), lval, (opt_opencl ? ", &vm_state[0]" : ""));
+				sprintf(result, "%s *= %s", lval, rval);
 			break;
 		case NODE_DIV_ASSIGN:
-			if (!l_is_float && !r_is_float)
-				sprintf(result, "%s = ((%s != 0) ? (int)((double)(%s) / (double)(%s)) : 0);\n%smangle_state(%s%s)", lval, rval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
-			else if (l_is_float && !r_is_float)
-				sprintf(result, "%s = ((%s != 0) ? %s / (double)(%s) : 0.0);\n%smangle_state((int)%s%s)", lval, rval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "%s = ((%s != 0.0) ? (int)((double)(%s) / %s) : 0);\n%smangle_state(%s%s)", lval, rval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
+			if (rcast[0])
+				sprintf(result, "%s = ((%s != 0) ? %s / %s(%s) : 0)", lval, rval, lval, rcast, rval);
 			else
-				sprintf(result, "%s = ((%s != 0.0) ? %s / %s : 0.0);\n%smangle_state((int)%s%s)", lval, rval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
+				sprintf(result, "%s = ((%s != 0) ? %s / %s : 0)", lval, rval, lval, rval);
 			break;
 		case NODE_MOD_ASSIGN:
-			if (!l_is_float && !r_is_float)
-				sprintf(result, "%s = ((%s != 0) ? %s %% %s : 0);\n%smangle_state(%s%s)", lval, rval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
-			else if (l_is_float && !r_is_float)
-				sprintf(result, "%s = (double)((%s != 0) ? (int)(%s) %% %s : 0);\n%smangle_state((int)%s%s)", lval, rval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "%s = (((int)(%s) != 0) ? %s %% (int)(%s) : 0);\n%smangle_state(%s%s)", lval, rval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
+			if (rcast[0])
+				sprintf(result, "%s = ((%s != 0) ? %s %% %s(%s) : 0)", lval, rval, lval, rcast, rval);
 			else
-				sprintf(result, "%s = (double)(((int)(%s) != 0) ? (int)(%s) %% (int)(%s) : 0);\n%smangle_state((int)%s%s)", lval, rval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
+				sprintf(result, "%s = ((%s != 0) ? %s %% %s : 0)", lval, rval, lval, rval);
 			break;
 		case NODE_LSHFT_ASSIGN:
-			if (!l_is_float && !r_is_float)
-				sprintf(result, "%s = %s << %s;\n%smangle_state(%s%s)", lval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
-			else if (l_is_float && !r_is_float)
-				sprintf(result, "%s = (double)((int)(%s) << %s);\n%smangle_state((int)%s%s)", lval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "%s = %s << (int)(%s);\n%smangle_state(%s%s)", lval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
+			if (rcast[0])
+				sprintf(result, "%s = %s << %s(%s)", lval, lval, rcast, rval);
 			else
-				sprintf(result, "%s = (double)((int)(%s) << (int)(%s));\n%smangle_state((int)%s%s)", lval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
+				sprintf(result, "%s = %s << %s", lval, lval, rval);
 			break;
 		case NODE_RSHFT_ASSIGN:
-			if (!l_is_float && !r_is_float)
-				sprintf(result, "%s = %s >> %s;\n%smangle_state(%s%s)", lval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
-			else if (l_is_float && !r_is_float)
-				sprintf(result, "%s = (double)((int)(%s) >> %s);\n%smangle_state((int)%s%s)", lval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "%s = %s >> (int)(%s);\n%smangle_state(%s%s)", lval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
+			if (rcast[0])
+				sprintf(result, "%s = %s >> %s(%s)", lval, lval, rcast, rval);
 			else
-				sprintf(result, "%s = (double)((int)(%s) >> (int)(%s));\n%smangle_state((int)%s%s)", lval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
+				sprintf(result, "%s = %s >> %s", lval, lval, rval);
 			break;
 		case NODE_AND_ASSIGN:
-			if (!l_is_float && !r_is_float)
-				sprintf(result, "%s = %s & %s;\n%smangle_state(%s%s)", lval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
-			else if (l_is_float && !r_is_float)
-				sprintf(result, "%s = (double)((int)(%s) & %s);\n%smangle_state((int)%s%s)", lval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "%s = %s & (int)(%s);\n%smangle_state(%s%s)", lval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
+			if (rcast[0])
+				sprintf(result, "%s = %s & %s(%s)", lval, lval, rcast, rval);
 			else
-				sprintf(result, "%s = (double)((int)(%s) & (int)(%s));\n%smangle_state((int)%s%s)", lval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
+				sprintf(result, "%s = %s & %s", lval, lval, rval);
 			break;
 		case NODE_XOR_ASSIGN:
-			if (!l_is_float && !r_is_float)
-				sprintf(result, "%s = %s ^ %s;\n%smangle_state(%s%s)", lval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
-			else if (l_is_float && !r_is_float)
-				sprintf(result, "%s = (double)((int)(%s) ^ %s);\n%smangle_state((int)%s%s)", lval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "%s = %s ^ (int)(%s);\n%smangle_state(%s%s)", lval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
+			if (rcast[0])
+				sprintf(result, "%s = %s ^ %s(%s)", lval, lval, rcast, rval);
 			else
-				sprintf(result, "%s = (double)((int)(%s) ^ (int)(%s));\n%smangle_state((int)%s%s)", lval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
+				sprintf(result, "%s = %s ^ %s", lval, lval, rval);
 			break;
 		case NODE_OR_ASSIGN:
-			if (!l_is_float && !r_is_float)
-				sprintf(result, "%s = %s | %s;\n%smangle_state(%s%s)", lval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
-			else if (l_is_float && !r_is_float)
-				sprintf(result, "%s = (double)((int)(%s) | %s);\n%smangle_state((int)%s%s)", lval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "%s = %s | (int)(%s);\n%smangle_state(%s%s)", lval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
+			if (rcast[0])
+				sprintf(result, "%s = %s | %s(%s)", lval, lval, rcast, rval);
 			else
-				sprintf(result, "%s = (double)((int)(%s) | (int)(%s));\n%smangle_state((int)%s%s)", lval, lval, rval, tab[tabs], lval, (opt_opencl ? ", &vm_state[0]" : ""));
+				sprintf(result, "%s = %s | %s", lval, lval, rval);
 			break;
 		case NODE_DECREMENT_R:
-			if (exp->end_stmnt) {
-				sprintf(result, "--%s;\n%smangle_state(%s%s%s)", lval, tab[tabs], (l_is_float ? "(int)" : ""), lval, (opt_opencl ? ", &vm_state[0]" : ""));
-			}
-			else
-				sprintf(result, "--%s", lval);
-			exp->is_float = l_is_float;
+			sprintf(result, "--%s", lval);
 			break;
 		case NODE_DECREMENT_L:
-			if (exp->end_stmnt) {
-				sprintf(result, "%s--;\n%smangle_state(%s%s%s)", lval, tab[tabs], (l_is_float ? "(int)" : ""), lval, (opt_opencl ? ", &vm_state[0]" : ""));
-			}
-			else
-				sprintf(result, "%s--", lval);
-			exp->is_float = l_is_float;
+			sprintf(result, "%s--", lval);
 			break;
 		case NODE_SUB:
-			if (l_is_float && !r_is_float)
-				sprintf(result, "(%s - (double)(%s))", lval, rval);
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "((double)(%s) - %s)", lval, rval);
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
+			if (lcast[0])
+				sprintf(result, "(%s)(%s) - %s", lcast, lval, rval);
+			else if (rcast[0])
+				sprintf(result, "%s - (%s)(%s)", lval, rcast, rval);
 			else
-				sprintf(result, "(%s - %s)", lval, rval);
-			exp->is_float = l_is_float | r_is_float;
+				sprintf(result, "%s - %s", lval, rval);
 			break;
 		case NODE_MUL:
-			if (l_is_float && !r_is_float)
-				sprintf(result, "(%s * (double)(%s))", lval, rval);
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "((double)(%s) * %s)", lval, rval);
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
+			if (lcast[0])
+				sprintf(result, "(%s)(%s) * %s", lcast, lval, rval);
+			else if (rcast[0])
+				sprintf(result, "%s * (%s)(%s)", lval, rcast, rval);
 			else
-				sprintf(result, "(%s * %s)", lval, rval);
-			exp->is_float = l_is_float | r_is_float;
+				sprintf(result, "%s * %s", lval, rval);
 			break;
 		case NODE_DIV:
-			if (!l_is_float && !r_is_float)
-				sprintf(result, "((%s != 0) ? (double)(%s) / (double)(%s) : 0.0)", rval, lval, rval);
-			else if (l_is_float && !r_is_float)
-				sprintf(result, "((%s != 0) ? %s / (double)(%s) : 0.0)", rval, lval, rval);
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "((%s != 0.0) ? (double)(%s) / %s : 0.0)", rval, lval, rval);
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
+			if (rcast[0])
+				sprintf(result, "((%s != 0) ? %s / %s(%s) : 0)", rval, lval, rcast, rval);
 			else
-				sprintf(result, "((%s != 0.0) ? %s / %s : 0.0)", rval, lval, rval);
-			exp->is_float = true;
+				sprintf(result, "((%s != 0) ? %s / %s : 0)", rval, lval, rval);
 			break;
 		case NODE_MOD:
-			if (l_is_float && r_is_float)
-				sprintf(result, "(((int)(%s) > 0) ? (int)(%s) %% (int)(%s) : 0)", rval, lval, rval);
-			else if (l_is_float && !r_is_float)
-				sprintf(result, "((%s > 0) ? (int)(%s) %% %s : 0)", rval, lval, rval);
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "(((int)(%s) > 0) ? %s %% (int)(%s) : 0)", rval, lval, rval);
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
+			if (rcast[0])
+				sprintf(result, "((%s != 0) ? %s %% %s(%s) : 0)", rval, lval, rcast, rval);
 			else
-				sprintf(result, "((%s > 0) ? %s %% %s : 0)", rval, lval, rval);
-			exp->is_float = false;
+				sprintf(result, "((%s != 0) ? %s %% %s : 0)", rval, lval, rval);
 			break;
 		case NODE_LSHIFT:
-			if (l_is_float && r_is_float)
-				sprintf(result, "((int)(%s) << (int)(%s))", lval, rval);
-			else if (l_is_float && !r_is_float)
-				sprintf(result, "((int)(%s) << %s)", lval, rval);
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "(%s << (int)(%s))", lval, rval);
-			else
-				sprintf(result, "(%s << %s)", lval, rval);
-			exp->is_float = false;
+			//get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
+			//if (rcast[0])
+			//	sprintf(result, "(%s << %s)", lval, rcast, rval);
+			//else
+			sprintf(result, "(%s << %s)", lval, rval);
 			break;
 		case NODE_LROT:
-			if (l_is_float && r_is_float)
-				sprintf(result, "rotl32( (int)(%s), (int)(%s) %% 32)", lval, rval);
-			else if (l_is_float && !r_is_float)
-				sprintf(result, "rotl32( (int)(%s), %s %% 32)", lval, rval);
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "rotl32( %s, (int)(%s) %% 32)", lval, rval);
-			else
-				sprintf(result, "rotl32( %s, %s %% 32)", lval, rval);
-			exp->is_float = false;
+			//if (l_is_float && r_is_float)
+			//	sprintf(result, "rotl32( (int)(%s), (int)(%s) %% 32)", lval, rval);
+			//else if (l_is_float && !r_is_float)
+			//	sprintf(result, "rotl32( (int)(%s), %s %% 32)", lval, rval);
+			//else if (!l_is_float && r_is_float)
+			//	sprintf(result, "rotl32( %s, (int)(%s) %% 32)", lval, rval);
+			//else
+			//	sprintf(result, "rotl32( %s, %s %% 32)", lval, rval);
+			//exp->is_float = false;
 			break;
 		case NODE_RSHIFT:
-			if (l_is_float && r_is_float)
-				sprintf(result, "((int)(%s) >> (int)(%s))", lval, rval);
-			else if (l_is_float && !r_is_float)
-				sprintf(result, "((int)(%s) >> %s)", lval, rval);
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "(%s >> (int)(%s))", lval, rval);
-			else
-				sprintf(result, "(%s >> %s)", lval, rval);
-			exp->is_float = false;
+			//get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
+			//if (rcast[0])
+			//	sprintf(result, "(%s >> %s)", lval, rcast, rval);
+			//else
+			sprintf(result, "(%s >> %s)", lval, rval);
 			break;
 		case NODE_RROT:
-			if (l_is_float && r_is_float)
-				sprintf(result, "rotr32( (int)(%s), (int)(%s) %% 32)", lval, rval);
-			else if (l_is_float && !r_is_float)
-				sprintf(result, "rotr32( (int)(%s), %s %% 32)", lval, rval);
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "rotr32( %s, (int)(%s) %% 32)", lval, rval);
-			else
-				sprintf(result, "rotr32( %s, %s %% 32)", lval, rval);
-			exp->is_float = false;
+			//if (l_is_float && r_is_float)
+			//	sprintf(result, "rotr32( (int)(%s), (int)(%s) %% 32)", lval, rval);
+			//else if (l_is_float && !r_is_float)
+			//	sprintf(result, "rotr32( (int)(%s), %s %% 32)", lval, rval);
+			//else if (!l_is_float && r_is_float)
+			//	sprintf(result, "rotr32( %s, (int)(%s) %% 32)", lval, rval);
+			//else
+			//	sprintf(result, "rotr32( %s, %s %% 32)", lval, rval);
+			//exp->is_float = false;
 			break;
 		case NODE_NOT:
 			sprintf(result, "!(%s)", lval);
-			exp->is_float = l_is_float;
 			break;
 		case NODE_COMPL:
 			sprintf(result, "~(%s)", lval);
-			exp->is_float = l_is_float;
 			break;
 		case NODE_AND:
-			if (l_is_float && !r_is_float)
-				sprintf(result, "(%s && (double)(%s))", lval, rval);
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "(%s && (int)(%s))", lval, rval);
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
+			if (lcast[0])
+				sprintf(result, "((%s)(%s) && %s)", lcast, lval, rval);
+			else if (rcast[0])
+				sprintf(result, "(%s && (%s)(%s))", lval, rcast, rval);
 			else
 				sprintf(result, "(%s && %s)", lval, rval);
-			exp->is_float = false;
 			break;
 		case NODE_OR:
-			if (l_is_float && !r_is_float)
-				sprintf(result, "(%s || (double)(%s))", lval, rval);
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "(%s || (int)(%s))", lval, rval);
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
+			if (lcast[0])
+				sprintf(result, "((%s)(%s) || %s)", lcast, lval, rval);
+			else if (rcast[0])
+				sprintf(result, "(%s || (%s)(%s))", lval, rcast, rval);
 			else
 				sprintf(result, "(%s || %s)", lval, rval);
-			exp->is_float = false;
 			break;
 		case NODE_BITWISE_AND:
-			if (l_is_float && r_is_float)
-				sprintf(result, "((int)(%s) & (int)(%s))", lval, rval);
-			else if (l_is_float && !r_is_float)
-				sprintf(result, "((int)(%s) & %s)", lval, rval);
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "(%s & (int)(%s))", lval, rval);
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
+			if (lcast[0])
+				sprintf(result, "((%s)(%s) & %s)", lcast, lval, rval);
+			else if (rcast[0])
+				sprintf(result, "(%s & (%s)(%s))", lval, rcast, rval);
 			else
 				sprintf(result, "(%s & %s)", lval, rval);
-			exp->is_float = false;
 			break;
 		case NODE_BITWISE_XOR:
-			if (l_is_float && r_is_float)
-				sprintf(result, "((int)(%s) ^ (int)(%s))", lval, rval);
-			else if (l_is_float && !r_is_float)
-				sprintf(result, "((int)(%s) ^ %s)", lval, rval);
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "(%s ^ (int)(%s))", lval, rval);
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
+			if (lcast[0])
+				sprintf(result, "((%s)(%s) ^ %s)", lcast, lval, rval);
+			else if (rcast[0])
+				sprintf(result, "(%s ^ (%s)(%s))", lval, rcast, rval);
 			else
 				sprintf(result, "(%s ^ %s)", lval, rval);
-			exp->is_float = false;
 			break;
 		case NODE_BITWISE_OR:
-			if (l_is_float && r_is_float)
-				sprintf(result, "((int)(%s) | (int)(%s))", lval, rval);
-			else if (l_is_float && !r_is_float)
-				sprintf(result, "((int)(%s) | %s)", lval, rval);
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "(%s | (int)(%s))", lval, rval);
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
+			if (lcast[0])
+				sprintf(result, "((%s)(%s) | %s)", lcast, lval, rval);
+			else if (rcast[0])
+				sprintf(result, "(%s | (%s)(%s))", lval, rcast, rval);
 			else
 				sprintf(result, "(%s | %s)", lval, rval);
-			exp->is_float = false;
 			break;
 		case NODE_EQ:
-			if (l_is_float && !r_is_float)
-				sprintf(result, "(%s == (double)(%s))", lval, rval);
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "((double)(%s) == %s)", lval, rval);
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
+			if (lcast[0])
+				sprintf(result, "((%s)(%s) == %s)", lcast, lval, rval);
+			else if (rcast[0])
+				sprintf(result, "(%s == (%s)(%s))", lval, rcast, rval);
 			else
 				sprintf(result, "(%s == %s)", lval, rval);
-			exp->is_float = false;
 			break;
 		case NODE_NE:
-			if (l_is_float && !r_is_float)
-				sprintf(result, "(%s != (double)(%s))", lval, rval);
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "((double)(%s) != %s)", lval, rval);
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
+			if (lcast[0])
+				sprintf(result, "((%s)(%s) != %s)", lcast, lval, rval);
+			else if (rcast[0])
+				sprintf(result, "(%s != (%s)(%s))", lval, rcast, rval);
 			else
 				sprintf(result, "(%s != %s)", lval, rval);
-			exp->is_float = false;
 			break;
 		case NODE_GT:
-			if (l_is_float && !r_is_float)
-				sprintf(result, "(%s > (double)(%s))", lval, rval);
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "((double)(%s) > %s)", lval, rval);
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
+			if (lcast[0])
+				sprintf(result, "((%s)(%s) > %s)", lcast, lval, rval);
+			else if (rcast[0])
+				sprintf(result, "(%s > (%s)(%s))", lval, rcast, rval);
 			else
 				sprintf(result, "(%s > %s)", lval, rval);
-			exp->is_float = false;
 			break;
 		case NODE_LT:
-			if (l_is_float && !r_is_float)
-				sprintf(result, "(%s < (double)(%s))", lval, rval);
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "((double)(%s) < %s)", lval, rval);
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
+			if (lcast[0])
+				sprintf(result, "((%s)(%s) < %s)", lcast, lval, rval);
+			else if (rcast[0])
+				sprintf(result, "(%s < (%s)(%s))", lval, rcast, rval);
 			else
 				sprintf(result, "(%s < %s)", lval, rval);
-			exp->is_float = false;
 			break;
 		case NODE_GE:
-			if (l_is_float && !r_is_float)
-				sprintf(result, "(%s >= (double)(%s))", lval, rval);
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "((double)(%s) >= %s)", lval, rval);
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
+			if (lcast[0])
+				sprintf(result, "((%s)(%s) >= %s)", lcast, lval, rval);
+			else if (rcast[0])
+				sprintf(result, "(%s >= (%s)(%s))", lval, rcast, rval);
 			else
 				sprintf(result, "(%s >= %s)", lval, rval);
-			exp->is_float = false;
 			break;
 		case NODE_LE:
-			if (l_is_float && !r_is_float)
-				sprintf(result, "(%s <= (double)(%s))", lval, rval);
-			else if (!l_is_float && r_is_float)
-				sprintf(result, "((double)(%s) <= %s)", lval, rval);
+			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
+			if (lcast[0])
+				sprintf(result, "((%s)(%s) <= %s)", lcast, lval, rval);
+			else if (rcast[0])
+				sprintf(result, "(%s <= (%s)(%s))", lval, rcast, rval);
 			else
 				sprintf(result, "(%s <= %s)", lval, rval);
-			exp->is_float = false;
 			break;
 		case NODE_NEG:
 			sprintf(result, "-(%s)", lval);
 			exp->is_float = l_is_float;
 			break;
-		case NODE_VERIFY:
+		case NODE_RESULT:
 			sprintf(result, "\n\tbounty_found = (%s != 0 ? 1 : 0)", lval);
 			break;
 		case NODE_PARAM:
@@ -720,7 +741,7 @@ static char* convert(ast* exp) {
 		if (tmp) free(tmp);
 
 		// Terminate Statements
-		if (exp->end_stmnt && (exp->type != NODE_IF) && (exp->type != NODE_REPEAT) && (exp->type != NODE_BLOCK)) {
+		if (exp->end_stmnt && (exp->type != NODE_FUNCTION) && (exp->type != NODE_IF) && (exp->type != NODE_REPEAT) && (exp->type != NODE_BLOCK)) {
 			tmp = malloc(strlen(result) + 20);
 			sprintf(tmp, "%s%s;\n", tab[tabs], result);
 			free(result);
