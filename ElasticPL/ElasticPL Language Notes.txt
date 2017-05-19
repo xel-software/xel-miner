@@ -32,12 +32,12 @@ GLOBAL VARIABLES
 	Named variables are not allowed, instead data is stored in an array which
 	represents the data type.  The arrays are declared as follows:
 	
-		array_int    XXXX;
-		array_uint   XXXX;
-		array_long   XXXX;
-		array_ulong  XXXX;
-		array_float  XXXX;
-		array_double XXXX;
+		array_int    XXXX
+		array_uint   XXXX
+		array_long   XXXX
+		array_ulong  XXXX
+		array_float  XXXX
+		array_double XXXX
 	
 		Note 1: XXXX represents the number of elements in the array.
 		Note 2: Only 1 instance of each data type can be declared.
@@ -58,17 +58,54 @@ GLOBAL VARIABLES
 		Note 2: Only 1 instance of each data type can be declared.
 		Note 3: The maximim combined storage size of all Global Variables can
 		        not exceed (TBD - need to determine max memory)
-
 				
-	If an array variable is combined with a variable or constant of a different
-	data type.  The values being combined will be cast based on	the following
+	Although it is discouraged to mix data types, there are times when this may
+	be necessary.  Because ElasticPL does not have an explicit 'cast' operation,
+	when an array variable is combined with a variable or constant of a different
+	data type, the values being combined will be cast based on the following
 	precedence:
 	
 		int32_t -> uint32_t -> int64_t -> uint64_t -> float -> double
+		
+		For example, using d[6] = u[5] / i[5];
+		
+			u[5] / i[5] evaluates to u[5] / (uint)(i[5]) 
+			
+			no cast is needed for (u[5] / (uint)(i[5])) as the d[6] storage
+			can handle the result of the operation.
 
 	If a value assigned to an array variable has a different data type, the
 	value will be cast to the same type as the array variable.
+	
+	Variables that have a calculated index value can accept an Unsigned Int /
+	Long as thier index; however, a boundary check will need to be performed
+	which may impact performance.  Therefore, you may want to minimize the use
+	of these.  For example:
+	
+		u[0] = u[u[3]]; evaluates to: u[0] = ((u[3]<MAX_ALLOWED) ? u[u[3]] : 0)
+		u[u[3]] = u[0]; evaluates to: if (u[3]<MAX_ALLOWED) { u[u[3]] = u[0]; }
 
+		
+VM INITIALIZED VARIABLES
+------------------------
+
+	The ElasticPL VM inializes 12 Unsigned Int variables each run/iteration.
+	These variables are stored in m[0] through m[11] and defined as follows:
+	
+		m[0]	Thread ID
+		m[1]	Run Number
+		m[2]	Iteration Number
+		m[3]	Not Used (Default to 0xFFFFFFFF)
+		m[4]	Random 32 bit Unsigned Int
+		.
+		.
+		.
+		m[11]	Random 32 bit Unsigned Int
+
+	The variables allow the job authors to randomize thier algorithm inputs
+	as well as trigger functions to run at specific intervals (i.e. run an 
+	'init' function only on run/iteration 0)
+	
 		
 FUNCTIONS
 ---------
@@ -122,17 +159,139 @@ FUNCTIONS
 		}
 		
 		The result of this function is True if i[0] == 0; otherwise, it's false
+
+
+ELASTICPL STATEMENTS
+--------------------
 	
+	Similare to C, all ElasticPL statements are terminated by a ';'
+	
+	IF / ELSE Statements
+	--------------------
+	
+		ElasticPL supports IF / ELSE statements.  Their behavior is identical
+		to the C programming language.
+
+		
+	REPEAT Statement
+	----------------
+	
+		ElasticPL does not allow DO, WHILE, or FOR loops.  Instead, ElasticPL
+		uses a 'repeat' statement which ensures all loops terminate and cannot
+		run indefinitely.
+		
+		The format of the 'repeat' statment is as follows:
+		
+			repeat( <variable1>, <variable2>, <constant> ) { }
+
+			repeat( u[100], u[200], 1000 ) {
+				statement1;
+				statement2;
+				.
+				.
+				.			
+			}
+		
+		variable1 = Unsigned Int / Long variable to store the loop counter
+		variable2 = Unsigned Int / Long variable to store number of iterations
+		constant  = Unsinged Int / Long constant for Max number of iterations allowed.
+			
+	
+	ELASTICPL 'RESULT'
+	------------------
+
+		All ElasticPL programs must have a 'result' statement that has a right
+		operand that can be evaluated to True / False.
+	
+		The 'result' is used to indicate whether or not a given solution
+		satisfies the Bounty requirements.  For Example:
+	
+			result (u[1000] == 0)
+	
+		The above statement indicates that a bounty will be rewarded for solutions
+		where there value stored in u[1000] equals zero.  Otherwise, the solution
+		does not qualify for a bounty.
+	
+		Only one 'result' statement per program is allowed, and it must be the
+		last statement in the 'verify' function.
+
 	
 ELASTICPL OPERATORS
 -------------------
 
-	To be completed later...
+	The following operators are supported by ElasticPL.  These operators behave
+	the same as C operators based on the C99 standard:
 	
-	
+	Precedence  Operator  Description            Order
+	------------------------------------------------------------
+	    0         a++     Postfix Increment      (Left to Right)
+		0         a--     Postfix Decrement      (Left to Right)
+	    1         ++a     Prefix Increment       (Right to Left)
+		1         --a     Prefix Decrement       (Right to Left)
+		1         -a      Unary Minus            (Right to Left)
+		1         !       Logical NOT            (Right to Left)
+		1         ~       Bitwise NOT            (Right to Left)
+	    2         *       Multiplication         (Left to Right)
+	    2         /       Division               (Left to Right)
+	    2         %       Remainder              (Left to Right)
+	    3         +       Addition               (Left to Right)
+	    3         -       Subtraction            (Left to Right)
+	    4         <<      Bitwise Left Shift     (Left to Right)
+	    4         <<<     Bitwise Left Rotation  (Left to Right)
+	    4         >>      Bitwise Right Shift    (Left to Right)
+	    4         >>>     Bitwise Right Rotation (Left to Right)
+	    5         <       Less Than              (Left to Right)
+	    5         <=      Less Than Or Equal     (Left to Right)
+	    5         >       Greater Than           (Left to Right)
+	    5         >=      Greater Than Or Equal  (Left to Right)
+	    6         >=      Equal                  (Left to Right)
+	    6         >=      Not Equal              (Left to Right)
+	    7         &       Bitwise AND            (Left to Right)
+	    8         ^       Bitwise XOR            (Left to Right)
+	    9         |       Bitwise OR             (Left to Right)
+	    10        &&      Logical AND            (Left to Right)
+	    11        ||      Logical OR             (Left to Right)
+	    12        a?b:c   Ternary Conditional    (Right to Left)
+	    13        =       Assignment             (Right to Left)
+	    13        +=      Add and Assignment     (Right to Left)
+	    13        -=      Sub and Assignment     (Right to Left)
+	    13        *=      Mul and Assignment     (Right to Left)
+	    13        /=      Div and Assignment     (Right to Left)
+	    13        %=      Mod and Assignment     (Right to Left)
+	    13        <<=     L Shift and Assignment (Right to Left)
+	    13        >>=     R Shift and Assignment (Right to Left)
+	    13        &=      Bit AND and Assignment (Right to Left)
+	    13        ^=      Bit XOR and Assignment (Right to Left)
+	    13        |=      Bit OR and Assignment  (Right to Left)
+
+		
 ELASTICPL BUILT_IN FUNCTIONS
 ----------------------------
 
-	To be completed later...
+	ElasticPL includes several functions from the C math library.  The built-in
+	functions behave the same as in C.
+	
+	sinh( double d )             Computes hyperbolic sine
+	sin( double d )              Computes sine
+	cosh( double d )             Computes hyperbolic cosine
+	cos( double d )              Computes cosine
+	tanh( double d )             Computes hyperbolic tangent
+	tan( double d )              Computes tangent
+	asin( double d )             Computes arc sine
+	acos( double d )             Computes arc cosine
+	atan2( double d )            Computes arc tangent, using signs to determine quadrants
+	atan( double d )             Computes arc tangent
+	exp( double d )              Computes e raised to the given power
+	log10( double d )            Computes common (base-10) logarithm
+	log( double d )              Computes natural (base-e) logarithm
+	pow( double x, double y )    Computes a number raised to the given power 
+	sqrt( double d )             Computes square root
+	ceil( double d )             Computes smallest integer not less than the given value
+	floor( double d )            Computes largest integer not greater than the given value
+	fabs( double d )             Computes absolute value of a floating-point value
+	abs( int i )                 Computes absolute value of an integral value
+	fmod ( double x, double y )  Computes remainder of the floating-point division operation
+	gcd ( uint x, uint y)        Computes greatest common denominator
+
 	
 		
