@@ -225,12 +225,12 @@ ELASTICPL OPERATORS
 	Precedence  Operator  Description            Order
 	------------------------------------------------------------
 	    0         a++     Postfix Increment      (Left to Right)
-		0         a--     Postfix Decrement      (Left to Right)
+	    0         a--     Postfix Decrement      (Left to Right)
 	    1         ++a     Prefix Increment       (Right to Left)
-		1         --a     Prefix Decrement       (Right to Left)
-		1         -a      Unary Minus            (Right to Left)
-		1         !       Logical NOT            (Right to Left)
-		1         ~       Bitwise NOT            (Right to Left)
+	    1         --a     Prefix Decrement       (Right to Left)
+	    1         -a      Unary Minus            (Right to Left)
+	    1         !       Logical NOT            (Right to Left)
+	    1         ~       Bitwise NOT            (Right to Left)
 	    2         *       Multiplication         (Left to Right)
 	    2         /       Division               (Left to Right)
 	    2         %       Remainder              (Left to Right)
