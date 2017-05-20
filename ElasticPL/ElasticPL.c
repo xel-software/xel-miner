@@ -12,12 +12,12 @@
 #include "ElasticPL.h"
 #include "../miner.h"
 
-uint32_t max_vm_ints = 0;
-uint32_t max_vm_uints = 0;
-uint32_t max_vm_longs = 0;
-uint32_t max_vm_ulongs = 0;
-uint32_t max_vm_floats = 0;
-uint32_t max_vm_doubles = 0;
+uint64_t max_vm_ints = 0;
+uint64_t max_vm_uints = 0;
+uint64_t max_vm_longs = 0;
+uint64_t max_vm_ulongs = 0;
+uint64_t max_vm_floats = 0;
+uint64_t max_vm_doubles = 0;
 
 
 /*
@@ -305,10 +305,15 @@ static void print_node(ast* node) {
 					printf("\tType: %d,\tul[%llu]\t\t\t", node->type, node->uvalue);
 			}
 			else {
-				if (node->is_signed)
+				if (node->is_signed) {
 					printf("\tType: %d,\ti[%llu]\t\t\t", node->type, node->uvalue);
-				else
-					printf("\tType: %d,\tu[%llu]\t\t\t", node->type, node->uvalue);
+				}
+				else {
+					if (node->is_vm_mem)
+						printf("\tType: %d,\tm[%llu]\t\t\t", node->type, node->uvalue);
+					else
+						printf("\tType: %d,\tu[%llu]\t\t\t", node->type, node->uvalue);
+				}
 			}
 		}
 		break;
@@ -327,10 +332,16 @@ static void print_node(ast* node) {
 					printf("\tType: %d,\tul[x]\t\t\t", node->type);
 			}
 			else {
-				if (node->is_signed)
+				if (node->is_signed) {
 					printf("\tType: %d,\ti[x]\t\t\t", node->type);
-				else
-					printf("\tType: %d,\tu[x]\t\t\t", node->type);
+				}
+				else {
+					if (node->is_vm_mem)
+						printf("\tType: %d,\tm[x]\t\t\t", node->type);
+					else
+						printf("\tType: %d,\tu[x]\t\t\t", node->type);
+
+				}
 			}
 		}
 		break;

@@ -19,16 +19,13 @@ int d_stack_op[10];	// DEBUG
 ast *d_stack_exp[10];	// DEBUG
 
 
-static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_64bit, bool is_signed, bool is_float, bool is_vm_mem, int64_t val_int64, uint64_t val_uint64, double val_double, unsigned char *svalue, int token_num, int line_num, DATA_TYPE data_type, ast* left, ast* right) {
+static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_vm_mem, int64_t val_int64, uint64_t val_uint64, double val_double, unsigned char *svalue, int token_num, int line_num, DATA_TYPE data_type, ast* left, ast* right) {
 	DATA_TYPE dt_l, dt_r;
 	ast* e = calloc(1, sizeof(ast));
 
 	if (e) {
 		e->type = node_type;
 		e->exp = exp_type;
-		e->is_64bit = is_64bit;
-		e->is_signed = is_signed;
-		e->is_float = is_float;
 		e->is_vm_mem = is_vm_mem;
 		e->ivalue = val_int64;
 		e->uvalue = val_uint64;
@@ -37,58 +34,67 @@ static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_64bit, bool 
 		e->token_num = token_num;
 		e->line_num = line_num;
 		e->end_stmnt = false;
-		e->data_type = (is_vm_mem ? DT_UINT : data_type);
+		e->data_type = data_type;
 		e->left = left;
 		e->right = right;
 
 		// ElasticPL Operator Nodes Inherit Data Type From Child Nodes
 		// Precedence Is Based On C99 Standard:
 		// double <- float <- uint64_t <- int64_t <- uint32_t <- int32_t
-		//if ((data_type != DT_NONE) && (node_type != NODE_VAR_CONST) && (node_type != NODE_VAR_EXP) && (node_type != NODE_CONSTANT)) {
-		//	dt_l = left ? left->data_type : DT_NONE;
-		//	dt_r = right ? right->data_type : DT_NONE;
-		//	e->data_type = MAX(dt_l, dt_r);
-		//}
 		if ((data_type != DT_NONE) && (node_type != NODE_VAR_CONST) && (node_type != NODE_VAR_EXP) && (node_type != NODE_CONSTANT)) {
 			dt_l = left ? left->data_type : DT_NONE;
 			dt_r = right ? right->data_type : DT_NONE;
 
-			if ((dt_l == DT_DOUBLE) || (dt_r == DT_DOUBLE)) {
+			if ((dt_l == DT_DOUBLE) || (dt_r == DT_DOUBLE))
 				e->data_type = DT_DOUBLE;
-				e->is_64bit = true;
-				e->is_signed = true;
-				e->is_float = true;
-			}
-			else if ((dt_l == DT_FLOAT) || (dt_r == DT_FLOAT)) {
+			else if ((dt_l == DT_FLOAT) || (dt_r == DT_FLOAT))
 				e->data_type = DT_FLOAT;
-				e->is_64bit = false;
-				e->is_signed = true;
-				e->is_float = true;
-			}
-			else if ((dt_l == DT_ULONG) || (dt_r == DT_ULONG)) {
+			else if ((dt_l == DT_ULONG) || (dt_r == DT_ULONG))
 				e->data_type = DT_ULONG;
-				e->is_64bit = true;
-				e->is_signed = false;
-				e->is_float = false;
-			}
-			else if ((dt_l == DT_LONG) || (dt_r == DT_LONG)) {
+			else if ((dt_l == DT_LONG) || (dt_r == DT_LONG))
 				e->data_type = DT_LONG;
-				e->is_64bit = true;
-				e->is_signed = true;
-				e->is_float = false;
-			}
-			else if ((dt_l == DT_UINT) || (dt_r == DT_UINT)) {
+			else if ((dt_l == DT_UINT) || (dt_r == DT_UINT))
 				e->data_type = DT_UINT;
-				e->is_64bit = false;
-				e->is_signed = false;
-				e->is_float = false;
-			}
-			else {
+			else
 				e->data_type = DT_INT;
-				e->is_64bit = false;
-				e->is_signed = true;
-				e->is_float = false;
-			}
+		}
+
+		// Set Indicators Based On Data Type
+		switch (data_type) {
+		case DT_INT:
+			e->is_64bit = false;
+			e->is_signed = true;
+			e->is_float = false;
+			break;
+		case DT_UINT:
+			e->is_64bit = false;
+			e->is_signed = false;
+			e->is_float = false;
+			break;
+		case DT_LONG:
+			e->is_64bit = true;
+			e->is_signed = true;
+			e->is_float = false;
+			break;
+		case DT_ULONG:
+			e->is_64bit = true;
+			e->is_signed = false;
+			e->is_float = false;
+			break;
+		case DT_FLOAT:
+			e->is_64bit = false;
+			e->is_signed = true;
+			e->is_float = true;
+			break;
+		case DT_DOUBLE:
+			e->is_64bit = true;
+			e->is_signed = true;
+			e->is_float = true;
+			break;
+		default:
+			e->is_64bit = false;
+			e->is_signed = false;
+			e->is_float = false;
 		}
 
 		if (left)
@@ -374,6 +380,12 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 					return false;
 				}
 				else if (stack_exp[stack_exp_idx]->uvalue >= max_vm_doubles) {
+					applog(LOG_ERR, "Syntax Error: Line: %d - Array index out of bounds", token->line_num);
+					return false;
+				}
+				break;
+			case DT_NONE: // m[]
+				if (stack_exp[stack_exp_idx]->uvalue >= 12) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Array index out of bounds", token->line_num);
 					return false;
 				}
@@ -671,14 +683,11 @@ static NODE_TYPE get_node_type(SOURCE_TOKEN *token, int token_num) {
 static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 	int i;
 	uint32_t len;
-	bool is_64bit = true;
 	bool is_signed = false;
-	bool is_float = false;
 	bool is_vm_mem = false;
 	int64_t val_int64 = 0;
 	uint64_t val_uint64 = 0;
 	double val_double = 0.0;
-	double value = 0.0;
 	unsigned char *svalue = NULL;
 	NODE_TYPE node_type = NODE_ERROR;
 	DATA_TYPE data_type;
@@ -706,15 +715,11 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 
 			if (token->type == TOKEN_TRUE) {
 				val_uint64 = 1;
-				is_64bit = true;
-				is_signed = false;
-				is_float = false;
+				data_type = DT_UINT;
 			}
 			else if (token->type == TOKEN_FALSE) {
 				val_uint64 = 0;
-				is_64bit = true;
-				is_signed = false;
-				is_float = false;
+				data_type = DT_UINT;
 			}
 			else if (node_type == NODE_CONSTANT) {
 
@@ -729,8 +734,6 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 
 				if (token->data_type == DT_INT) {
 
-					is_float = false;
-
 					// Convert Hex Numbers
 					if ((len > 2) && (token->literal[0] == '0') && (token->literal[1] == 'x')) {
 						if (len > 18) {
@@ -738,12 +741,10 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 							return false;
 						}
 						else if (len < 11) {
-							is_64bit = false;
-							token->data_type = DT_UINT;
+							data_type = DT_UINT;
 						}
 						else {
-							is_64bit = true;
-							token->data_type = DT_ULONG;
+							data_type = DT_ULONG;
 						}
 
 						val_uint64 = strtoull(&token->literal[2], NULL, 16);
@@ -756,12 +757,10 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 							return false;
 						}
 						else if (len < 35) {
-							is_64bit = false;
-							token->data_type = DT_UINT;
+							data_type = DT_UINT;
 						}
 						else {
-							is_64bit = true;
-							token->data_type = DT_ULONG;
+							data_type = DT_ULONG;
 						}
 
 						val_uint64 = strtoull(&token->literal[2], NULL, 2);
@@ -781,54 +780,23 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 
 						if (is_signed) {
 							if ((val_int64 >= INT32_MIN) && (val_int64 <= INT32_MAX)) {
-								is_64bit = false;
-								token->data_type = DT_INT;
+								data_type = DT_INT;
 							}
 							else {
-								is_64bit = true;
-								token->data_type = DT_LONG;
+								data_type = DT_LONG;
 							}
 						}
 						else {
 							if (val_uint64 <= UINT32_MAX) {
-								is_64bit = false;
-								token->data_type = DT_UINT;
+								data_type = DT_UINT;
 							}
 							else {
-								is_64bit = true;
-								token->data_type = DT_ULONG;
+								data_type = DT_ULONG;
 							}
 						}
 					}
-
-					// Check If Conversion Failed
-
-					//// Check For Hex - If Found, Convert To Int
-					//if ((strlen(token->literal) > 2) && (strlen(token->literal) <= 10) && (token->literal[0] == '0') && (token->literal[1] == 'x')) {
-					//		hex2ints(val, 1, token->literal + 2, strlen(token->literal) - 2);
-					//	sprintf(token->literal, "%ll", val[0]);
-					//}
-
-					//// Check For Binary - If Found, Convert To Decimal String
-					//else if ((strlen(token->literal) > 2) && (strlen(token->literal) <= 34) && (token->literal[0] == '0') && (token->literal[1] == 'b')) {
-					//	val[0] = bin2int(token->literal + 2);
-					//	sprintf(token->literal, "%ll", val[0]);
-					//}
-
-					//// Convert Literal To Corresponding Integer Data Type
-					//if (strlen(token->literal) > 0)
-
-					//else if ((strlen(token->literal) > 0) && (strlen(token->literal) <= 11)) {
-					//	UINT32_MAX;
-					//	INT32_MAX;
-					//	if (token->data_type == DT_INT)
-					//		ivalue = (int32_t)strtod(token->literal, NULL);
-					//	else
-					//		uvalue = (uint32_t)strtod(token->literal, NULL);
-					//}
 				}
 				else if (token->data_type == DT_FLOAT) {
-					is_float = true;
 
 					val_double = strtod(&token->literal[0], NULL);
 
@@ -842,8 +810,7 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 					//	token->data_type = DT_FLOAT;
 					//}
 					//else {
-						is_64bit = true;
-						token->data_type = DT_DOUBLE;
+						data_type = DT_DOUBLE;
 //					}
 				}
 				else {
@@ -852,8 +819,6 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 						return false;
 					strcpy(svalue, token->literal);
 				}
-
-
 			}
 		}
 		// Unary Expressions
@@ -867,46 +832,12 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 				left = NULL;
 			}
 
-			if ((node_type == NODE_VAR_CONST) || (node_type == NODE_VAR_EXP)) {
-				switch (token->data_type) {
-				case DT_INT:
-					is_64bit = false;
-					is_signed = true;
-					is_float = false;
-					break;
-				case DT_UINT:
-					is_64bit = false;
-					is_signed = false;
-					is_float = false;
-					break;
-				case DT_LONG:
-					is_64bit = true;
-					is_signed = true;
-					is_float = false;
-					break;
-				case DT_ULONG:
-					is_64bit = true;
-					is_signed = false;
-					is_float = false;
-					break;
-				case DT_FLOAT:
-					is_64bit = false;
-					is_signed = true;
-					is_float = true;
-					break;
-				case DT_DOUBLE:
-					is_64bit = true;
-					is_signed = true;
-					is_float = true;
-					break;
-				case DT_NONE:	// m[0] - m[11]
-					is_64bit = false;
-					is_signed = false;
-					is_float = false;
-					is_vm_mem = true;
-					break;
-				}
+			// Set Indicator For m[] Array
+			if (((node_type == NODE_VAR_CONST) || (node_type == NODE_VAR_EXP)) && (token->data_type == DT_NONE)) {
+				is_vm_mem = true;
+				data_type = DT_UINT;
 			}
+
 		}
 		// Binary Expressions
 		else if (token->inputs == 2) {
@@ -941,9 +872,9 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 		}
 		// Repeat Statements
 		else if (node_type == NODE_REPEAT) {
-			right = pop_exp();			// Block
-			value = pop_exp()->value;	// Max # Of Iterations
-			left = pop_exp();			// # Of Iterations
+			right = pop_exp();				// Block
+			val_uint64 = pop_exp()->uvalue;	// Max # Of Iterations
+			left = pop_exp();				// # Of Iterations
 		}
 		break;
 
@@ -952,14 +883,14 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 		if (token->inputs > 0) {
 			// First Paramater
 			left = pop_exp();
-			exp = add_exp(NODE_PARAM, EXP_EXPRESSION, true, false, false, false, 0, 0, 0.0, NULL, 0, 0, DT_NONE, left, NULL);
+			exp = add_exp(NODE_PARAM, EXP_EXPRESSION, false, 0, 0, 0.0, NULL, 0, 0, DT_NONE, left, NULL);
 			push_exp(exp);
 
 			// Remaining Paramaters
 			for (i = 1; i < token->inputs; i++) {
 				right = pop_exp();
 				left = pop_exp();
-				exp = add_exp(NODE_PARAM, EXP_EXPRESSION, true, false, false, false, 0, 0, 0.0, NULL, 0, 0, DT_NONE, left, right);
+				exp = add_exp(NODE_PARAM, EXP_EXPRESSION, false, 0, 0, 0.0, NULL, 0, 0, DT_NONE, left, right);
 				push_exp(exp);
 			}
 			left = NULL;
@@ -971,7 +902,7 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 		}
 	}
 
-	exp = add_exp(node_type, token->exp, is_64bit, is_signed, is_float, is_vm_mem, val_int64, val_uint64, val_double, svalue, token_num, token->line_num, token->data_type, left, right);
+	exp = add_exp(node_type, token->exp, is_vm_mem, val_int64, val_uint64, val_double, svalue, token_num, token->line_num, data_type, left, right);
 
 	// Update The "End Statement" Indicator For If/Else/Repeat/Block
 	if ((exp->type == NODE_IF) || (exp->type == NODE_ELSE) || (exp->type == NODE_REPEAT) || (exp->type == NODE_BLOCK) || (exp->type == NODE_FUNCTION))
