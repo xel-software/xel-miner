@@ -15,11 +15,6 @@
 #include <stdint.h>
 #include <string.h>
 
-#ifndef MAX
-	#define MAX(a,b) ((a) > (b) ? a : b)
-	#define MIN(a,b) ((a) < (b) ? a : b)
-#endif
-
 #define MAX_LITERAL_SIZE 260
 #define TOKEN_LIST_SIZE 4096
 #define PARSE_STACK_SIZE 24000
@@ -29,17 +24,18 @@
 #define VM_MEMORY_SIZE	64000			// Number Of Integers Supported By ElasticPL
 #define VM_FLOAT_SIZE	1000			// Number Of Doubles Supported By ElasticPL
 
-extern uint32_t max_vm_ints;
-extern uint32_t max_vm_uints;
-extern uint32_t max_vm_longs;
-extern uint32_t max_vm_ulongs;
-extern uint32_t max_vm_floats;
-extern uint32_t max_vm_doubles;
+// Max Array Variable Index For Each Data Type
+uint64_t max_vm_ints;
+uint64_t max_vm_uints;
+uint64_t max_vm_longs;
+uint64_t max_vm_ulongs;
+uint64_t max_vm_floats;
+uint64_t max_vm_doubles;
 
 // Index Value Of Main & Verify Functions In AST Array
-uint32_t ast_func_idx;
-uint32_t ast_main_idx;
-uint32_t ast_verify_idx;
+int ast_func_idx;
+int ast_main_idx;
+int ast_verify_idx;
 
 typedef enum {
 	NODE_ERROR,
@@ -288,6 +284,7 @@ typedef struct AST {
 	bool is_64bit;
 	bool is_signed;
 	bool is_float;
+	bool is_vm_mem;
 	struct AST*	parent;
 	struct AST*	left;
 	struct AST*	right;
@@ -323,7 +320,7 @@ static ast* pop_exp();
 static void push_exp(ast* exp);
 static int pop_op();
 static void push_op(int token_id);
-static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_64bit, bool is_signed, bool is_float, int64_t val_int64, uint64_t val_uint64, double val_double, unsigned char *svalue, int token_num, int line_num, DATA_TYPE data_type, ast* left, ast* right);
+static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_64bit, bool is_signed, bool is_float, bool is_vm_mem, int64_t val_int64, uint64_t val_uint64, double val_double, unsigned char *svalue, int token_num, int line_num, DATA_TYPE data_type, ast* left, ast* right);
 extern char* get_node_str(NODE_TYPE node_type);
 extern void dump_vm_ast(ast* root);
 static void print_node(ast* node);

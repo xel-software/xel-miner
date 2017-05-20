@@ -231,7 +231,7 @@ static char* convert(ast* exp) {
 			switch (exp->data_type) {
 			case DT_INT:
 			case DT_LONG:
-				sprintf(result, "%ll", exp->ivalue);
+				sprintf(result, "%d", exp->ivalue);
 				break;
 			case DT_UINT:
 			case DT_ULONG:
@@ -251,7 +251,10 @@ static char* convert(ast* exp) {
 				sprintf(result, "i[%lu]", ((exp->uvalue >= max_vm_ints) ? 0 : exp->uvalue));
 				break;
 			case DT_UINT:
-				sprintf(result, "u[%lu]", ((exp->uvalue >= max_vm_uints) ? 0 : exp->uvalue));
+				if (exp->is_vm_mem)
+					sprintf(result, "m[%lu]", ((exp->uvalue >= max_vm_uints) ? 0 : exp->uvalue));
+				else
+					sprintf(result, "u[%lu]", ((exp->uvalue >= max_vm_uints) ? 0 : exp->uvalue));
 				break;
 			case DT_LONG:
 				sprintf(result, "l[%lu]", ((exp->uvalue >= max_vm_longs) ? 0 : exp->uvalue));
@@ -275,7 +278,10 @@ static char* convert(ast* exp) {
 				sprintf(result, "i[%s]", lval);
 				break;
 			case DT_UINT:
-				sprintf(result, "u[%s]", lval);
+				if (exp->is_vm_mem)
+					sprintf(result, "m[%s]", lval);
+				else
+					sprintf(result, "u[%s]", lval);
 				break;
 			case DT_LONG:
 				sprintf(result, "l[%s]", lval);

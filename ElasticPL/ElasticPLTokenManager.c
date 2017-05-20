@@ -41,9 +41,7 @@ struct EXP_TOKEN_LIST epl_token[] = {
 	{ "array_ulong",				11,	TOKEN_ARRAY_ULONG,	EXP_STATEMENT,	1,	0,	DT_NONE },
 	{ "array_float",				11,	TOKEN_ARRAY_FLOAT,	EXP_STATEMENT,	1,	0,	DT_NONE },
 	{ "array_double",				12,	TOKEN_ARRAY_DOUBLE,	EXP_STATEMENT,	1,	0,	DT_NONE },
-	{ "init_once",					9,	TOKEN_INIT_ONCE,	EXP_STATEMENT,	1,	2,	DT_NONE },
-//	{ "verify",						6,	TOKEN_VERIFY,		EXP_STATEMENT,	1,	2,	DT_NONE },
-	{ "repeat",						6,	TOKEN_REPEAT,		EXP_STATEMENT,	3,	2,	DT_NONE },
+	{ "repeat",						6,	TOKEN_REPEAT,		EXP_STATEMENT,	4,	2,	DT_NONE },
 	{ "if",							2,	TOKEN_IF,			EXP_STATEMENT,	2,	2,	DT_NONE },
 	{ "else",						4,	TOKEN_ELSE,			EXP_STATEMENT,	2,	2,	DT_NONE },
 	{ "break",						5,	TOKEN_BREAK,		EXP_STATEMENT,	0,	2,	DT_NONE },
@@ -57,7 +55,7 @@ struct EXP_TOKEN_LIST epl_token[] = {
 	{ "ul[",						3,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_ULONG },
 	{ "f[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_FLOAT },
 	{ "d[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_DOUBLE },
-	{ "m[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_INT },
+	{ "m[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_NONE },
 	{ "]",							1,	TOKEN_VAR_END,		EXP_EXPRESSION,	1,	4,	DT_INT },
 
 	{ "++",							2,	TOKEN_INCREMENT,	EXP_EXPRESSION,	1,	5,	DT_INT },	// Increment
@@ -224,10 +222,10 @@ extern void delete_token_list(SOURCE_TOKEN_LIST *token_list) {
 
 static DATA_TYPE validate_literal(char *str) {
 	int i, len;
-	int max_hex_len = 10;
-	int max_bin_len = 34;
-	int max_int_len = 10;
-	int max_dbl_len = 18;
+	int max_hex_len = 18;
+	int max_bin_len = 66;
+	int max_int_len = 21;
+	int max_dbl_len = 21;
 	char *ptr;
 	bool string = false;
 
@@ -235,24 +233,6 @@ static DATA_TYPE validate_literal(char *str) {
 		return false;
 
 	len = strlen(str);
-
-	// Validate Strings
-	if (str[0] == '\"') {
-		if (str[len - 1] != '\"')
-			return false;
-
-		// Remove Quotes
-		str[len - 1] = 0;
-		for (i = 0; i < len; i++)
-			str[i] = str[i + 1];
-
-		len -= 2;
-		max_hex_len = MAX_LITERAL_SIZE;
-		max_bin_len = MAX_LITERAL_SIZE;
-		max_int_len = MAX_LITERAL_SIZE;
-		max_dbl_len = MAX_LITERAL_SIZE;
-		string = true;
-	}
 
 	// Validate Hex Numbers
 	if (strstr(str, "0x") == str) {
@@ -340,7 +320,7 @@ extern bool get_token_list(char *str, SOURCE_TOKEN_LIST *token_list) {
 	char c, *cmnt, literal[MAX_LITERAL_SIZE];
 	int i, idx, len, token_id, line_num, token_list_sz, literal_idx;
 	DATA_TYPE data_type;
-	bool quote = false;
+	bool literal_str = false;
 
 	token_list_sz = sizeof(epl_token) / sizeof(epl_token[0]);
 
@@ -355,22 +335,14 @@ extern bool get_token_list(char *str, SOURCE_TOKEN_LIST *token_list) {
 		token_id = -1;
 		c = str[idx];
 
-		// When An Unescaped Quote Is Found, Everthing In Between Is a Literal String
-//		if ((idx > 0) && (str[idx] == '\"') && (str[idx - 1] != '\\'))
-//			quote = !quote;
-////		else if ((token_list->token[token_list->num - 1].type == TOKEN_FUNCTION))
-////			idx = idx;
-////			quote = !quote;
-//		else if (!quote && (literal_idx > 0))
-
 		if (literal_idx > 0) {
-			if ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z'))
-				quote = true;
+			if ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c == '_'))
+				literal_str = true;
 			else
-				quote = false;
+				literal_str = false;
 		}
 		
-		if (!quote) {
+		if (!literal_str) {
 
 			// Remove Whitespace
 			if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f') {
@@ -456,15 +428,6 @@ extern bool get_token_list(char *str, SOURCE_TOKEN_LIST *token_list) {
 				continue;
 			}
 
-			// Remove Trace Statements
-			if (epl_token[token_id].type == TOKEN_TRACE) {
-				cmnt = strstr(&str[idx], "\n");
-				if (cmnt)
-					idx += &cmnt[0] - &str[idx];
-				line_num++;
-				continue;
-			}
-
 			// Add Literals To Token List
 			if (literal_idx > 0) {
 
@@ -514,7 +477,8 @@ extern bool get_token_list(char *str, SOURCE_TOKEN_LIST *token_list) {
 	if (!validate_tokens(token_list))
 		return false;
 
-	dump_token_list(token_list);
+	if (opt_debug_epl)
+		dump_token_list(token_list);
 
 	return true;
 }

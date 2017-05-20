@@ -19,7 +19,7 @@ int d_stack_op[10];	// DEBUG
 ast *d_stack_exp[10];	// DEBUG
 
 
-static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_64bit, bool is_signed, bool is_float, int64_t val_int64, uint64_t val_uint64, double val_double, unsigned char *svalue, int token_num, int line_num, DATA_TYPE data_type, ast* left, ast* right) {
+static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_64bit, bool is_signed, bool is_float, bool is_vm_mem, int64_t val_int64, uint64_t val_uint64, double val_double, unsigned char *svalue, int token_num, int line_num, DATA_TYPE data_type, ast* left, ast* right) {
 	DATA_TYPE dt_l, dt_r;
 	ast* e = calloc(1, sizeof(ast));
 
@@ -29,6 +29,7 @@ static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_64bit, bool 
 		e->is_64bit = is_64bit;
 		e->is_signed = is_signed;
 		e->is_float = is_float;
+		e->is_vm_mem = is_vm_mem;
 		e->ivalue = val_int64;
 		e->uvalue = val_uint64;
 		e->fvalue = val_double;
@@ -36,7 +37,7 @@ static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_64bit, bool 
 		e->token_num = token_num;
 		e->line_num = line_num;
 		e->end_stmnt = false;
-		e->data_type = data_type;
+		e->data_type = (is_vm_mem ? DT_UINT : data_type);
 		e->left = left;
 		e->right = right;
 
@@ -631,7 +632,6 @@ static NODE_TYPE get_node_type(SOURCE_TOKEN *token, int token_num) {
 	case TOKEN_BREAK:			node_type = NODE_BREAK;			break;
 	case TOKEN_CONTINUE:		node_type = NODE_CONTINUE;		break;
 	case TOKEN_ASSIGN:			node_type = NODE_ASSIGN;		break;
-	case TOKEN_VERIFY:			node_type = NODE_VERIFY;		break;
 	case TOKEN_SIN:				node_type = NODE_SIN;			break;
 	case TOKEN_COS:				node_type = NODE_COS; 			break;
 	case TOKEN_TAN:				node_type = NODE_TAN; 			break;
@@ -662,7 +662,6 @@ static NODE_TYPE get_node_type(SOURCE_TOKEN *token, int token_num) {
 	case TOKEN_FUNCTION:		node_type = NODE_FUNCTION;		break;
 	case TOKEN_CALL_FUNCTION:	node_type = NODE_CALL_FUNCTION;	break;
 	case TOKEN_RESULT:			node_type = NODE_RESULT;		break;
-	case TOKEN_INIT_ONCE:		node_type = NODE_INIT_ONCE;		break;
 	default: return NODE_ERROR;
 	}
 
@@ -671,11 +670,11 @@ static NODE_TYPE get_node_type(SOURCE_TOKEN *token, int token_num) {
 
 static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 	int i;
-	uint32_t val[2];
 	uint32_t len;
 	bool is_64bit = true;
 	bool is_signed = false;
 	bool is_float = false;
+	bool is_vm_mem = false;
 	int64_t val_int64 = 0;
 	uint64_t val_uint64 = 0;
 	double val_double = 0.0;
@@ -706,13 +705,13 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 		if (token->inputs == 0) {
 
 			if (token->type == TOKEN_TRUE) {
-				val_uint64 = 1.0;
+				val_uint64 = 1;
 				is_64bit = true;
 				is_signed = false;
 				is_float = false;
 			}
 			else if (token->type == TOKEN_FALSE) {
-				val_uint64 = 0.0;
+				val_uint64 = 0;
 				is_64bit = true;
 				is_signed = false;
 				is_float = false;
@@ -831,7 +830,7 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 				else if (token->data_type == DT_FLOAT) {
 					is_float = true;
 
-					val_double = strtod(&token->literal[0], NULL, 10);
+					val_double = strtod(&token->literal[0], NULL);
 
 					if (errno) {
 						applog(LOG_ERR, "Syntax Error: Line: %d - Decimal value exceeds 64 bits", token->line_num);
@@ -900,6 +899,12 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 					is_signed = true;
 					is_float = true;
 					break;
+				case DT_NONE:	// m[0] - m[11]
+					is_64bit = false;
+					is_signed = false;
+					is_float = false;
+					is_vm_mem = true;
+					break;
 				}
 			}
 		}
@@ -947,14 +952,14 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 		if (token->inputs > 0) {
 			// First Paramater
 			left = pop_exp();
-			exp = add_exp(NODE_PARAM, EXP_EXPRESSION, true, false, false, 0, 0, 0.0, NULL, 0, 0, DT_NONE, left, NULL);
+			exp = add_exp(NODE_PARAM, EXP_EXPRESSION, true, false, false, false, 0, 0, 0.0, NULL, 0, 0, DT_NONE, left, NULL);
 			push_exp(exp);
 
 			// Remaining Paramaters
 			for (i = 1; i < token->inputs; i++) {
 				right = pop_exp();
 				left = pop_exp();
-				exp = add_exp(NODE_PARAM, EXP_EXPRESSION, true, false, false, 0, 0, 0.0, NULL, 0, 0, DT_NONE, left, right);
+				exp = add_exp(NODE_PARAM, EXP_EXPRESSION, true, false, false, false, 0, 0, 0.0, NULL, 0, 0, DT_NONE, left, right);
 				push_exp(exp);
 			}
 			left = NULL;
@@ -966,7 +971,7 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 		}
 	}
 
-	exp = add_exp(node_type, token->exp, is_64bit, is_signed, is_float, val_int64, val_uint64, val_double, svalue, token_num, token->line_num, token->data_type, left, right);
+	exp = add_exp(node_type, token->exp, is_64bit, is_signed, is_float, is_vm_mem, val_int64, val_uint64, val_double, svalue, token_num, token->line_num, token->data_type, left, right);
 
 	// Update The "End Statement" Indicator For If/Else/Repeat/Block
 	if ((exp->type == NODE_IF) || (exp->type == NODE_ELSE) || (exp->type == NODE_REPEAT) || (exp->type == NODE_BLOCK) || (exp->type == NODE_FUNCTION))
@@ -1251,7 +1256,7 @@ static bool validate_ast() {
 }
 
 static bool validate_functions() {
-	size_t i;
+	int i;
 
 	ast_main_idx = 0;
 	ast_verify_idx = 0;
@@ -1314,7 +1319,7 @@ static bool validate_functions() {
 }
 
 static bool validate_function_calls() {
-	size_t i, call_idx;
+	int i, call_idx;
 	bool downward = true;
 	ast *root = NULL;
 	ast *ast_ptr = NULL;
