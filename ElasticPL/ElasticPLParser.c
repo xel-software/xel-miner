@@ -425,7 +425,7 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 		if ((stack_exp_idx > 2) &&
 			(stack_exp[stack_exp_idx - 3]->type == NODE_VAR_CONST) &&
 			(stack_exp[stack_exp_idx - 3]->data_type == DT_UINT) &&
-			((stack_exp[stack_exp_idx - 2]->type == NODE_VAR_CONST) || (stack_exp[stack_exp_idx - 2]->type == NODE_VAR_EXP)) &&
+			((stack_exp[stack_exp_idx - 2]->type == NODE_VAR_CONST) || (stack_exp[stack_exp_idx - 2]->type == NODE_VAR_EXP) || (stack_exp[stack_exp_idx - 2]->type == NODE_CONSTANT)) &&
 			(stack_exp[stack_exp_idx - 2]->data_type == DT_UINT) &&
 			(stack_exp[stack_exp_idx - 1]->type == NODE_CONSTANT) &&
 			(stack_exp[stack_exp_idx - 1]->data_type == DT_UINT) &&
@@ -878,6 +878,16 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 			val_int64 = pop_exp()->uvalue;	// Max # Of Iterations
 			left = pop_exp();				// # Of Iterations
 			val_uint64 = pop_exp()->uvalue;	// Loop Counter
+
+			if (val_int64 <= 0) {
+				applog(LOG_ERR, "Syntax Error: Line: %d - Invalid value for max iterations", token->line_num);
+				return false;
+			}
+
+			if ((left->type == NODE_CONSTANT) && (left->uvalue > val_int64)) {
+				applog(LOG_ERR, "Syntax Error: Line: %d - Number of iterations exceeds maximum", token->line_num);
+				return false;
+			}
 		}
 		break;
 
