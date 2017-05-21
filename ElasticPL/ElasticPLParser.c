@@ -1296,7 +1296,7 @@ static bool validate_function_calls() {
 
 					// Validate That Repeat Counter Has Not Been Used
 					for (i = 0; i < rpt_idx; i++) {
-						if (ast_ptr->left->uvalue == rpt_stack[i]->left->uvalue) {
+						if (ast_ptr->uvalue == rpt_stack[i]->uvalue) {
 							applog(LOG_ERR, "Syntax Error: Line: %d - Repeat loop counter already used", ast_ptr->line_num);
 							return false;
 						}
@@ -1375,7 +1375,7 @@ static bool validate_function_calls() {
 
 					// Validate That Repeat Counter Has Not Been Used
 					for (i = 0; i < rpt_idx; i++) {
-						if (ast_ptr->left->uvalue == rpt_stack[i]->left->uvalue) {
+						if (ast_ptr->uvalue == rpt_stack[i]->uvalue) {
 							applog(LOG_ERR, "Syntax Error: Line: %d - Repeat loop counter already used", ast_ptr->line_num);
 							return false;
 						}

@@ -18,12 +18,11 @@
 #include "ElasticPLFunctions.h"
 #include "../miner.h"
 
-#define MAX_NESTED_REPEAT 100
 #define MAX_AST_DEPTH 1000
 
 static uint32_t calc_weight(ast* root, uint32_t *ast_depth) {
 	uint32_t depth = 0, weight = 0, total_weight = 0;
-	uint32_t block_weight[MAX_NESTED_REPEAT];
+	uint32_t block_weight[REPEAT_STACK_SIZE];
 	int block_level = -1;
 	bool downward = true;
 	ast *ast_ptr = NULL;
@@ -43,6 +42,15 @@ static uint32_t calc_weight(ast* root, uint32_t *ast_depth) {
 			// Navigate To Lowest Left Node
 			while (ast_ptr->left) {
 				ast_ptr = ast_ptr->left;
+
+				// Check For "Repeat" Blocks
+				if (ast_ptr->type == NODE_REPEAT) {
+					total_weight += weight;
+					block_level++;
+					block_weight[block_level] = 0;
+					break;
+				}
+
 				if (++depth > *ast_depth) *ast_depth = depth;
 			}
 
@@ -56,14 +64,12 @@ static uint32_t calc_weight(ast* root, uint32_t *ast_depth) {
 				downward = false;
 			}
 
-			// Check For "Repeat" Blocks
-			if (ast_ptr->type == NODE_REPEAT) {
-				total_weight += weight;
-				block_level++;
-				if (block_level >= MAX_NESTED_REPEAT)
-					return 0;
-				block_weight[block_level] = 0;
-			}
+			//// Check For "Repeat" Blocks
+			//if (ast_ptr->type == NODE_REPEAT) {
+			//	total_weight += weight;
+			//	block_level++;
+			//	block_weight[block_level] = 0;
+			//}
 
 			//// Switch To Right Node
 			//if (new_ptr->right) {
@@ -106,9 +112,9 @@ static uint32_t calc_weight(ast* root, uint32_t *ast_depth) {
 		// Get Total weight For The "Repeat" Block
 		if ((block_level >= 0) && (ast_ptr->type == NODE_REPEAT)) {
 			if (block_level == 0)
-				total_weight += (ast_ptr->uvalue * block_weight[block_level]);
+				total_weight += (ast_ptr->ivalue * block_weight[block_level]);
 			else
-				block_weight[block_level - 1] += (ast_ptr->uvalue * block_weight[block_level]);
+				block_weight[block_level - 1] += (ast_ptr->ivalue * block_weight[block_level]);
 			block_level--;
 		}
 	}
