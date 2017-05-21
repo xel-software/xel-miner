@@ -29,15 +29,7 @@ extern char* convert_ast_to_c() {
 	int i, idx = 0;
 
 	tabs = 0;
-//	use_elasticpl_init = false;
 	use_elasticpl_math = false;
-
-	// Check For "init_once", If Found Move Logic To Seperate Function
-	//if (vm_ast[0]->type == NODE_INIT_ONCE) {
-	//	idx = 1;
-	//	use_elasticpl_init = true;
-	//	code1 = append_strings(code1, convert(vm_ast[0]->left));
-	//}
 
 	for (i = ast_func_idx; i < vm_ast_cnt; i++) {
 		code2 = append_strings(code2, convert(vm_ast[i]));
@@ -180,7 +172,6 @@ static void get_cast(char *lcast, char *rcast, DATA_TYPE ldata_type, DATA_TYPE r
 
 // Use Post Order Traversal To Translate The Expressions In The AST to C
 static char* convert(ast* exp) {
-	uint32_t val;
 	char *lval = NULL;
 	char *rval = NULL;
 	char *tmp = NULL;
@@ -231,7 +222,7 @@ static char* convert(ast* exp) {
 			switch (exp->data_type) {
 			case DT_INT:
 			case DT_LONG:
-				sprintf(result, "%d", exp->ivalue);
+				sprintf(result, "%lld", exp->ivalue);
 				break;
 			case DT_UINT:
 			case DT_ULONG:
@@ -248,25 +239,25 @@ static char* convert(ast* exp) {
 		case NODE_VAR_CONST:
 			switch (exp->data_type) {
 			case DT_INT:
-				sprintf(result, "i[%lu]", ((exp->uvalue >= max_vm_ints) ? 0 : exp->uvalue));
+				sprintf(result, "i[%llu]", ((exp->uvalue >= max_vm_ints) ? 0 : exp->uvalue));
 				break;
 			case DT_UINT:
 				if (exp->is_vm_mem)
-					sprintf(result, "m[%lu]", ((exp->uvalue >= max_vm_uints) ? 0 : exp->uvalue));
+					sprintf(result, "m[%llu]", ((exp->uvalue >= max_vm_uints) ? 0 : exp->uvalue));
 				else
-					sprintf(result, "u[%lu]", ((exp->uvalue >= max_vm_uints) ? 0 : exp->uvalue));
+					sprintf(result, "u[%llu]", ((exp->uvalue >= max_vm_uints) ? 0 : exp->uvalue));
 				break;
 			case DT_LONG:
-				sprintf(result, "l[%lu]", ((exp->uvalue >= max_vm_longs) ? 0 : exp->uvalue));
+				sprintf(result, "l[%llu]", ((exp->uvalue >= max_vm_longs) ? 0 : exp->uvalue));
 				break;
 			case DT_ULONG:
-				sprintf(result, "ul[%lu]", ((exp->uvalue >= max_vm_ulongs) ? 0 : exp->uvalue));
+				sprintf(result, "ul[%llu]", ((exp->uvalue >= max_vm_ulongs) ? 0 : exp->uvalue));
 				break;
 			case DT_FLOAT:
-				sprintf(result, "f[%lu]", ((exp->uvalue >= max_vm_floats) ? 0 : exp->uvalue));
+				sprintf(result, "f[%llu]", ((exp->uvalue >= max_vm_floats) ? 0 : exp->uvalue));
 				break;
 			case DT_DOUBLE:
-				sprintf(result, "d[%lu]", ((exp->uvalue >= max_vm_doubles) ? 0 : exp->uvalue));
+				sprintf(result, "d[%llu]", ((exp->uvalue >= max_vm_doubles) ? 0 : exp->uvalue));
 				break;
 			default:
 				sprintf(result, "0");
@@ -337,7 +328,7 @@ static char* convert(ast* exp) {
 			if (exp->left->type == NODE_CONSTANT)
 				sprintf(result, "%sif ( %s > 0 ) {\n%sint loop%d;\n%sfor (loop%d = 0; loop%d < ( %s ); loop%d++) {\n%s%s%s}\n%s}\n", tab[tabs - 2], lval, tab[tabs - 1], exp->token_num, tab[tabs - 1], exp->token_num, exp->token_num, lval, exp->token_num, "", rval, tab[tabs - 1], tab[tabs - 2]);
 			else
-				sprintf(result, "%sif ( %s > 0 ) {\n%sint loop%d;\n%sfor (loop%d = 0; loop%d < ( %s ); loop%d++) {\n%sif (loop%d >= %d) break;\n%s%s%s}\n%s}\n", tab[tabs - 2], lval, tab[tabs - 1], exp->token_num, tab[tabs - 1], exp->token_num, exp->token_num, lval, exp->token_num, tab[tabs - 1], exp->token_num, exp->value, "", rval, tab[tabs - 1], tab[tabs - 2]);
+				sprintf(result, "%sif ( %s > 0 ) {\n%sint loop%d;\n%sfor (loop%d = 0; loop%d < ( %s ); loop%d++) {\n%s\tif (loop%d >= %lld) break;\n%s%s%s}\n%s}\n", tab[tabs - 2], lval, tab[tabs - 1], exp->token_num, tab[tabs - 1], exp->token_num, exp->token_num, lval, exp->token_num, tab[tabs - 1], exp->token_num, exp->uvalue, "", rval, tab[tabs - 1], tab[tabs - 2]);
 			if (tabs > 1) tabs -= 2;
 			break;
 		case NODE_BREAK:

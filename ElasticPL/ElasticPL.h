@@ -23,6 +23,7 @@
 #define MAX_VM_MEMORY_SIZE	100000		// Maximum Number Of Bytes That Can Be Used By VM Memory Model
 #define VM_MEMORY_SIZE	64000			// Number Of Integers Supported By ElasticPL
 #define VM_FLOAT_SIZE	1000			// Number Of Doubles Supported By ElasticPL
+#define MAX_VM_M_ARRAY	12				// Number Of Unsigned Ints Initialized By VM
 
 // Max Array Variable Index For Each Data Type
 uint64_t max_vm_ints;
@@ -87,7 +88,6 @@ typedef enum {
 	NODE_TRUE,
 	NODE_FALSE,
 	NODE_BLOCK,
-	NODE_EXPRESSION,
 	NODE_IF,
 	NODE_ELSE,
 	NODE_REPEAT,
@@ -123,8 +123,7 @@ typedef enum {
 	NODE_ARRAY_DOUBLE,
 	NODE_FUNCTION,
 	NODE_CALL_FUNCTION,
-	NODE_RESULT,
-	NODE_INIT_ONCE
+	NODE_RESULT
 } NODE_TYPE;
 
 
@@ -187,8 +186,6 @@ typedef enum {
 	TOKEN_VERIFY,
 	TOKEN_COMMENT,
 	TOKEN_BLOCK_COMMENT,
-	TOKEN_TRACE,
-	TOKEN_EOF,
 	TOKEN_SIN,
 	TOKEN_COS,
 	TOKEN_TAN,
@@ -218,8 +215,7 @@ typedef enum {
 	TOKEN_ARRAY_DOUBLE,
 	TOKEN_FUNCTION,
 	TOKEN_CALL_FUNCTION,
-	TOKEN_RESULT,
-	TOKEN_INIT_ONCE
+	TOKEN_RESULT
 } EPL_TOKEN_TYPE;
 
 typedef enum {
@@ -272,7 +268,6 @@ struct EXP_TOKEN_LIST {
 typedef struct AST {
 	NODE_TYPE type;
 	EXP_TYPE exp;
-	int32_t value;
 	int64_t ivalue;
 	uint64_t uvalue;
 	double fvalue;

@@ -385,7 +385,7 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 				}
 				break;
 			case DT_NONE: // m[]
-				if (stack_exp[stack_exp_idx]->uvalue >= 12) {
+				if (stack_exp[stack_exp_idx]->uvalue >= MAX_VM_M_ARRAY) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Array index out of bounds", token->line_num);
 					return false;
 				}
@@ -420,10 +420,12 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 			return true;
 		break;
 
-	// REPEAT Statement (1 Usigned Int/Long & 1 Constant Unsigned Int/Long & 1 Block)
+	// REPEAT Statement (2 Unsigned Int/Long & 1 Constant Unsigned Int/Long & 1 Block)
 	case NODE_REPEAT:
-		if ((stack_exp_idx > 1) &&
-			(stack_exp[stack_exp_idx - 2]->data_type == DT_NONE) &&
+		if ((stack_exp_idx > 2) &&
+			//(stack_exp[stack_exp_idx - 3]->type == NODE_VAR_CONST) &&
+			//(!stack_exp[stack_exp_idx - 3]->is_signed) &&
+			((stack_exp[stack_exp_idx - 2]->type == NODE_VAR_CONST) || (stack_exp[stack_exp_idx - 2]->type == NODE_VAR_EXP)) &&
 			(!stack_exp[stack_exp_idx - 2]->is_signed) &&
 			(stack_exp[stack_exp_idx - 1]->type == NODE_CONSTANT) &&
 			(!stack_exp[stack_exp_idx - 1]->is_signed) &&
@@ -904,8 +906,8 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 
 	exp = add_exp(node_type, token->exp, is_vm_mem, val_int64, val_uint64, val_double, svalue, token_num, token->line_num, data_type, left, right);
 
-	// Update The "End Statement" Indicator For If/Else/Repeat/Block
-	if ((exp->type == NODE_IF) || (exp->type == NODE_ELSE) || (exp->type == NODE_REPEAT) || (exp->type == NODE_BLOCK) || (exp->type == NODE_FUNCTION))
+	// Update The "End Statement" Indicator For If/Else/Repeat/Block/Function/Result
+	if ((exp->type == NODE_IF) || (exp->type == NODE_ELSE) || (exp->type == NODE_REPEAT) || (exp->type == NODE_BLOCK) || (exp->type == NODE_FUNCTION) || (exp->type == NODE_RESULT))
 		exp->end_stmnt = true;
 
 	if (exp)
@@ -1065,7 +1067,7 @@ extern bool parse_token_list(SOURCE_TOKEN_LIST *token_list) {
 			}
 			pop_op();
 
-			// Link Block To If/Repeat/Init Operator
+			// Link Block To If/Repeat/Function Statement
 			while ((top_op >= 0) && (token_list->token[top_op].type == TOKEN_IF || token_list->token[top_op].type == TOKEN_ELSE || token_list->token[top_op].type == TOKEN_REPEAT || token_list->token[top_op].type == TOKEN_FUNCTION)) {
 					token_id = pop_op();
 				if (!create_exp(&token_list->token[token_id], token_id))
@@ -1175,11 +1177,6 @@ static bool validate_ast() {
 		return false;
 	}
 
-	//if (!stack_exp[i]->end_stmnt) {
-	//	applog(LOG_ERR, "Syntax Error: Line: %d - Invalid Statement", stack_exp[i]->line_num);
-	//	return false;
-	//}
-
 	if (!validate_functions())
 		return false;
 
@@ -1188,6 +1185,7 @@ static bool validate_ast() {
 
 static bool validate_functions() {
 	int i;
+	ast *exp;
 
 	ast_main_idx = 0;
 	ast_verify_idx = 0;
@@ -1227,6 +1225,16 @@ static bool validate_functions() {
 		if (!stack_exp[i]->right->left) {
 			applog(LOG_ERR, "Syntax Error: Line: %d - Functions must have at least one statement", stack_exp[i]->line_num);
 			return false;
+		}
+
+		// Validate Function Only Contains Valid Statements
+		exp = stack_exp[i];
+		while (exp->right) {
+			if (exp->right->left && !exp->right->left->end_stmnt) {
+				applog(LOG_ERR, "Syntax Error: Line: %d - Invalid Statement", exp->line_num);
+				return false;
+			}
+			exp = exp->right;
 		}
 	}
 

@@ -41,7 +41,7 @@ struct EXP_TOKEN_LIST epl_token[] = {
 	{ "array_ulong",				11,	TOKEN_ARRAY_ULONG,	EXP_STATEMENT,	1,	0,	DT_NONE },
 	{ "array_float",				11,	TOKEN_ARRAY_FLOAT,	EXP_STATEMENT,	1,	0,	DT_NONE },
 	{ "array_double",				12,	TOKEN_ARRAY_DOUBLE,	EXP_STATEMENT,	1,	0,	DT_NONE },
-	{ "repeat",						6,	TOKEN_REPEAT,		EXP_STATEMENT,	4,	2,	DT_NONE },
+	{ "repeat",						6,	TOKEN_REPEAT,		EXP_STATEMENT,	3,	2,	DT_NONE },
 	{ "if",							2,	TOKEN_IF,			EXP_STATEMENT,	2,	2,	DT_NONE },
 	{ "else",						4,	TOKEN_ELSE,			EXP_STATEMENT,	2,	2,	DT_NONE },
 	{ "break",						5,	TOKEN_BREAK,		EXP_STATEMENT,	0,	2,	DT_NONE },

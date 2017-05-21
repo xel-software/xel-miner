@@ -106,9 +106,9 @@ static uint32_t calc_weight(ast* root, uint32_t *ast_depth) {
 		// Get Total weight For The "Repeat" Block
 		if ((block_level >= 0) && (ast_ptr->type == NODE_REPEAT)) {
 			if (block_level == 0)
-				total_weight += (ast_ptr->value * block_weight[block_level]);
+				total_weight += (ast_ptr->uvalue * block_weight[block_level]);
 			else
-				block_weight[block_level - 1] += (ast_ptr->value * block_weight[block_level]);
+				block_weight[block_level - 1] += (ast_ptr->uvalue * block_weight[block_level]);
 			block_level--;
 		}
 	}
@@ -319,19 +319,10 @@ extern int interpret_ast(bool first_run) {
 	vm_break = false;
 	vm_continue = false;
 
-	if (vm_ast[0]->type == NODE_INIT_ONCE) {
-		idx = 1;
-		if (first_run) {
-			if (!interpret(vm_ast[0]->left))
-					return 0;
-		}
-	}
-
 	for (i = idx; i < vm_ast_cnt; i++) {
 		if (!interpret(vm_ast[i]) && (vm_ast[i]->type != NODE_VAR_CONST) && (vm_ast[i]->type != NODE_VAR_EXP) && (vm_ast[i]->type != NODE_CONSTANT))
 				return 0;
 	}
-
 
 	return vm_bounty;
 }
@@ -378,15 +369,15 @@ static void mangle_state(int x) {
 }
 
 static double interpret(ast* node) {
-	double lfval, rfval;
-	int32_t lval, rval;
+	//double lfval, rfval;
+	//int32_t lval, rval;
 
 	if (node == NULL)
 		return 0;
 
 	if (vm_break || vm_continue)
 		return 1;
-
+/*
 	switch (node->type) {
 	case NODE_CONSTANT:
 		if (node->data_type == DT_FLOAT)
@@ -960,6 +951,6 @@ static double interpret(ast* node) {
 		applog(LOG_ERR, "ERROR: VM Runtime - Unsupported Operation (%d)", node->type);
 		return 0;
 	}
-
+*/
 	return 1;
 }
