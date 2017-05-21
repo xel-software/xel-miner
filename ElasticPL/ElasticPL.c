@@ -351,6 +351,9 @@ static void print_node(ast* node) {
 	case NODE_CALL_FUNCTION:
 		printf("\tType: %d,\t%s()\t\t", node->type, node->svalue);
 		break;
+	case NODE_REPEAT:
+		printf("\tType: %d,\t%s (u[%llu], %lld)\t", node->type, get_node_str(node->type), node->uvalue, node->ivalue);
+		break;
 	case NODE_BLOCK:
 		if (node->parent->type != NODE_FUNCTION)
 			printf("\t-------------------------------------------------\n");

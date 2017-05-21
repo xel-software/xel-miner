@@ -420,15 +420,15 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 			return true;
 		break;
 
-	// REPEAT Statement (2 Unsigned Int/Long & 1 Constant Unsigned Int/Long & 1 Block)
+	// REPEAT Statement (2 Unsigned Int & 1 Constant Unsigned Int & 1 Block)
 	case NODE_REPEAT:
 		if ((stack_exp_idx > 2) &&
-			//(stack_exp[stack_exp_idx - 3]->type == NODE_VAR_CONST) &&
-			//(!stack_exp[stack_exp_idx - 3]->is_signed) &&
+			(stack_exp[stack_exp_idx - 3]->type == NODE_VAR_CONST) &&
+			(stack_exp[stack_exp_idx - 3]->data_type == DT_UINT) &&
 			((stack_exp[stack_exp_idx - 2]->type == NODE_VAR_CONST) || (stack_exp[stack_exp_idx - 2]->type == NODE_VAR_EXP)) &&
-			(!stack_exp[stack_exp_idx - 2]->is_signed) &&
+			(stack_exp[stack_exp_idx - 2]->data_type == DT_UINT) &&
 			(stack_exp[stack_exp_idx - 1]->type == NODE_CONSTANT) &&
-			(!stack_exp[stack_exp_idx - 1]->is_signed) &&
+			(stack_exp[stack_exp_idx - 1]->data_type == DT_UINT) &&
 			(stack_exp[stack_exp_idx]->type == NODE_BLOCK))
 			return true;
 		break;
@@ -875,8 +875,9 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 		// Repeat Statements
 		else if (node_type == NODE_REPEAT) {
 			right = pop_exp();				// Block
-			val_uint64 = pop_exp()->uvalue;	// Max # Of Iterations
+			val_int64 = pop_exp()->uvalue;	// Max # Of Iterations
 			left = pop_exp();				// # Of Iterations
+			val_uint64 = pop_exp()->uvalue;	// Loop Counter
 		}
 		break;
 
@@ -1258,11 +1259,12 @@ static bool validate_functions() {
 }
 
 static bool validate_function_calls() {
-	int i, call_idx;
+	int i, call_idx, rpt_idx;
 	bool downward = true;
 	ast *root = NULL;
 	ast *ast_ptr = NULL;
 	ast *call_stack[CALL_STACK_SIZE];
+	ast *rpt_stack[REPEAT_STACK_SIZE];
 
 	if (opt_debug_epl) {
 		fprintf(stdout, "\n*********************************************************\n");
@@ -1274,6 +1276,7 @@ static bool validate_function_calls() {
 	// Set Root To Main Function
 	root = stack_exp[ast_main_idx];
 
+	rpt_idx = 0;
 	call_idx = 0;
 	call_stack[call_idx++] = root;
 
@@ -1287,6 +1290,28 @@ static bool validate_function_calls() {
 			// Navigate To Lowest Left Parent Node
 			while (ast_ptr->left) {
 				ast_ptr = ast_ptr->left;
+
+				// Validate Repeat Node
+				if (ast_ptr->type == NODE_REPEAT) {
+
+					// Validate That Repeat Counter Has Not Been Used
+					for (i = 0; i < rpt_idx; i++) {
+						if (ast_ptr->left->uvalue == rpt_stack[i]->left->uvalue) {
+							applog(LOG_ERR, "Syntax Error: Line: %d - Repeat loop counter already used", ast_ptr->line_num);
+							return false;
+						}
+					}
+
+					rpt_stack[rpt_idx++] = ast_ptr;
+
+					if (rpt_idx >= REPEAT_STACK_SIZE) {
+						applog(LOG_ERR, "Syntax Error: Line: %d - Repeat statements can only be nested up to %d levels", ast_ptr->line_num, REPEAT_STACK_SIZE - 1);
+						return false;
+					}
+
+					if (opt_debug_epl)
+						fprintf(stdout, "\tBegin Repeat (Line #%d)\t- Depth: %d\n", ast_ptr->line_num, rpt_idx);
+				}
 			}
 
 			// Switch To Root Of Called Function
@@ -1335,7 +1360,7 @@ static bool validate_function_calls() {
 				ast_ptr = stack_exp[ast_ptr->uvalue];
 
 				if (call_idx >= CALL_STACK_SIZE) {
-					applog(LOG_ERR, "Syntax Error: Line: %d - Functions can only be nested up to %d levels", ast_ptr->line_num, CALL_STACK_SIZE);
+					applog(LOG_ERR, "Syntax Error: Line: %d - Functions can only be nested up to %d levels", ast_ptr->line_num, CALL_STACK_SIZE - 1);
 					return false;
 				}
 
@@ -1344,11 +1369,31 @@ static bool validate_function_calls() {
 			// If There Is A Right Node, Switch To It
 			if (ast_ptr->right) {
 				ast_ptr = ast_ptr->right;
+
+				// Validate Repeat Node
+				if (ast_ptr->type == NODE_REPEAT) {
+
+					// Validate That Repeat Counter Has Not Been Used
+					for (i = 0; i < rpt_idx; i++) {
+						if (ast_ptr->left->uvalue == rpt_stack[i]->left->uvalue) {
+							applog(LOG_ERR, "Syntax Error: Line: %d - Repeat loop counter already used", ast_ptr->line_num);
+							return false;
+						}
+					}
+
+					rpt_stack[rpt_idx++] = ast_ptr;
+
+					if (rpt_idx >= REPEAT_STACK_SIZE) {
+						applog(LOG_ERR, "Syntax Error: Line: %d - Repeat statements can only be nested up to %d levels", ast_ptr->line_num, REPEAT_STACK_SIZE - 1);
+						return false;
+					}
+
+					if (opt_debug_epl)
+						fprintf(stdout, "\tBegin Repeat (Line #%d)\t- Depth: %d\n", ast_ptr->line_num, rpt_idx);
+				}
 			}
 			// Otherwise, Print Current Node & Navigate Back Up The Tree
 			else {
-				if (ast_ptr->type == NODE_CALL_FUNCTION)
-					downward = false;
 				downward = false;
 			}
 		}
@@ -1359,6 +1404,13 @@ static bool validate_function_calls() {
 			// Quit When We Reach The Root Of Main Function
 			if (ast_ptr == root)
 				break;
+
+			// Remove 'Repeat' From Stack
+			if (ast_ptr->type == NODE_REPEAT) {
+				if (opt_debug_epl)
+					fprintf(stdout, "\t  End Repeat (Line #%d)\n", ast_ptr->line_num);
+				rpt_stack[rpt_idx--] = 0;
+			}
 
 			// Return To Calling Function When We Reach The Root Of Called Function
 			if (ast_ptr->parent->type == NODE_FUNCTION) {
