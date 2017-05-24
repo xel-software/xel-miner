@@ -195,10 +195,10 @@ ELASTICPL STATEMENTS
 			}
 		
 		variable1 = Unsigned Int variable to store the loop counter
-		            (must have a constant index)
-		variable2 = Unsigned Int variable to store number of iterations to do
-		            (can be a variable or constant index)
-		constant  = Unsinged Intconstant for Max number of iterations allowed
+		            (Array variable must have a constant index)
+		variable2 = Unsigned Int variable or constant to store number of iterations to do
+		            (Array variable can be a variable or constant index)
+		constant  = Unsigned Int constant for Max number of iterations allowed
 		            (constant is used to calculate the WCET of the Repeat)
 		
 		Note:  'repeat' statements can only be nested up to 32 Levels.

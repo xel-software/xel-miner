@@ -61,16 +61,16 @@ struct EXP_TOKEN_LIST epl_token[] = {
 	{ "++",							2,	TOKEN_INCREMENT,	EXP_EXPRESSION,	1,	5,	DT_INT },	// Increment
 	{ "--",							2,	TOKEN_DECREMENT,	EXP_EXPRESSION,	1,	5,	DT_INT },	// Decrement
 
-	{ "+=",							2,	TOKEN_ADD_ASSIGN,	EXP_STATEMENT,	2,	16,	DT_INT },	// Assignment
-	{ "-=",							2,	TOKEN_SUB_ASSIGN,	EXP_STATEMENT,	2,	16,	DT_INT },	// Assignment
-	{ "*=",							2,	TOKEN_MUL_ASSIGN,	EXP_STATEMENT,	2,	16,	DT_INT },	// Assignment
-	{ "/=",							2,	TOKEN_DIV_ASSIGN,	EXP_STATEMENT,	2,	16,	DT_FLOAT },	// Assignment
-	{ "%=",							2,	TOKEN_MOD_ASSIGN,	EXP_STATEMENT,	2,	16,	DT_INT },	// Assignment
-	{ "<<=",						3,	TOKEN_LSHFT_ASSIGN,	EXP_STATEMENT,	2,	16,	DT_INT },	// Assignment
-	{ ">>=",						3,	TOKEN_RSHFT_ASSIGN,	EXP_STATEMENT,	2,	16,	DT_INT },	// Assignment
-	{ "&=",							2,	TOKEN_AND_ASSIGN,	EXP_STATEMENT,	2,	16,	DT_INT },	// Assignment
-	{ "^=",							2,	TOKEN_XOR_ASSIGN,	EXP_STATEMENT,	2,	16,	DT_INT },	// Assignment
-	{ "|=",							2,	TOKEN_OR_ASSIGN,	EXP_STATEMENT,	2,	16,	DT_INT },	// Assignment
+	{ "+=",							2,	TOKEN_ADD_ASSIGN,	EXP_STATEMENT,	2,	18,	DT_INT },	// Assignment
+	{ "-=",							2,	TOKEN_SUB_ASSIGN,	EXP_STATEMENT,	2,	18,	DT_INT },	// Assignment
+	{ "*=",							2,	TOKEN_MUL_ASSIGN,	EXP_STATEMENT,	2,	18,	DT_INT },	// Assignment
+	{ "/=",							2,	TOKEN_DIV_ASSIGN,	EXP_STATEMENT,	2,	18,	DT_FLOAT },	// Assignment
+	{ "%=",							2,	TOKEN_MOD_ASSIGN,	EXP_STATEMENT,	2,	18,	DT_INT },	// Assignment
+	{ "<<=",						3,	TOKEN_LSHFT_ASSIGN,	EXP_STATEMENT,	2,	18,	DT_INT },	// Assignment
+	{ ">>=",						3,	TOKEN_RSHFT_ASSIGN,	EXP_STATEMENT,	2,	18,	DT_INT },	// Assignment
+	{ "&=",							2,	TOKEN_AND_ASSIGN,	EXP_STATEMENT,	2,	18,	DT_INT },	// Assignment
+	{ "^=",							2,	TOKEN_XOR_ASSIGN,	EXP_STATEMENT,	2,	18,	DT_INT },	// Assignment
+	{ "|=",							2,	TOKEN_OR_ASSIGN,	EXP_STATEMENT,	2,	18,	DT_INT },	// Assignment
 
 	{ "+",							1,	TOKEN_ADD,			EXP_EXPRESSION,	2,	7,	DT_INT },	// Additive
 	{ "-",							1,	TOKEN_SUB,			EXP_EXPRESSION,	2,	7,	DT_INT },	// Additive
@@ -103,9 +103,9 @@ struct EXP_TOKEN_LIST epl_token[] = {
 	{ "|",							1,	TOKEN_BITWISE_OR,	EXP_EXPRESSION,	2,	13,	DT_INT },	// Bitwise OR
 	{ "or",							2,	TOKEN_BITWISE_OR,	EXP_EXPRESSION,	2,	13,	DT_INT },	// Bitwise OR
 
-	{ "=",							1,	TOKEN_ASSIGN,		EXP_STATEMENT,	2,	16,	DT_INT },	// Assignment
+	{ "=",							1,	TOKEN_ASSIGN,		EXP_STATEMENT,	2,	18,	DT_INT },	// Assignment
 
-	{ "?",							1,	TOKEN_CONDITIONAL,	EXP_STATEMENT,	2,	17,	DT_INT },	// Conditional
+	{ "?",							1,	TOKEN_CONDITIONAL,	EXP_STATEMENT,	2,	16,	DT_INT },	// Conditional
 	{ ":",							1,	TOKEN_COND_ELSE,	EXP_STATEMENT,	2,	17,	DT_INT },	// Conditional
 
 	{ "~",							1,	TOKEN_COMPL,		EXP_EXPRESSION,	1,	5,	DT_INT },	// Unary Operator
@@ -113,27 +113,27 @@ struct EXP_TOKEN_LIST epl_token[] = {
 	{ "true",						4,	TOKEN_TRUE,			EXP_EXPRESSION,	0,	40,	DT_INT },	// Unary Operator
 	{ "false",						5,	TOKEN_FALSE,		EXP_EXPRESSION,	0,	40,	DT_INT },	// Unary Operator
 
-	{ "sinh",						4,	TOKEN_SINH,			EXP_FUNCTION,	1,	50,	DT_FLOAT },	// Built In Math Functions
-	{ "sin",						3,	TOKEN_SIN,			EXP_FUNCTION,	1,	50,	DT_FLOAT },	// Built In Math Functions
-	{ "cosh",						4,	TOKEN_COSH,			EXP_FUNCTION,	1,	50,	DT_FLOAT },	// Built In Math Functions
-	{ "cos",						3,	TOKEN_COS,			EXP_FUNCTION,	1,	50,	DT_FLOAT },	// Built In Math Functions
-	{ "tanh",						4,	TOKEN_TANH,			EXP_FUNCTION,	1,	50,	DT_FLOAT },	// Built In Math Functions
-	{ "tan",						3,	TOKEN_TAN,			EXP_FUNCTION,	1,	50,	DT_FLOAT },	// Built In Math Functions
-	{ "asin",						4,	TOKEN_ASIN,			EXP_FUNCTION,	1,	50,	DT_FLOAT },	// Built In Math Functions
-	{ "acos",						4,	TOKEN_ACOS,			EXP_FUNCTION,	1,	50,	DT_FLOAT },	// Built In Math Functions
-	{ "atan2",						5,	TOKEN_ATAN2,		EXP_FUNCTION,	2,	50,	DT_FLOAT },	// Built In Math Functions
-	{ "atan",						4,	TOKEN_ATAN,			EXP_FUNCTION,	1,	50,	DT_FLOAT },	// Built In Math Functions
-	{ "exp",						3,	TOKEN_EXPNT,		EXP_FUNCTION,	1,	50,	DT_FLOAT },	// Built In Math Functions
-	{ "log10",						5,	TOKEN_LOG10,		EXP_FUNCTION,	1,	50,	DT_FLOAT },	// Built In Math Functions
-	{ "log",						3,	TOKEN_LOG,			EXP_FUNCTION,	1,	50,	DT_FLOAT },	// Built In Math Functions
-	{ "pow",						3,	TOKEN_POW,			EXP_FUNCTION,	2,	50,	DT_FLOAT },	// Built In Math Functions
-	{ "sqrt",						4,	TOKEN_SQRT,			EXP_FUNCTION,	1,	50,	DT_FLOAT },	// Built In Math Functions
-	{ "ceil",						4,	TOKEN_CEIL,			EXP_FUNCTION,	1,	50,	DT_FLOAT },	// Built In Math Functions
-	{ "floor",						5,	TOKEN_FLOOR,		EXP_FUNCTION,	1,	50,	DT_FLOAT },	// Built In Math Functions
-	{ "fabs",						4,	TOKEN_FABS,			EXP_FUNCTION,	1,	50,	DT_FLOAT },	// Built In Math Functions
-	{ "abs",						3,	TOKEN_ABS,			EXP_FUNCTION,	1,	50,	DT_INT },	// Built In Math Functions
-	{ "fmod",						4,	TOKEN_FMOD,			EXP_FUNCTION,	2,	50,	DT_FLOAT },	// Built In Math Functions
-	{ "gcd",						3,	TOKEN_GCD,			EXP_FUNCTION,	2,	50,	DT_FLOAT },	// Built In Math Functions
+	{ "sinh",						4,	TOKEN_SINH,			EXP_FUNCTION,	1,	2,	DT_FLOAT },	// Built In Math Functions
+	{ "sin",						3,	TOKEN_SIN,			EXP_FUNCTION,	1,	2,	DT_FLOAT },	// Built In Math Functions
+	{ "cosh",						4,	TOKEN_COSH,			EXP_FUNCTION,	1,	2,	DT_FLOAT },	// Built In Math Functions
+	{ "cos",						3,	TOKEN_COS,			EXP_FUNCTION,	1,	2,	DT_FLOAT },	// Built In Math Functions
+	{ "tanh",						4,	TOKEN_TANH,			EXP_FUNCTION,	1,	2,	DT_FLOAT },	// Built In Math Functions
+	{ "tan",						3,	TOKEN_TAN,			EXP_FUNCTION,	1,	2,	DT_FLOAT },	// Built In Math Functions
+	{ "asin",						4,	TOKEN_ASIN,			EXP_FUNCTION,	1,	2,	DT_FLOAT },	// Built In Math Functions
+	{ "acos",						4,	TOKEN_ACOS,			EXP_FUNCTION,	1,	2,	DT_FLOAT },	// Built In Math Functions
+	{ "atan2",						5,	TOKEN_ATAN2,		EXP_FUNCTION,	2,	2,	DT_FLOAT },	// Built In Math Functions
+	{ "atan",						4,	TOKEN_ATAN,			EXP_FUNCTION,	1,	2,	DT_FLOAT },	// Built In Math Functions
+	{ "exp",						3,	TOKEN_EXPNT,		EXP_FUNCTION,	1,	2,	DT_FLOAT },	// Built In Math Functions
+	{ "log10",						5,	TOKEN_LOG10,		EXP_FUNCTION,	1,	2,	DT_FLOAT },	// Built In Math Functions
+	{ "log",						3,	TOKEN_LOG,			EXP_FUNCTION,	1,	2,	DT_FLOAT },	// Built In Math Functions
+	{ "pow",						3,	TOKEN_POW,			EXP_FUNCTION,	2,	2,	DT_FLOAT },	// Built In Math Functions
+	{ "sqrt",						4,	TOKEN_SQRT,			EXP_FUNCTION,	1,	2,	DT_FLOAT },	// Built In Math Functions
+	{ "ceil",						4,	TOKEN_CEIL,			EXP_FUNCTION,	1,	2,	DT_FLOAT },	// Built In Math Functions
+	{ "floor",						5,	TOKEN_FLOOR,		EXP_FUNCTION,	1,	2,	DT_FLOAT },	// Built In Math Functions
+	{ "fabs",						4,	TOKEN_FABS,			EXP_FUNCTION,	1,	2,	DT_FLOAT },	// Built In Math Functions
+	{ "abs",						3,	TOKEN_ABS,			EXP_FUNCTION,	1,	2,	DT_INT },	// Built In Math Functions
+	{ "fmod",						4,	TOKEN_FMOD,			EXP_FUNCTION,	2,	2,	DT_FLOAT },	// Built In Math Functions
+	{ "gcd",						3,	TOKEN_GCD,			EXP_FUNCTION,	2,	2,	DT_FLOAT },	// Built In Math Functions
 };
 
 extern bool init_token_list(SOURCE_TOKEN_LIST *token_list, size_t size) {

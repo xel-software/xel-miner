@@ -18,7 +18,8 @@
 #include "ElasticPLFunctions.h"
 #include "../miner.h"
 
-#define MAX_AST_DEPTH 1000
+//#define MAX_AST_DEPTH 1000
+#define MAX_AST_DEPTH 20000
 
 static uint32_t calc_weight(ast* root, uint32_t *ast_depth) {
 	uint32_t depth = 0, weight = 0, total_weight = 0;

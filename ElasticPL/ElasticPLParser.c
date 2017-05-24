@@ -60,7 +60,7 @@ static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_vm_mem, int6
 		}
 
 		// Set Indicators Based On Data Type
-		switch (data_type) {
+		switch (e->data_type) {
 		case DT_INT:
 			e->is_64bit = false;
 			e->is_signed = true;
@@ -1146,7 +1146,8 @@ extern bool parse_token_list(SOURCE_TOKEN_LIST *token_list) {
 					(token_list->token[top_op].type == TOKEN_VAR_BEGIN) ||
 					(token_list->token[top_op].type == TOKEN_IF) ||
 					(token_list->token[top_op].type == TOKEN_ELSE) ||
-					(token_list->token[top_op].type == TOKEN_REPEAT)) {
+					(token_list->token[top_op].type == TOKEN_REPEAT) ||
+					(token_list->token[top_op].type == TOKEN_CONDITIONAL)) {
 					break;
 				}
 

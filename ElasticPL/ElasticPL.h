@@ -20,6 +20,7 @@
 #define PARSE_STACK_SIZE 24000
 #define CALL_STACK_SIZE 257
 #define REPEAT_STACK_SIZE 33
+#define CODE_STACK_SIZE 10000
 
 #define MAX_VM_MEMORY_SIZE	100000		// Maximum Number Of Bytes That Can Be Used By VM Memory Model
 #define VM_MEMORY_SIZE	64000			// Number Of Integers Supported By ElasticPL
@@ -324,9 +325,11 @@ static bool validate_ast();
 static bool validate_functions();
 static bool validate_function_calls();
 
-extern char* convert_ast_to_c();
-static char* convert(ast* exp);
-static char* append_strings(char * old, char * new);
+static bool convert_function(ast* root);
+static bool convert_node(ast* node);
+static void get_cast(char *lcast, char *rcast, DATA_TYPE ldata_type, DATA_TYPE rdata_type, bool right_only);
+static bool get_node_inputs(ast* node, char **lstr, char **rstr);
+
 extern uint32_t calc_wcet();
 static uint32_t calc_weight(ast* root, uint32_t *depth);
 static uint32_t get_node_weight(ast* node);

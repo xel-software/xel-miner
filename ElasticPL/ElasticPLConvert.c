@@ -20,105 +20,589 @@
 char *tab[] = { "\t", "\t\t", "\t\t\t", "\t\t\t\t", "\t\t\t\t\t", "\t\t\t\t\t\t", "\t\t\t\t\t\t\t", "\t\t\t\t\t\t\t" };
 int tabs;
 
+char *stack_code[CODE_STACK_SIZE];
+int stack_code_idx;
+
+static void push(char *str) {
+	stack_code[stack_code_idx++] = str;
+}
+
+static char* pop() {
+	if (stack_code_idx > 0)
+		return stack_code[--stack_code_idx];
+	else
+		return NULL;
+}
+
 extern char* convert_ast_to_c() {
-	char* ptr = NULL;
-	char* code = NULL;
-	char* code1 = NULL;
-	char* code2 = NULL;
+	int i, j;
 
-	int i, idx = 0;
+	char work_id[] = "1234567890";
+	char file_name[1000];
+	sprintf(file_name, "./work/job_%s.c", work_id);
 
-	tabs = 0;
+	FILE* f = fopen(file_name, "w");
+	if (!f)
+		return false;
+
 	use_elasticpl_math = false;
 
+	// Write Function Declarations
+	fprintf(f, "// Function Declarations For Job #%s\n", work_id);
 	for (i = ast_func_idx; i < vm_ast_cnt; i++) {
-		code2 = append_strings(code2, convert(vm_ast[i]));
+		fprintf(f, "void %s_%s();\n", vm_ast[i]->svalue, work_id);
+	}
+	fprintf(f, "\n");
+
+	// Write Function Definitions
+	for (i = ast_func_idx; i < vm_ast_cnt; i++) {
+
+		stack_code_idx = 0;
+		tabs = 0;
+
+		if (!convert_function(vm_ast[i])) {
+			fclose(f);
+			return NULL;
+		}
+
+		for (j = 0; j < stack_code_idx; j++) {
+			if (stack_code[j]) {
+				fprintf(f, "%s", stack_code[j]);
+				free(stack_code[j]);
+				stack_code[j] = NULL;
+			}
+		}
+		fprintf(f, "\n");
 	}
 
-	if (!code2)
-		return NULL;
+	fclose(f);
 
-	// Create C / OpenCL Code
-	if (!opt_opencl) {
+	return NULL;
+}
 
-		char code2_end[] = "\n\treturn bounty_found;\n}\n\n";
-		char code1_begin[] = "static void init_once() {\n\n";
-		char code1_end[] = "}\n";
+static bool convert_function(ast* root) {
+	bool downward = true;
+	ast *ast_ptr = NULL;
 
-		// Check For Init Function
-		if (code1) {
-			code = malloc(strlen(code1) + strlen(code2) + strlen(code2_end) + strlen(code1_begin) + strlen(code1_end) + 1);
-			ptr = &code[0];
-			memcpy(ptr, code2, strlen(code2));
-			ptr += strlen(code2);
-			memcpy(ptr, &code2_end[0], strlen(code2_end));
-			ptr += strlen(code2_end);
-			memcpy(ptr, &code1_begin[0], strlen(code1_begin));
-			ptr += strlen(code1_begin);
-			memcpy(ptr, code1, strlen(code1));
-			ptr += strlen(code1);
-			memcpy(ptr, &code1_end[0], strlen(code1_end));
-			ptr += strlen(code1_end);
-			ptr[0] = 0; // Terminate String
+	if (!root)
+		return false;
 
-			free(code1);
-			free(code2);
+	ast_ptr = root;
+
+	while (ast_ptr) {
+
+		// Navigate Down The Tree
+		if (downward) {
+
+			// Navigate To Lowest Left Node
+			while (ast_ptr->left) {
+				ast_ptr = ast_ptr->left;
+
+				// Indent Statements Below IF / REPEAT
+				if ((ast_ptr->type == NODE_IF) || (ast_ptr->type == NODE_REPEAT))
+					tabs++;
+			}
+
+			if (ast_ptr->type == NODE_FUNCTION)
+				if (!convert_node(ast_ptr))
+					return false;
+
+			// If There Is A Right Node, Switch To It
+			if (ast_ptr->right) {
+				ast_ptr = ast_ptr->right;
+			}
+			// Otherwise, Convert Current Node & Navigate Back Up The Tree
+			else {
+				if (!convert_node(ast_ptr))
+					return false;
+				downward = false;
+			}
 		}
+
+		// Navigate Back Up The Tree
 		else {
-			code = malloc(strlen(code2) + strlen(code2_end) + strlen(code1_begin) + strlen(code1_end) + 1);
-			ptr = &code[0];
-			memcpy(ptr, code2, strlen(code2));
-			ptr += strlen(code2);
-			memcpy(ptr, &code2_end[0], strlen(code2_end));
-			ptr += strlen(code2_end);
-			memcpy(ptr, &code1_begin[0], strlen(code1_begin));
-			ptr += strlen(code1_begin);
-			memcpy(ptr, &code1_end[0], strlen(code1_end));
-			ptr += strlen(code1_end);
-			ptr[0] = 0; // Terminate String
-			free(code2);
+			if (ast_ptr->parent == root)
+				break;
+
+			// Check If We Need To Navigate Back Down A Right Branch
+			if ((ast_ptr == ast_ptr->parent->left) && (ast_ptr->parent->right)) {
+				ast_ptr = ast_ptr->parent->right;
+
+				if ((ast_ptr->parent->type == NODE_IF) || (ast_ptr->parent->type == NODE_ELSE) || (ast_ptr->parent->type == NODE_REPEAT)) {
+					if (!convert_node(ast_ptr->parent))
+						return false;
+
+					if ((ast_ptr->type == NODE_IF) || (ast_ptr->type == NODE_REPEAT))
+						tabs++;
+				}
+
+				downward = true;
+			}
+			else {
+				ast_ptr = ast_ptr->parent;
+				if ((ast_ptr->type == NODE_IF) || (ast_ptr->type == NODE_ELSE) || (ast_ptr->type == NODE_REPEAT)) {
+					if (tabs) tabs--;
+				}
+				else if (ast_ptr->type == NODE_BLOCK) {
+					if ((ast_ptr->parent->type == NODE_IF) || (ast_ptr->parent->type == NODE_ELSE) || (ast_ptr->parent->type == NODE_REPEAT) || (ast_ptr->parent->type == NODE_FUNCTION)) {
+						if (!convert_node(ast_ptr))
+							return false;
+					}
+				}
+				else {
+					if (!convert_node(ast_ptr))
+						return false;
+				}
+			}
 		}
 	}
 
-	// Create OpenCL Code
+	return true;
+}
+
+static bool convert_node(ast* node) {
+	char op[10];
+	char lcast[16];
+	char rcast[16];
+	char *lstr = NULL;
+	char *rstr = NULL;
+	char *str = NULL;
+	char *tmp = NULL;
+
+	if (!node)
+		return false;
+
+	// Get Left & Right Values From Code Stack
+	if (!get_node_inputs(node, &lstr, &rstr))
+		return false;
+
+	switch (node->type) {
+	case NODE_FUNCTION:
+		str = malloc(256);
+		sprintf(str, "void %s() {\n", node->svalue);
+		break;
+	case NODE_CALL_FUNCTION:
+		str = malloc(256);
+		sprintf(str, "%s()", node->svalue);
+		break;
+	case NODE_RESULT:
+		str = malloc(strlen(lstr) + 50);
+		sprintf(str, "\n\tbounty_found = (%s != 0 ? 1 : 0)", lstr);
+		break;
+	case NODE_CONSTANT:
+		str = malloc(25);
+		switch (node->data_type) {
+		case DT_INT:
+		case DT_LONG:
+			sprintf(str, "%lld", node->ivalue);
+			break;
+		case DT_UINT:
+		case DT_ULONG:
+			sprintf(str, "%llu", node->uvalue);
+			break;
+		case DT_FLOAT:
+		case DT_DOUBLE:
+			sprintf(str, "%f", node->fvalue);
+			break;
+		default:
+			applog(LOG_ERR, "Compiler Error: Invalid constant at Line: %d", node->line_num);
+			return false;
+		}
+		break;
+	case NODE_VAR_CONST:
+		str = malloc(25);
+		switch (node->data_type) {
+		case DT_INT:
+			sprintf(str, "i[%llu]", ((node->uvalue >= max_vm_ints) ? 0 : node->uvalue));
+			break;
+		case DT_UINT:
+			if (node->is_vm_mem)
+				sprintf(str, "m[%llu]", ((node->uvalue >= max_vm_uints) ? 0 : node->uvalue));
+			else
+				sprintf(str, "u[%llu]", ((node->uvalue >= max_vm_uints) ? 0 : node->uvalue));
+			break;
+		case DT_LONG:
+			sprintf(str, "l[%llu]", ((node->uvalue >= max_vm_longs) ? 0 : node->uvalue));
+			break;
+		case DT_ULONG:
+			sprintf(str, "ul[%llu]", ((node->uvalue >= max_vm_ulongs) ? 0 : node->uvalue));
+			break;
+		case DT_FLOAT:
+			sprintf(str, "f[%llu]", ((node->uvalue >= max_vm_floats) ? 0 : node->uvalue));
+			break;
+		case DT_DOUBLE:
+			sprintf(str, "d[%llu]", ((node->uvalue >= max_vm_doubles) ? 0 : node->uvalue));
+			break;
+		default:
+			applog(LOG_ERR, "Compiler Error: Invalid variable at Line: %d", node->line_num);
+			return false;
+		}
+		break;
+	case NODE_VAR_EXP:
+		str = malloc(strlen(lstr) + 5);
+		switch (node->data_type) {
+		case DT_INT:
+			sprintf(str, "i[%s]", lstr);
+			break;
+		case DT_UINT:
+			if (node->is_vm_mem)
+				sprintf(str, "m[%s]", lstr);
+			else
+				sprintf(str, "u[%s]", lstr);
+			break;
+		case DT_LONG:
+			sprintf(str, "l[%s]", lstr);
+			break;
+		case DT_ULONG:
+			sprintf(str, "ul[%s]", lstr);
+			break;
+		case DT_FLOAT:
+			sprintf(str, "f[%s]", lstr);
+			break;
+		case DT_DOUBLE:
+			sprintf(str, "d[%s]", lstr);
+			break;
+		default:
+			applog(LOG_ERR, "Compiler Error: Invalid variable at Line: %d", node->line_num);
+			return false;
+		}
+		break;
+	case NODE_IF:
+		if (tabs < 1) tabs = 1;
+		str = malloc(strlen(lstr) + 25);
+		if ((node->right->type == NODE_BLOCK) || ((node->right->type == NODE_ELSE) && (node->right->left->type == NODE_BLOCK)))
+			sprintf(str, "%sif (%s) {\n", tab[tabs - 1], lstr);
+		else
+			sprintf(str, "%sif (%s)\n", tab[tabs - 1], lstr);
+		break;
+	case NODE_ELSE:
+		if (tabs < 1) tabs = 1;
+		str = malloc(25);
+		if (node->right->type == NODE_BLOCK)
+			sprintf(str, "%selse {\n", tab[tabs - 1]);
+		else
+			sprintf(str, "%selse\n", tab[tabs - 1]);
+		break;
+	case NODE_REPEAT:
+		str = malloc(256);
+		if (tabs < 1) tabs = 1;
+		sprintf(str, "%sint loop%d;\n%sfor (loop%d = 0; loop%d < ( %s ); loop%d++) {\n%s\tif (loop%d >= %lld) break;\n%s\tu[%lld] = loop%d;\n", tab[tabs - 1], node->token_num, tab[tabs - 1], node->token_num, node->token_num, lstr, node->token_num, tab[tabs - 1], node->token_num, node->ivalue, tab[tabs - 1], node->uvalue, node->token_num);
+		break;
+	case NODE_BLOCK:
+		str = malloc(25);
+		sprintf(str, "%s}\n", tab[tabs - 1]);
+		if (node->parent->type == NODE_FUNCTION)
+			sprintf(str, "}\n");
+		else
+			sprintf(str, "%s}\n", tab[tabs - 1]);
+		break;
+	case NODE_BREAK:
+		str = malloc(10);
+		sprintf(str, "break");
+		break;
+	case NODE_CONTINUE:
+		str = malloc(10);
+		sprintf(str, "continue");
+		break;
+
+	case NODE_CONDITIONAL:
+		tmp = pop();
+		if (!tmp) {
+			applog(LOG_ERR, "Compiler Error: Corupted code stack at Line: %d", node->line_num);
+			return false;
+		}
+		str = malloc(strlen(lstr) + strlen(rstr) + strlen(tmp) + 25);
+		sprintf(str, "(( %s ) ? %s : %s)", tmp, lstr, rstr);
+		free(tmp);
+		break;
+
+	case NODE_COND_ELSE:
+		return true;
+
+	case NODE_ADD:
+	case NODE_SUB:
+	case NODE_MUL:
+	case NODE_EQ:
+	case NODE_NE:
+	case NODE_GT:
+	case NODE_LT:
+	case NODE_GE:
+	case NODE_LE:
+	case NODE_AND:
+	case NODE_OR:
+	case NODE_BITWISE_AND:
+	case NODE_BITWISE_XOR:
+	case NODE_BITWISE_OR:
+	case NODE_LSHIFT:
+	case NODE_RSHIFT:
+		switch (node->type) {
+		case NODE_ADD:			sprintf(op, "%s", "+");		break;
+		case NODE_SUB:			sprintf(op, "%s", "-");		break;
+		case NODE_MUL:			sprintf(op, "%s", "*");		break;
+		case NODE_EQ:			sprintf(op, "%s", "==");	break;
+		case NODE_NE:			sprintf(op, "%s", "!=");	break;
+		case NODE_GT:			sprintf(op, "%s", ">");		break;
+		case NODE_LT:			sprintf(op, "%s", "<");		break;
+		case NODE_GE:			sprintf(op, "%s", ">=");	break;
+		case NODE_LE:			sprintf(op, "%s", "<=");	break;
+		case NODE_AND:			sprintf(op, "%s", "&&");	break;
+		case NODE_OR:			sprintf(op, "%s", "||");	break;
+		case NODE_BITWISE_AND:	sprintf(op, "%s", "&");		break;
+		case NODE_BITWISE_XOR:	sprintf(op, "%s", "^");		break;
+		case NODE_BITWISE_OR:	sprintf(op, "%s", "|");		break;
+		case NODE_LSHIFT:		sprintf(op, "%s", "<<");	break;
+		case NODE_RSHIFT:		sprintf(op, "%s", ">>");	break;
+		}
+		str = malloc(strlen(lstr) + strlen(rstr) + 25);
+		get_cast(lcast, rcast, node->left->data_type, node->right->data_type, false);
+		if (lcast[0])
+			sprintf(str, "(%s)(%s) %s %s", lcast, lstr, op, rstr);
+		else if (rcast[0])
+			sprintf(str, "%s %s (%s)(%s)", lstr, op, rcast, rstr);
+		else
+			sprintf(str, "%s %s %s", lstr, op, rstr);
+		break;
+
+	case NODE_DIV:
+	case NODE_MOD:
+		switch (node->type) {
+		case NODE_DIV:	sprintf(op, "%s", "/"); break;
+		case NODE_MOD:	sprintf(op, "%s", "%"); break;
+		}
+		str = malloc(strlen(lstr) + strlen(rstr) + strlen(rstr) + 25);
+		get_cast(lcast, rcast, node->left->data_type, node->right->data_type, true);
+		if (rcast[0])
+			sprintf(str, "((%s != 0) ? %s %s %s(%s) : 0)", rstr, lstr, op, rcast, rstr);
+		else
+			sprintf(str, "((%s != 0) ? %s %s %s : 0)", rstr, lstr, op, rstr);
+		break;
+
+	case NODE_ASSIGN:
+	case NODE_ADD_ASSIGN:
+	case NODE_SUB_ASSIGN:
+	case NODE_MUL_ASSIGN:
+	case NODE_LSHFT_ASSIGN:
+	case NODE_RSHFT_ASSIGN:
+	case NODE_AND_ASSIGN:
+	case NODE_XOR_ASSIGN:
+	case NODE_OR_ASSIGN:
+		switch (node->type) {
+		case NODE_ASSIGN:		sprintf(op, "%s", "=");		break;
+		case NODE_ADD_ASSIGN:	sprintf(op, "%s", "+=");	break;
+		case NODE_SUB_ASSIGN:	sprintf(op, "%s", "-=");	break;
+		case NODE_MUL_ASSIGN:	sprintf(op, "%s", "*=");	break;
+		case NODE_LSHFT_ASSIGN:	sprintf(op, "%s", "<<=");	break;
+		case NODE_RSHFT_ASSIGN:	sprintf(op, "%s", ">>=");	break;
+		case NODE_AND_ASSIGN:	sprintf(op, "%s", "&=");	break;
+		case NODE_XOR_ASSIGN:	sprintf(op, "%s", "^=");	break;
+		case NODE_OR_ASSIGN:	sprintf(op, "%s", "|=");	break;
+		}
+		str = malloc(strlen(lstr) + strlen(rstr) + 25);
+		get_cast(lcast, rcast, node->left->data_type, node->right->data_type, true);
+		if (rcast[0])
+			sprintf(str, "%s %s %s(%s)", lstr, op, rcast, rstr);
+		else
+			sprintf(str, "%s %s %s", lstr, op, rstr);
+		break;
+
+	case NODE_DIV_ASSIGN:
+	case NODE_MOD_ASSIGN:
+		switch (node->type) {
+		case NODE_DIV_ASSIGN:	sprintf(op, "%s", "/");	break;
+		case NODE_MOD_ASSIGN:	sprintf(op, "%s", "%");	break;
+		}
+		str = malloc(strlen(lstr) + strlen(lstr) + strlen(rstr) + strlen(rstr) + 40);
+		get_cast(lcast, rcast, node->left->data_type, node->right->data_type, true);
+		if (rcast[0])
+			sprintf(str, "%s = ((%s != 0) ? %s %s %s(%s) : 0)", lstr, rstr, lstr, op, rcast, rstr);
+		else
+			sprintf(str, "%s = ((%s != 0) ? %s %s %s : 0)", lstr, rstr, lstr, op, rstr);
+		break;
+
+	case NODE_INCREMENT_R:
+		str = malloc(strlen(lstr) + 10);
+		sprintf(str, "++%s", lstr);
+		break;
+
+	case NODE_INCREMENT_L:
+		str = malloc(strlen(lstr) + 10);
+		sprintf(str, "%s++", lstr);
+		break;
+
+	case NODE_DECREMENT_R:
+		str = malloc(strlen(lstr) + 10);
+		sprintf(str, "--%s", lstr);
+		break;
+
+	case NODE_DECREMENT_L:
+		str = malloc(strlen(lstr) + 10);
+		sprintf(str, "%s--", lstr);
+		break;
+
+	case NODE_NOT:
+		str = malloc(strlen(lstr) + 10);
+		sprintf(str, "!(%s)", lstr);
+		break;
+
+	case NODE_COMPL:
+		str = malloc(strlen(lstr) + 10);
+		sprintf(str, "~(%s)", lstr);
+		break;
+
+	case NODE_NEG:
+		str = malloc(strlen(lstr) + 10);
+		sprintf(str, "-(%s)", lstr);
+		break;
+
+	case NODE_LROT:
+		str = malloc(strlen(lstr) + strlen(rstr) + 25);
+		if (node->is_64bit)
+			sprintf(str, "rotl64(%s, %s)", lstr, rstr);
+		else
+			sprintf(str, "rotl32(%s, %s)", lstr, rstr);
+		use_elasticpl_math = true;
+		break;
+	case NODE_RROT:
+		str = malloc(strlen(lstr) + strlen(rstr) + 25);
+		if (node->is_64bit)
+			sprintf(str, "rotr64(%s, %s)", lstr, rstr);
+		else
+			sprintf(str, "rotr32(%s, %s)", lstr, rstr);
+		use_elasticpl_math = true;
+		break;
+
+	case NODE_PARAM:
+		str = malloc(strlen(lstr) + 1);
+		sprintf(str, "%s", lstr);
+		break;
+	case NODE_ABS:
+		str = malloc(strlen(lstr) + 10);
+		sprintf(str, "abs(%s)", lstr);
+		use_elasticpl_math = true;
+		break;
+	case NODE_POW:
+		str = malloc(strlen(lstr) + strlen(rstr) + 10);
+		sprintf(str, "pow(%s, %s)", lstr, rstr);
+		use_elasticpl_math = true;
+		break;
+	case NODE_SIN:
+		str = malloc(strlen(lstr) + 10);
+		sprintf(str, "sin(%s)", lstr);
+		use_elasticpl_math = true;
+		break;
+	case NODE_COS:
+		str = malloc(strlen(lstr) + 10);
+		sprintf(str, "cos(%s)", lstr);
+		use_elasticpl_math = true;
+		break;
+	case NODE_TAN:
+		str = malloc(strlen(lstr) + 10);
+		sprintf(str, "tan(%s)", lstr);
+		use_elasticpl_math = true;
+		break;
+	case NODE_SINH:
+		str = malloc(strlen(lstr) + strlen(lstr) + strlen(lstr) + 50);
+		sprintf(str, "(((%s >= -1.0) && (%s <= 1.0)) ? sinh( %s ) : 0.0)", lstr, lstr, lstr);
+		use_elasticpl_math = true;
+		break;
+	case NODE_COSH:
+		str = malloc(strlen(lstr) + strlen(lstr) + strlen(lstr) + 50);
+		sprintf(str, "(((%s >= -1.0) && (%s <= 1.0)) ? cosh( %s ) : 0.0)", lstr, lstr, lstr);
+		use_elasticpl_math = true;
+		break;
+	case NODE_TANH:
+		str = malloc(strlen(lstr) + 10);
+		sprintf(str, "tanh(%s)", lstr);
+		use_elasticpl_math = true;
+		break;
+	case NODE_ASIN:
+		str = malloc(strlen(lstr) + strlen(lstr) + strlen(lstr) + 50);
+		sprintf(str, "(((%s >= -1.0) && (%s <= 1.0)) ? asin( %s ) : 0.0)", lstr, lstr, lstr);
+		use_elasticpl_math = true;
+		break;
+	case NODE_ACOS:
+		str = malloc(strlen(lstr) + strlen(lstr) + strlen(lstr) + 50);
+		sprintf(str, "(((%s >= -1.0) && (%s <= 1.0)) ? acos( %s ) : 0.0)", lstr, lstr, lstr);
+		use_elasticpl_math = true;
+		break;
+	case NODE_ATAN:
+		str = malloc(strlen(lstr) + 10);
+		sprintf(str, "atan(%s)", lstr);
+		use_elasticpl_math = true;
+		break;
+	case NODE_ATAN2:
+		str = malloc(strlen(lstr) + strlen(rstr) + strlen(rstr) + 50);
+		sprintf(str, "((%s != 0) ? atan2(%s, %s) : 0.0)", rstr, lstr, rstr);
+		use_elasticpl_math = true;
+		break;
+	case NODE_EXPNT:
+		str = malloc(strlen(lstr) + strlen(lstr) + strlen(lstr) + 60);
+		sprintf(str, "((((%s) >= -708.0) && ((%s) <= 709.0)) ? exp( %s ) : 0.0)", lstr, lstr, lstr);
+		use_elasticpl_math = true;
+		break;
+	case NODE_LOG:
+		str = malloc(strlen(lstr) + strlen(lstr) + 50);
+		sprintf(str, "((%s > 0) ? log( %s ) : 0.0)", lstr, lstr);
+		use_elasticpl_math = true;
+		break;
+	case NODE_LOG10:
+		str = malloc(strlen(lstr) + strlen(lstr) + 50);
+		sprintf(str, "((%s > 0) ? log10( %s ) : 0.0)", lstr, lstr);
+		use_elasticpl_math = true;
+		break;
+	case NODE_SQRT:
+		str = malloc(strlen(lstr) + strlen(lstr) + 50);
+		sprintf(str, "((%s > 0) ? sqrt( %s ) : 0.0)", lstr, lstr);
+		use_elasticpl_math = true;
+		break;
+	case NODE_CEIL:
+		str = malloc(strlen(lstr) + 10);
+		sprintf(str, "ceil(%s)", lstr);
+		use_elasticpl_math = true;
+		break;
+	case NODE_FLOOR:
+		str = malloc(strlen(lstr) + 10);
+		sprintf(str, "floor(%s)", lstr);
+		use_elasticpl_math = true;
+		break;
+	case NODE_FABS:
+		str = malloc(strlen(lstr) + 10);
+		sprintf(str, "fabs(%s)", lstr);
+		use_elasticpl_math = true;
+		break;
+	case NODE_FMOD:
+		str = malloc(strlen(lstr) + strlen(rstr) + strlen(rstr) + 50);
+		sprintf(str, "((%s != 0) ? fmod(%s, %s) : 0.0)", rstr, lstr, rstr);
+		use_elasticpl_math = true;
+		break;
+	case NODE_GCD:
+		str = malloc(strlen(lstr) + 10);
+		sprintf(str, "gcd(%s, %s)", lstr, rstr);
+		use_elasticpl_math = true;
+		break;
+	default:
+		applog(LOG_ERR, "Compiler Error: Unknown expression at Line: %d", node->line_num);
+		return false;
+	}
+
+	if (lstr) free(lstr);
+	if (rstr) free(rstr);
+
+	lstr = NULL;
+	rstr = NULL;
+
+	// Terminate Statements
+	if (node->end_stmnt && (node->type != NODE_IF) && (node->type != NODE_ELSE) && (node->type != NODE_REPEAT) && (node->type != NODE_BLOCK) && (node->type != NODE_FUNCTION)) {
+		tmp = malloc(strlen(str) + 20);
+		sprintf(tmp, "%s%s;\n", tab[tabs], str);
+		free(str);
+		push(tmp);
+	}
 	else {
-
-		char code2_end[] = "\n";
-		char code1_begin[] = "if (1) {\n";
-		char code1_end[] = "}\n\n";
-
-		// Check For Init Function
-		if (code1) {
-			code = malloc(strlen(code1) + strlen(code2) + strlen(code2_end) + strlen(code1_begin) + strlen(code1_end) + 1);
-			ptr = &code[0];
-			memcpy(ptr, &code1_begin[0], strlen(code1_begin));
-			ptr += strlen(code1_begin);
-			memcpy(ptr, code1, strlen(code1));
-			ptr += strlen(code1);
-			memcpy(ptr, &code1_end[0], strlen(code1_end));
-			ptr += strlen(code1_end);
-			memcpy(ptr, code2, strlen(code2));
-			ptr += strlen(code2);
-			memcpy(ptr, &code2_end[0], strlen(code2_end));
-			ptr += strlen(code2_end);
-			ptr[0] = 0; // Terminate String
-
-			free(code1);
-			free(code2);
-		}
-		else {
-			code = malloc(strlen(code2) + strlen(code2_end) + strlen(code1_begin) + strlen(code1_end) + 1);
-			ptr = &code[0];
-			memcpy(ptr, code2, strlen(code2));
-			ptr += strlen(code2);
-			memcpy(ptr, &code2_end[0], strlen(code2_end));
-			ptr += strlen(code2_end);
-			ptr[0] = 0; // Terminate String
-			free(code2);
-		}
-
+		push(str);
 	}
-	return code;
+
+	return true;
 }
 
 static void get_cast(char *lcast, char *rcast, DATA_TYPE ldata_type, DATA_TYPE rdata_type, bool right_only) {
@@ -169,619 +653,98 @@ static void get_cast(char *lcast, char *rcast, DATA_TYPE ldata_type, DATA_TYPE r
 	}
 }
 
+static bool get_node_inputs(ast* node, char **lstr, char **rstr) {
 
-// Use Post Order Traversal To Translate The Expressions In The AST to C
-static char* convert(ast* exp) {
-	char *lval = NULL;
-	char *rval = NULL;
-	char *tmp = NULL;
-	char *result = NULL;
-	char lcast[16];
-	char rcast[16];
-
-	bool l_is_float = false;
-	bool r_is_float = false;
-
-	if (exp != NULL) {
-
-		// Determine Tab Indentations
-		if (exp->type == NODE_REPEAT) {
-			if (tabs < 6) tabs += 2;
+	// Get Left & Right Values From Code Stack
+	switch (node->type) {
+	case NODE_VAR_EXP:
+	case NODE_INCREMENT_R:
+	case NODE_INCREMENT_L:
+	case NODE_DECREMENT_R:
+	case NODE_DECREMENT_L:
+	case NODE_NOT:
+	case NODE_COMPL:
+	case NODE_NEG:
+	case NODE_IF:
+	case NODE_REPEAT:
+	case NODE_RESULT:
+	case NODE_PARAM:
+	case NODE_SIN:
+	case NODE_COS:
+	case NODE_TAN:
+	case NODE_SINH:
+	case NODE_COSH:
+	case NODE_TANH:
+	case NODE_ASIN:
+	case NODE_ACOS:
+	case NODE_ATAN:
+	case NODE_EXPNT:
+	case NODE_LOG:
+	case NODE_LOG10:
+	case NODE_SQRT:
+	case NODE_CEIL:
+	case NODE_FLOOR:
+	case NODE_ABS:
+	case NODE_FABS:
+		*lstr = pop();
+		if (!lstr) {
+			applog(LOG_ERR, "Compiler Error: Corupted code stack at Line: %d", node->line_num);
+			return false;
 		}
-		else if (exp->type == NODE_IF) {
-			if (tabs < 7) tabs++;
+		break;
+	case NODE_ASSIGN:
+	case NODE_ADD_ASSIGN:
+	case NODE_SUB_ASSIGN:
+	case NODE_MUL_ASSIGN:
+	case NODE_DIV_ASSIGN:
+	case NODE_MOD_ASSIGN:
+	case NODE_LSHFT_ASSIGN:
+	case NODE_RSHFT_ASSIGN:
+	case NODE_AND_ASSIGN:
+	case NODE_XOR_ASSIGN:
+	case NODE_OR_ASSIGN:
+	case NODE_ADD:
+	case NODE_SUB:
+	case NODE_MUL:
+	case NODE_DIV:
+	case NODE_MOD:
+	case NODE_LSHIFT:
+	case NODE_LROT:
+	case NODE_RSHIFT:
+	case NODE_RROT:
+	case NODE_AND:
+	case NODE_OR:
+	case NODE_BITWISE_AND:
+	case NODE_BITWISE_XOR:
+	case NODE_BITWISE_OR:
+	case NODE_EQ:
+	case NODE_NE:
+	case NODE_GT:
+	case NODE_LT:
+	case NODE_GE:
+	case NODE_LE:
+	case NODE_CONDITIONAL:
+	case NODE_POW:
+	case NODE_ATAN2:
+	case NODE_FMOD:
+	case NODE_GCD:
+		*rstr = pop();
+		*lstr = pop();
+		if (!lstr || !rstr) {
+			applog(LOG_ERR, "Compiler Error: Corupted code stack at Line: %d", node->line_num);
+			return false;
 		}
+		break;
 
-		// Process Left Side Statements
-		if (exp->left != NULL) {
-			lval = convert(exp->left);
-		}
-
-		// Check For If Statement As Right Side Is Conditional
-		if ((exp->type != NODE_IF) && (exp->type != NODE_CONDITIONAL))
-			rval = convert(exp->right);
-
-		// Check If Leafs Are Float Or Int To Determine If Casting Is Needed
-		if (exp->left != NULL)
-			l_is_float = (exp->left->is_float);
-		if (exp->right != NULL)
-			r_is_float = (exp->right->is_float);
-
-		// Allocate Memory For Results
-		result = malloc((lval ? strlen(lval) : 0) + (rval ? 3 * strlen(rval) : 0) + 256);
-		result[0] = 0;
-
-		switch (exp->type) {
-		case NODE_FUNCTION:
-			sprintf(result, "void %s() {\n%s}\n\n", exp->svalue, rval);
-			break;
-		case NODE_CALL_FUNCTION:
-			sprintf(result, "%s()", exp->svalue);
-			break;
-		case NODE_CONSTANT:
-			switch (exp->data_type) {
-			case DT_INT:
-			case DT_LONG:
-				sprintf(result, "%lld", exp->ivalue);
-				break;
-			case DT_UINT:
-			case DT_ULONG:
-				sprintf(result, "%llu", exp->uvalue);
-				break;
-			case DT_FLOAT:
-			case DT_DOUBLE:
-				sprintf(result, "%f", exp->fvalue);
-				break;
-			default:
-				sprintf(result, "0");
-			}
-			break;
-		case NODE_VAR_CONST:
-			switch (exp->data_type) {
-			case DT_INT:
-				sprintf(result, "i[%llu]", ((exp->uvalue >= max_vm_ints) ? 0 : exp->uvalue));
-				break;
-			case DT_UINT:
-				if (exp->is_vm_mem)
-					sprintf(result, "m[%llu]", ((exp->uvalue >= max_vm_uints) ? 0 : exp->uvalue));
-				else
-					sprintf(result, "u[%llu]", ((exp->uvalue >= max_vm_uints) ? 0 : exp->uvalue));
-				break;
-			case DT_LONG:
-				sprintf(result, "l[%llu]", ((exp->uvalue >= max_vm_longs) ? 0 : exp->uvalue));
-				break;
-			case DT_ULONG:
-				sprintf(result, "ul[%llu]", ((exp->uvalue >= max_vm_ulongs) ? 0 : exp->uvalue));
-				break;
-			case DT_FLOAT:
-				sprintf(result, "f[%llu]", ((exp->uvalue >= max_vm_floats) ? 0 : exp->uvalue));
-				break;
-			case DT_DOUBLE:
-				sprintf(result, "d[%llu]", ((exp->uvalue >= max_vm_doubles) ? 0 : exp->uvalue));
-				break;
-			default:
-				sprintf(result, "0");
-			}
-			break;
-		case NODE_VAR_EXP:
-			switch (exp->data_type) {
-			case DT_INT:
-				sprintf(result, "i[%s]", lval);
-				break;
-			case DT_UINT:
-				if (exp->is_vm_mem)
-					sprintf(result, "m[%s]", lval);
-				else
-					sprintf(result, "u[%s]", lval);
-				break;
-			case DT_LONG:
-				sprintf(result, "l[%s]", lval);
-				break;
-			case DT_ULONG:
-				sprintf(result, "ul[%s]", lval);
-				break;
-			case DT_FLOAT:
-				sprintf(result, "f[%s]", lval);
-				break;
-			case DT_DOUBLE:
-				sprintf(result, "d[%s]", lval);
-				break;
-			default:
-				sprintf(result, "//");
-			}
-			break;
-		case NODE_ASSIGN:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
-			if (rcast[0])
-				sprintf(result, "%s = %s(%s)", lval, rcast, rval);
-			else
-				sprintf(result, "%s = %s", lval, rval);
-			break;
-		case NODE_IF:
-			if (tabs < 1) tabs = 1;
-			if (exp->right->type != NODE_ELSE) {
-				rval = convert(exp->right);				// If Body (No Else Condition)
-				result = realloc(result, (lval ? strlen(lval) : 0) + (rval ? strlen(rval) : 0) + 256);
-				sprintf(result, "%sif( %s ) {\n%s%s%s}\n", tab[tabs - 1], lval, (rval[0] == '\t' ? "" : tab[tabs]), rval, tab[tabs - 1]);
-			}
-			else {
-				tmp = lval;
-				lval = convert(exp->right->left);		// If Body
-				rval = convert(exp->right->right);		// Else Body
-				result = realloc(result, (lval ? strlen(lval) : 0) + (rval ? strlen(rval) : 0) + 256);
-				sprintf(result, "%sif( %s ) {\n%s%s%s}\n%selse {\n%s%s%s}\n", tab[tabs - 1], tmp, (lval[0] == '\t' ? "" : tab[tabs]), lval, tab[tabs - 1], tab[tabs - 1], (rval[0] == '\t' ? "" : tab[tabs]), rval, tab[tabs - 1]);
-			}
-			if (tabs) tabs--;
-			break;
-		case NODE_CONDITIONAL:
-			tmp = lval;
-			lval = convert(exp->right->left);		// If Body
-			rval = convert(exp->right->right);		// Else Body
-			result = realloc(result, (lval ? strlen(lval) : 0) + (rval ? strlen(rval) : 0) + 256);
-			sprintf(result, "(( %s ) ? %s : %s)", tmp, lval, rval);
-			break;
-		case NODE_COND_ELSE:
-		case NODE_ELSE:
-			break;
-		case NODE_REPEAT:
-			if (tabs < 2) tabs = 2;
-//			sprintf(result, "%sif ( %s > 0 ) {\n%sint loop%d;\n%sfor (loop%d = 0; loop%d < ( %s ); loop%d++) {\n%s\tif (loop%d >= %lld) break;\n  %s\tu[%lld] = loop%d;\n  %s%s%s}\n%s}\n", tab[tabs - 2], lval, tab[tabs - 1], exp->token_num, tab[tabs - 1], exp->token_num, exp->token_num, lval, exp->token_num, tab[tabs - 1], exp->token_num, exp->ivalue, tab[tabs - 1], exp->uvalue, exp->token_num, "", rval, tab[tabs - 1], tab[tabs - 2]);
-			sprintf(result, "%sint loop%d;\n%sfor (loop%d = 0; loop%d < ( %s ); loop%d++) {\n%s\tif (loop%d >= %lld) break;\n  %s\tu[%lld] = loop%d;\n  %s%s%s}\n", tab[tabs - 1], exp->token_num, tab[tabs - 1], exp->token_num, exp->token_num, lval, exp->token_num, tab[tabs - 1], exp->token_num, exp->ivalue, tab[tabs - 1], exp->uvalue, exp->token_num, "", rval, tab[tabs - 1]);
-			if (tabs > 1) tabs -= 2;
-			break;
-		case NODE_BREAK:
-			sprintf(result, "break");
-			break;
-		case NODE_CONTINUE:
-			sprintf(result, "continue");
-			break;
-		case NODE_BLOCK:
-			if (lval[0] != '\t')
-				sprintf(result, "%s%s%s", tab[tabs], lval, (rval ? rval : ""));
-			else
-				sprintf(result, "%s%s", lval, (rval ? rval : ""));
-			break;
-		case NODE_INCREMENT_R:
-			sprintf(result, "++%s", lval);
-			break;
-		case NODE_INCREMENT_L:
-			sprintf(result, "%s++", lval);
-			break;
-		case NODE_ADD:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
-			if (lcast[0])
-				sprintf(result, "(%s)(%s) + %s", lcast, lval, rval);
-			else if (rcast[0])
-				sprintf(result, "%s + (%s)(%s)", lval, rcast, rval);
-			else
-				sprintf(result, "%s + %s", lval, rval);
-			break;
-		case NODE_ADD_ASSIGN:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
-			if (rcast[0])
-				sprintf(result, "%s += %s(%s)", lval, rcast, rval);
-			else
-				sprintf(result, "%s += %s", lval, rval);
-			break;
-		case NODE_SUB_ASSIGN:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
-			if (rcast[0])
-				sprintf(result, "%s -= %s(%s)", lval, rcast, rval);
-			else
-				sprintf(result, "%s -= %s", lval, rval);
-			break;
-		case NODE_MUL_ASSIGN:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
-			if (rcast[0])
-				sprintf(result, "%s *= %s(%s)", lval, rcast, rval);
-			else
-				sprintf(result, "%s *= %s", lval, rval);
-			break;
-		case NODE_DIV_ASSIGN:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
-			if (rcast[0])
-				sprintf(result, "%s = ((%s != 0) ? %s / %s(%s) : 0)", lval, rval, lval, rcast, rval);
-			else
-				sprintf(result, "%s = ((%s != 0) ? %s / %s : 0)", lval, rval, lval, rval);
-			break;
-		case NODE_MOD_ASSIGN:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
-			if (rcast[0])
-				sprintf(result, "%s = ((%s != 0) ? %s %% %s(%s) : 0)", lval, rval, lval, rcast, rval);
-			else
-				sprintf(result, "%s = ((%s != 0) ? %s %% %s : 0)", lval, rval, lval, rval);
-			break;
-		case NODE_LSHFT_ASSIGN:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
-			if (rcast[0])
-				sprintf(result, "%s = %s << %s(%s)", lval, lval, rcast, rval);
-			else
-				sprintf(result, "%s = %s << %s", lval, lval, rval);
-			break;
-		case NODE_RSHFT_ASSIGN:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
-			if (rcast[0])
-				sprintf(result, "%s = %s >> %s(%s)", lval, lval, rcast, rval);
-			else
-				sprintf(result, "%s = %s >> %s", lval, lval, rval);
-			break;
-		case NODE_AND_ASSIGN:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
-			if (rcast[0])
-				sprintf(result, "%s = %s & %s(%s)", lval, lval, rcast, rval);
-			else
-				sprintf(result, "%s = %s & %s", lval, lval, rval);
-			break;
-		case NODE_XOR_ASSIGN:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
-			if (rcast[0])
-				sprintf(result, "%s = %s ^ %s(%s)", lval, lval, rcast, rval);
-			else
-				sprintf(result, "%s = %s ^ %s", lval, lval, rval);
-			break;
-		case NODE_OR_ASSIGN:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
-			if (rcast[0])
-				sprintf(result, "%s = %s | %s(%s)", lval, lval, rcast, rval);
-			else
-				sprintf(result, "%s = %s | %s", lval, lval, rval);
-			break;
-		case NODE_DECREMENT_R:
-			sprintf(result, "--%s", lval);
-			break;
-		case NODE_DECREMENT_L:
-			sprintf(result, "%s--", lval);
-			break;
-		case NODE_SUB:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
-			if (lcast[0])
-				sprintf(result, "(%s)(%s) - %s", lcast, lval, rval);
-			else if (rcast[0])
-				sprintf(result, "%s - (%s)(%s)", lval, rcast, rval);
-			else
-				sprintf(result, "%s - %s", lval, rval);
-			break;
-		case NODE_MUL:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
-			if (lcast[0])
-				sprintf(result, "(%s)(%s) * %s", lcast, lval, rval);
-			else if (rcast[0])
-				sprintf(result, "%s * (%s)(%s)", lval, rcast, rval);
-			else
-				sprintf(result, "%s * %s", lval, rval);
-			break;
-		case NODE_DIV:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
-			if (rcast[0])
-				sprintf(result, "((%s != 0) ? %s / %s(%s) : 0)", rval, lval, rcast, rval);
-			else
-				sprintf(result, "((%s != 0) ? %s / %s : 0)", rval, lval, rval);
-			break;
-		case NODE_MOD:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, true);
-			if (rcast[0])
-				sprintf(result, "((%s != 0) ? %s %% %s(%s) : 0)", rval, lval, rcast, rval);
-			else
-				sprintf(result, "((%s != 0) ? %s %% %s : 0)", rval, lval, rval);
-			break;
-		case NODE_LSHIFT:
-			//get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
-			//if (rcast[0])
-			//	sprintf(result, "(%s << %s)", lval, rcast, rval);
-			//else
-			sprintf(result, "(%s << %s)", lval, rval);
-			break;
-		case NODE_LROT:
-			//if (l_is_float && r_is_float)
-			//	sprintf(result, "rotl32( (int)(%s), (int)(%s) %% 32)", lval, rval);
-			//else if (l_is_float && !r_is_float)
-			//	sprintf(result, "rotl32( (int)(%s), %s %% 32)", lval, rval);
-			//else if (!l_is_float && r_is_float)
-			//	sprintf(result, "rotl32( %s, (int)(%s) %% 32)", lval, rval);
-			//else
-			//	sprintf(result, "rotl32( %s, %s %% 32)", lval, rval);
-			//exp->is_float = false;
-			break;
-		case NODE_RSHIFT:
-			//get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
-			//if (rcast[0])
-			//	sprintf(result, "(%s >> %s)", lval, rcast, rval);
-			//else
-			sprintf(result, "(%s >> %s)", lval, rval);
-			break;
-		case NODE_RROT:
-			//if (l_is_float && r_is_float)
-			//	sprintf(result, "rotr32( (int)(%s), (int)(%s) %% 32)", lval, rval);
-			//else if (l_is_float && !r_is_float)
-			//	sprintf(result, "rotr32( (int)(%s), %s %% 32)", lval, rval);
-			//else if (!l_is_float && r_is_float)
-			//	sprintf(result, "rotr32( %s, (int)(%s) %% 32)", lval, rval);
-			//else
-			//	sprintf(result, "rotr32( %s, %s %% 32)", lval, rval);
-			//exp->is_float = false;
-			break;
-		case NODE_NOT:
-			sprintf(result, "!(%s)", lval);
-			break;
-		case NODE_COMPL:
-			sprintf(result, "~(%s)", lval);
-			break;
-		case NODE_AND:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
-			if (lcast[0])
-				sprintf(result, "((%s)(%s) && %s)", lcast, lval, rval);
-			else if (rcast[0])
-				sprintf(result, "(%s && (%s)(%s))", lval, rcast, rval);
-			else
-				sprintf(result, "(%s && %s)", lval, rval);
-			break;
-		case NODE_OR:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
-			if (lcast[0])
-				sprintf(result, "((%s)(%s) || %s)", lcast, lval, rval);
-			else if (rcast[0])
-				sprintf(result, "(%s || (%s)(%s))", lval, rcast, rval);
-			else
-				sprintf(result, "(%s || %s)", lval, rval);
-			break;
-		case NODE_BITWISE_AND:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
-			if (lcast[0])
-				sprintf(result, "((%s)(%s) & %s)", lcast, lval, rval);
-			else if (rcast[0])
-				sprintf(result, "(%s & (%s)(%s))", lval, rcast, rval);
-			else
-				sprintf(result, "(%s & %s)", lval, rval);
-			break;
-		case NODE_BITWISE_XOR:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
-			if (lcast[0])
-				sprintf(result, "((%s)(%s) ^ %s)", lcast, lval, rval);
-			else if (rcast[0])
-				sprintf(result, "(%s ^ (%s)(%s))", lval, rcast, rval);
-			else
-				sprintf(result, "(%s ^ %s)", lval, rval);
-			break;
-		case NODE_BITWISE_OR:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
-			if (lcast[0])
-				sprintf(result, "((%s)(%s) | %s)", lcast, lval, rval);
-			else if (rcast[0])
-				sprintf(result, "(%s | (%s)(%s))", lval, rcast, rval);
-			else
-				sprintf(result, "(%s | %s)", lval, rval);
-			break;
-		case NODE_EQ:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
-			if (lcast[0])
-				sprintf(result, "((%s)(%s) == %s)", lcast, lval, rval);
-			else if (rcast[0])
-				sprintf(result, "(%s == (%s)(%s))", lval, rcast, rval);
-			else
-				sprintf(result, "(%s == %s)", lval, rval);
-			break;
-		case NODE_NE:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
-			if (lcast[0])
-				sprintf(result, "((%s)(%s) != %s)", lcast, lval, rval);
-			else if (rcast[0])
-				sprintf(result, "(%s != (%s)(%s))", lval, rcast, rval);
-			else
-				sprintf(result, "(%s != %s)", lval, rval);
-			break;
-		case NODE_GT:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
-			if (lcast[0])
-				sprintf(result, "((%s)(%s) > %s)", lcast, lval, rval);
-			else if (rcast[0])
-				sprintf(result, "(%s > (%s)(%s))", lval, rcast, rval);
-			else
-				sprintf(result, "(%s > %s)", lval, rval);
-			break;
-		case NODE_LT:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
-			if (lcast[0])
-				sprintf(result, "((%s)(%s) < %s)", lcast, lval, rval);
-			else if (rcast[0])
-				sprintf(result, "(%s < (%s)(%s))", lval, rcast, rval);
-			else
-				sprintf(result, "(%s < %s)", lval, rval);
-			break;
-		case NODE_GE:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
-			if (lcast[0])
-				sprintf(result, "((%s)(%s) >= %s)", lcast, lval, rval);
-			else if (rcast[0])
-				sprintf(result, "(%s >= (%s)(%s))", lval, rcast, rval);
-			else
-				sprintf(result, "(%s >= %s)", lval, rval);
-			break;
-		case NODE_LE:
-			get_cast(lcast, rcast, exp->left->data_type, exp->right->data_type, false);
-			if (lcast[0])
-				sprintf(result, "((%s)(%s) <= %s)", lcast, lval, rval);
-			else if (rcast[0])
-				sprintf(result, "(%s <= (%s)(%s))", lval, rcast, rval);
-			else
-				sprintf(result, "(%s <= %s)", lval, rval);
-			break;
-		case NODE_NEG:
-			sprintf(result, "-(%s)", lval);
-			exp->is_float = l_is_float;
-			break;
-		case NODE_RESULT:
-			sprintf(result, "\n\tbounty_found = (%s != 0 ? 1 : 0)", lval);
-			break;
-		case NODE_PARAM:
-			if (rval)
-				sprintf(result, "%s, %s", lval, rval);
-			else
-				sprintf(result, "%s", lval);
-			break;
-		case NODE_SIN:
-			sprintf(result, "sin( %s )", rval);
-			exp->is_float = true;
-			use_elasticpl_math = true;
-			break;
-		case NODE_COS:
-			sprintf(result, "cos( %s )", rval);
-			exp->is_float = true;
-			use_elasticpl_math = true;
-			break;
-		case NODE_TAN:
-			sprintf(result, "tan( %s )", rval);
-			exp->is_float = true;
-			use_elasticpl_math = true;
-			break;
-		case NODE_SINH:
-			sprintf(result, "(((%s >= -1.0) && (%s <= 1.0)) ? sinh( %s ) : 0.0)", rval, rval, rval);
-			exp->is_float = true;
-			use_elasticpl_math = true;
-			break;
-		case NODE_COSH:
-			sprintf(result, "(((%s >= -1.0) && (%s <= 1.0)) ? cosh( %s ) : 0.0)", rval, rval, rval);
-			exp->is_float = true;
-			use_elasticpl_math = true;
-			break;
-		case NODE_TANH:
-			sprintf(result, "tanh( %s )", rval);
-			exp->is_float = true;
-			use_elasticpl_math = true;
-			break;
-		case NODE_ASIN:
-			sprintf(result, "(((%s >= -1.0) && (%s <= 1.0)) ? asin( %s ) : 0.0)", rval, rval, rval);
-			exp->is_float = true;
-			use_elasticpl_math = true;
-			break;
-		case NODE_ACOS:
-			sprintf(result, "(((%s >= -1.0) && (%s <= 1.0)) ? acos( %s ) : 0.0)", rval, rval, rval);
-			exp->is_float = true;
-			use_elasticpl_math = true;
-			break;
-		case NODE_ATAN:
-			sprintf(result, "atan( %s )", rval);
-			exp->is_float = true;
-			use_elasticpl_math = true;
-			break;
-		case NODE_ATAN2:
-			tmp = strstr(rval, ",");	// Point To Second Argurment
-			sprintf(result, "((%s != 0) ? atan2( %s ) : 0.0)", tmp + 1, rval);
-			tmp = NULL;
-			exp->is_float = true;
-			use_elasticpl_math = true;
-			break;
-		case NODE_EXPNT:
-			sprintf(result, "((((%s) >= -708.0) && ((%s) <= 709.0)) ? exp( %s ) : 0.0)", rval, rval, rval);
-			exp->is_float = true;
-			use_elasticpl_math = true;
-			break;
-		case NODE_LOG:
-			sprintf(result, "((%s > 0) ? log( %s ) : 0.0)", rval, rval);
-			exp->is_float = true;
-			use_elasticpl_math = true;
-			break;
-		case NODE_LOG10:
-			sprintf(result, "((%s > 0) ? log10( %s ) : 0.0)", rval, rval);
-			exp->is_float = true;
-			use_elasticpl_math = true;
-			break;
-		case NODE_POW:
-			sprintf(result, "pow( %s )", rval);
-			exp->is_float = true;
-			use_elasticpl_math = true;
-			break;
-		case NODE_SQRT:
-			sprintf(result, "((%s > 0) ? sqrt( %s ) : 0.0)", rval, rval);
-			exp->is_float = true;
-			use_elasticpl_math = true;
-			break;
-		case NODE_CEIL:
-			sprintf(result, "ceil( %s )", rval);
-			exp->is_float = true;
-			use_elasticpl_math = true;
-			break;
-		case NODE_FLOOR:
-			sprintf(result, "floor( %s )", rval);
-			exp->is_float = true;
-			use_elasticpl_math = true;
-			break;
-		case NODE_ABS:
-			sprintf(result, "abs( %s )", rval);
-			exp->is_float = false;
-			use_elasticpl_math = true;
-			break;
-		case NODE_FABS:
-			sprintf(result, "fabs( %s )", rval);
-			exp->is_float = true;
-			use_elasticpl_math = true;
-			break;
-		case NODE_FMOD:
-			tmp = strstr(rval, ",");	// Point To Second Argurment
-			sprintf(result, "((%s != 0) ? fmod( %s ) : 0.0)", tmp + 1, rval);
-			tmp = NULL;
-			exp->is_float = true;
-			use_elasticpl_math = true;
-			break;
-		case NODE_GCD:
-			sprintf(result, "gcd( %s )", rval);
-			exp->is_float = true;
-			use_elasticpl_math = true;
-			break;
-		default:
-			sprintf(result, "fprintf(stderr, \"ERROR: VM Runtime - Unsupported Operation (%d)\");\n", exp->type);
-		}
-
-		if (lval) free(lval);
-		if (rval) free(rval);
-		if (tmp) free(tmp);
-
-		// Terminate Statements
-		if (exp->end_stmnt && (exp->type != NODE_FUNCTION) && (exp->type != NODE_IF) && (exp->type != NODE_REPEAT) && (exp->type != NODE_BLOCK)) {
-			tmp = malloc(strlen(result) + 20);
-			sprintf(tmp, "%s%s;\n", tab[tabs], result);
-			free(result);
-			result = tmp;
-		}
+	case NODE_ELSE:
+	case NODE_BLOCK:
+	case NODE_COND_ELSE:
+	case NODE_BREAK:
+	case NODE_CONTINUE:
+		break;
+	default:
+		break;
 	}
 
-	return result;
-}
-
-static char* append_strings(char * old, char * new) {
-
-	char* out = NULL;
-
-	if (new == NULL && old != NULL) {
-		out = calloc(strlen(old) + 1, sizeof(char));
-		strcpy(out, old);
-	}
-	else if (old == NULL && new != NULL) {
-		out = calloc(strlen(new) + 1, sizeof(char));
-		strcpy(out, new);
-	}
-	else if (new == NULL && old == NULL) {
-		// pass
-	}
-	else {
-		// find the size of the string to allocate
-		const size_t old_len = strlen(old), new_len = strlen(new);
-		const size_t out_len = old_len + new_len + 1;
-		// allocate a pointer to the new string
-		out = malloc(out_len);
-		// concat both strings and return
-		memcpy(out, old, old_len);
-		strcpy(out + old_len, new);
-	}
-
-	// Free here
-	if (old != NULL) {
-		free(old);
-		old = NULL;
-	}
-	if (new != NULL) {
-		free(new);
-		new = NULL;
-	}
-
-	return out;
+	return true;
 }
