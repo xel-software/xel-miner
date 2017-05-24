@@ -19,107 +19,6 @@ uint64_t max_vm_ulongs = 0;
 uint64_t max_vm_floats = 0;
 uint64_t max_vm_doubles = 0;
 
-
-/*
-#define NAV_LEFT_DOWN	0
-#define NAV_RIGHT_DOWN	1
-#define NAV_LEFT_UP		2
-#define NAV_RIGHT_UP	3
-#define AST_TREE_LEFT	0
-#define AST_TREE_RIGHT	1
-#define AST_NAV_UP		0
-#define AST_NAV_DOWN	1
-
-//#define NAV_UP		1
-//#define NAV_LEFT	2
-//#define NAV_RIGHT	3
-
-static void get_next_node(ast *node, int *side, int *direction) {
-	ast *node_tmp = NULL;
-
-	if (!node)
-		return NULL;
-
-	node_tmp = node;
-
-	// Navigate Down The Tree
-	if (*direction == AST_NAV_DOWN) {
-
-		// Navigate To Lowest Left Parent Node
-		while (node_tmp->left) {
-			node_tmp = node_tmp->left;
-		}
-
-		if (node_tmp != node) {
-			return node_tmp;
-		}
-
-		// Switch To Right Node
-		if (node->right) {
-			node_tmp = node->right;
-			while (node_tmp->left) {
-				node_tmp = node_tmp->left;
-			}
-
-			if (node_tmp != node->right) {
-				return node_tmp;
-			}
-
-			return node_tmp;
-		}
-		else {
-			// Print Right Node & Navigate Back Up The Tree
-			*direction == DIR_UP;
-			return node_tmp->parent;
-		}
-	}
-
-	// Navigate Back Up The Tree
-	else {
-		// Check If We Need To Navigate Back Down A Right Branch
-		if ((node_tmp == node->parent->left) && (node->parent->right)) {
-			*direction == DIR_DOWN;
-			return node->parent->right;
-		}
-		else {
-			return node->parent;
-		}
-	}
-	return NULL;
-}
-
-
-extern void dump_vm_ast2(ast* root) {
-
-	if (!root)
-		return;
-
-	ast *node = root;
-	int direction = DIR_DOWN;
-
-	while (node) {
-
-		node = get_next_node(node, &direction);
-
-		if (!node)
-			break;
-
-		// Print Bottom Nodes
-		if (direction == DIR_DOWN) {
-			if (node->left && !node->left->left && !node->left->right)
-				print_node(node->left);
-		}
-		if (direction == DIR_UP) {
-			if (node->right && !node->right->left && !node->right->right)
-				print_node(node->right);
-			print_node(node);
-		}
-	}
-}
-
-*/
-
-
 extern bool create_epl_vm(char *source) {
 	int i;
 	SOURCE_TOKEN_LIST token_list;
@@ -140,12 +39,16 @@ extern bool create_epl_vm(char *source) {
 		return false;
 	}
 
+	// Reset Global Variable Array Size
 	max_vm_ints = 0;
 	max_vm_uints = 0;
 	max_vm_longs = 0;
 	max_vm_ulongs = 0;
 	max_vm_floats = 0;
 	max_vm_doubles = 0;
+
+	// Copy WorkID To Job Suffix
+	sprintf(job_suffix, "%s", "9282876192505564533");
 
 	if (!init_token_list(&token_list, TOKEN_LIST_SIZE)) {
 		applog(LOG_ERR, "ERROR: Unable To Allocate Token List For Parser!");

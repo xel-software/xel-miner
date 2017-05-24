@@ -37,9 +37,8 @@ static char* pop() {
 extern char* convert_ast_to_c() {
 	int i, j;
 
-	char work_id[] = "1234567890";
 	char file_name[1000];
-	sprintf(file_name, "./work/job_%s.c", work_id);
+	sprintf(file_name, "./work/job_%s.c", job_suffix);
 
 	FILE* f = fopen(file_name, "w");
 	if (!f)
@@ -48,9 +47,11 @@ extern char* convert_ast_to_c() {
 	use_elasticpl_math = false;
 
 	// Write Function Declarations
-	fprintf(f, "// Function Declarations For Job #%s\n", work_id);
+	fprintf(f, "/********************************************************************************\n");
+	fprintf(f, " Job # %s\n", job_suffix);
+	fprintf(f, "*********************************************************************************\\\n\n");
 	for (i = ast_func_idx; i < vm_ast_cnt; i++) {
-		fprintf(f, "void %s_%s();\n", vm_ast[i]->svalue, work_id);
+		fprintf(f, "void %s_%s();\n", vm_ast[i]->svalue, job_suffix);
 	}
 	fprintf(f, "\n");
 
@@ -179,11 +180,11 @@ static bool convert_node(ast* node) {
 	switch (node->type) {
 	case NODE_FUNCTION:
 		str = malloc(256);
-		sprintf(str, "void %s() {\n", node->svalue);
+		sprintf(str, "void %s_%s() {\n", node->svalue, job_suffix);
 		break;
 	case NODE_CALL_FUNCTION:
 		str = malloc(256);
-		sprintf(str, "%s()", node->svalue);
+		sprintf(str, "%s_%s()", node->svalue, job_suffix);
 		break;
 	case NODE_RESULT:
 		str = malloc(strlen(lstr) + 50);
@@ -290,11 +291,10 @@ static bool convert_node(ast* node) {
 		break;
 	case NODE_BLOCK:
 		str = malloc(25);
-		sprintf(str, "%s}\n", tab[tabs - 1]);
 		if (node->parent->type == NODE_FUNCTION)
 			sprintf(str, "}\n");
 		else
-			sprintf(str, "%s}\n", tab[tabs - 1]);
+			sprintf(str, "%s}\n", tab[tabs]);
 		break;
 	case NODE_BREAK:
 		str = malloc(10);
@@ -460,7 +460,6 @@ static bool convert_node(ast* node) {
 			sprintf(str, "rotl64(%s, %s)", lstr, rstr);
 		else
 			sprintf(str, "rotl32(%s, %s)", lstr, rstr);
-		use_elasticpl_math = true;
 		break;
 	case NODE_RROT:
 		str = malloc(strlen(lstr) + strlen(rstr) + 25);
@@ -468,7 +467,6 @@ static bool convert_node(ast* node) {
 			sprintf(str, "rotr64(%s, %s)", lstr, rstr);
 		else
 			sprintf(str, "rotr32(%s, %s)", lstr, rstr);
-		use_elasticpl_math = true;
 		break;
 
 	case NODE_PARAM:

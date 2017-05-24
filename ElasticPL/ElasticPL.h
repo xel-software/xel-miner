@@ -15,7 +15,7 @@
 #include <stdint.h>
 #include <string.h>
 
-#define MAX_LITERAL_SIZE 260
+#define MAX_LITERAL_SIZE 100
 #define TOKEN_LIST_SIZE 4096
 #define PARSE_STACK_SIZE 24000
 #define CALL_STACK_SIZE 257
@@ -34,6 +34,9 @@ uint64_t max_vm_longs;
 uint64_t max_vm_ulongs;
 uint64_t max_vm_floats;
 uint64_t max_vm_doubles;
+
+// Work ID Used To Make ElasticPL Functions Unique Per Job
+char job_suffix[22];
 
 // Index Value Of Main & Verify Functions In AST Array
 int ast_func_idx;

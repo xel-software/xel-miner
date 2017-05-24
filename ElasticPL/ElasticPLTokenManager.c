@@ -454,6 +454,7 @@ extern bool get_token_list(char *str, SOURCE_TOKEN_LIST *token_list) {
 						return false;
 					}
 				}
+
 				add_token(token_list, -1, literal, data_type, line_num);
 				literal_idx = 0;
 				memset(literal, 0, 100);
