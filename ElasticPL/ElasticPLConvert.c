@@ -49,7 +49,7 @@ extern char* convert_ast_to_c() {
 	// Write Function Declarations
 	fprintf(f, "/********************************************************************************\n");
 	fprintf(f, " Job # %s\n", job_suffix);
-	fprintf(f, "*********************************************************************************\\\n\n");
+	fprintf(f, "*********************************************************************************/\n\n");
 	for (i = ast_func_idx; i < vm_ast_cnt; i++) {
 		fprintf(f, "void %s_%s();\n", vm_ast[i]->svalue, job_suffix);
 	}
@@ -180,15 +180,24 @@ static bool convert_node(ast* node) {
 	switch (node->type) {
 	case NODE_FUNCTION:
 		str = malloc(256);
-		sprintf(str, "void %s_%s() {\n", node->svalue, job_suffix);
+		if ((!strcmp(node->svalue, "main")) || (!strcmp(node->svalue, "verify")))
+
+#ifdef WIN32
+			sprintf(str, "__declspec(dllexport) void %s_%s() {\n", node->svalue, job_suffix);
+#else
+			sprintf(str, "void %s_%s() {\n", node->svalue, job_suffix);
+#endif
+
+		else
+			sprintf(str, "void %s_%s() {\n", node->svalue, job_suffix);
 		break;
 	case NODE_CALL_FUNCTION:
 		str = malloc(256);
 		sprintf(str, "%s_%s()", node->svalue, job_suffix);
 		break;
 	case NODE_RESULT:
-		str = malloc(strlen(lstr) + 50);
-		sprintf(str, "\n\tbounty_found = (%s != 0 ? 1 : 0)", lstr);
+		str = malloc(strlen(lstr) + 40);
+		sprintf(str, "bounty_found = (%s != 0 ? 1 : 0)", lstr);
 		break;
 	case NODE_CONSTANT:
 		str = malloc(25);
@@ -211,7 +220,7 @@ static bool convert_node(ast* node) {
 		}
 		break;
 	case NODE_VAR_CONST:
-		str = malloc(25);
+		str = malloc(30);
 		switch (node->data_type) {
 		case DT_INT:
 			sprintf(str, "i[%llu]", ((node->uvalue >= max_vm_ints) ? 0 : node->uvalue));
@@ -285,12 +294,12 @@ static bool convert_node(ast* node) {
 			sprintf(str, "%selse\n", tab[tabs - 1]);
 		break;
 	case NODE_REPEAT:
-		str = malloc(256);
+		str = malloc(strlen(lstr) + 256);
 		if (tabs < 1) tabs = 1;
-		sprintf(str, "%sint loop%d;\n%sfor (loop%d = 0; loop%d < ( %s ); loop%d++) {\n%s\tif (loop%d >= %lld) break;\n%s\tu[%lld] = loop%d;\n", tab[tabs - 1], node->token_num, tab[tabs - 1], node->token_num, node->token_num, lstr, node->token_num, tab[tabs - 1], node->token_num, node->ivalue, tab[tabs - 1], node->uvalue, node->token_num);
+		sprintf(str, "%sint loop%d;\n%sfor (loop%d = 0; loop%d < (%s); loop%d++) {\n%s\tif (loop%d >= %lld) break;\n%s\tu[%lld] = loop%d;\n", tab[tabs - 1], node->token_num, tab[tabs - 1], node->token_num, node->token_num, lstr, node->token_num, tab[tabs - 1], node->token_num, node->ivalue, tab[tabs - 1], node->uvalue, node->token_num);
 		break;
 	case NODE_BLOCK:
-		str = malloc(25);
+		str = malloc(20);
 		if (node->parent->type == NODE_FUNCTION)
 			sprintf(str, "}\n");
 		else
@@ -312,7 +321,7 @@ static bool convert_node(ast* node) {
 			return false;
 		}
 		str = malloc(strlen(lstr) + strlen(rstr) + strlen(tmp) + 25);
-		sprintf(str, "(( %s ) ? %s : %s)", tmp, lstr, rstr);
+		sprintf(str, "((%s) ? (%s) : (%s))", tmp, lstr, rstr);
 		free(tmp);
 		break;
 
@@ -356,11 +365,11 @@ static bool convert_node(ast* node) {
 		str = malloc(strlen(lstr) + strlen(rstr) + 25);
 		get_cast(lcast, rcast, node->left->data_type, node->right->data_type, false);
 		if (lcast[0])
-			sprintf(str, "(%s)(%s) %s %s", lcast, lstr, op, rstr);
+			sprintf(str, "(%s)(%s) %s (%s)", lcast, lstr, op, rstr);
 		else if (rcast[0])
-			sprintf(str, "%s %s (%s)(%s)", lstr, op, rcast, rstr);
+			sprintf(str, "(%s) %s (%s)(%s)", lstr, op, rcast, rstr);
 		else
-			sprintf(str, "%s %s %s", lstr, op, rstr);
+			sprintf(str, "(%s) %s (%s)", lstr, op, rstr);
 		break;
 
 	case NODE_DIV:
@@ -369,12 +378,12 @@ static bool convert_node(ast* node) {
 		case NODE_DIV:	sprintf(op, "%s", "/"); break;
 		case NODE_MOD:	sprintf(op, "%s", "%"); break;
 		}
-		str = malloc(strlen(lstr) + strlen(rstr) + strlen(rstr) + 25);
+		str = malloc(strlen(lstr) + strlen(rstr) + strlen(rstr) + 40);
 		get_cast(lcast, rcast, node->left->data_type, node->right->data_type, true);
 		if (rcast[0])
-			sprintf(str, "((%s != 0) ? %s %s %s(%s) : 0)", rstr, lstr, op, rcast, rstr);
+			sprintf(str, "(((%s) != 0) ? (%s) %s (%s)(%s) : 0)", rstr, lstr, op, rcast, rstr);
 		else
-			sprintf(str, "((%s != 0) ? %s %s %s : 0)", rstr, lstr, op, rstr);
+			sprintf(str, "(((%s) != 0) ? (%s) %s (%s) : 0)", rstr, lstr, op, rstr);
 		break;
 
 	case NODE_ASSIGN:
@@ -400,7 +409,7 @@ static bool convert_node(ast* node) {
 		str = malloc(strlen(lstr) + strlen(rstr) + 25);
 		get_cast(lcast, rcast, node->left->data_type, node->right->data_type, true);
 		if (rcast[0])
-			sprintf(str, "%s %s %s(%s)", lstr, op, rcast, rstr);
+			sprintf(str, "%s %s (%s)(%s)", lstr, op, rcast, rstr);
 		else
 			sprintf(str, "%s %s %s", lstr, op, rstr);
 		break;
@@ -414,9 +423,9 @@ static bool convert_node(ast* node) {
 		str = malloc(strlen(lstr) + strlen(lstr) + strlen(rstr) + strlen(rstr) + 40);
 		get_cast(lcast, rcast, node->left->data_type, node->right->data_type, true);
 		if (rcast[0])
-			sprintf(str, "%s = ((%s != 0) ? %s %s %s(%s) : 0)", lstr, rstr, lstr, op, rcast, rstr);
+			sprintf(str, "%s = (((%s) != 0) ? (%s) %s (%s)(%s) : 0)", lstr, rstr, lstr, op, rcast, rstr);
 		else
-			sprintf(str, "%s = ((%s != 0) ? %s %s %s : 0)", lstr, rstr, lstr, op, rstr);
+			sprintf(str, "%s = (((%s) != 0) ? (%s) %s (%s) : 0)", lstr, rstr, lstr, op, rstr);
 		break;
 
 	case NODE_INCREMENT_R:
@@ -612,19 +621,19 @@ static void get_cast(char *lcast, char *rcast, DATA_TYPE ldata_type, DATA_TYPE r
 	else if (right_only || (rdata_type < ldata_type)) {
 		switch (ldata_type) {
 		case DT_UINT:
-			sprintf(rcast, "(uint32_t)");
+			sprintf(rcast, "uint32_t");
 			break;
 		case DT_LONG:
-			sprintf(rcast, "(int64_t)");
+			sprintf(rcast, "int64_t");
 			break;
 		case DT_ULONG:
-			sprintf(rcast, "(uint64_t)");
+			sprintf(rcast, "uint64_t");
 			break;
 		case DT_FLOAT:
-			sprintf(rcast, "(float)");
+			sprintf(rcast, "float");
 			break;
 		case DT_DOUBLE:
-			sprintf(rcast, "(double)");
+			sprintf(rcast, "double");
 			break;
 		}
 		return;
@@ -632,19 +641,19 @@ static void get_cast(char *lcast, char *rcast, DATA_TYPE ldata_type, DATA_TYPE r
 	else {
 		switch (rdata_type) {
 		case DT_UINT:
-			sprintf(lcast, "(uint32_t)");
+			sprintf(lcast, "uint32_t");
 			break;
 		case DT_LONG:
-			sprintf(lcast, "(int64_t)");
+			sprintf(lcast, "int64_t");
 			break;
 		case DT_ULONG:
-			sprintf(lcast, "(uint64_t)");
+			sprintf(lcast, "uint64_t");
 			break;
 		case DT_FLOAT:
-			sprintf(lcast, "(float)");
+			sprintf(lcast, "float");
 			break;
 		case DT_DOUBLE:
-			sprintf(lcast, "(double)");
+			sprintf(lcast, "double");
 			break;
 		}
 		return;
