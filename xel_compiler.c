@@ -14,14 +14,11 @@
 #define LM_ID_BASE              0x00
 #endif
 
-bool create_c_source() {
-	char *code;
+bool create_c_source(char *work_str) {
+	int i;
+
 	FILE* f = fopen("./work/work_lib.c", "w");
 	if (!f)
-		return false;
-
-	code = convert_ast_to_c();
-	if (!code)
 		return false;
 
 	fprintf(f, "#include <stdbool.h>\n");
@@ -30,98 +27,154 @@ bool create_c_source() {
 	fprintf(f, "#include <stdlib.h>\n");
 	fprintf(f, "#include <limits.h>\n");
 	fprintf(f, "#include <time.h>\n");
-	fprintf(f, "#include <math.h>\n");
-	fprintf(f, "#include \"../ElasticPL/ElasticPLFunctions.h\"\n\n");
+	if (use_elasticpl_math) {
+		fprintf(f, "#include <math.h>\n");
+		fprintf(f, "#include \"../ElasticPL/ElasticPLFunctions.h\"\n");
+	}
+	fprintf(f, "\n");
 
 #ifdef _MSC_VER
-	fprintf(f, "__declspec(thread) int32_t *m = NULL;\n");
-	fprintf(f, "__declspec(thread) double *f = NULL;\n");
-	fprintf(f, "__declspec(thread) uint32_t *state = NULL;\n\n");
+	fprintf(f, "__declspec(thread) uint32_t *m = NULL;\n");
+	fprintf(f, "__declspec(thread) int32_t *i = NULL;\n");
+	fprintf(f, "__declspec(thread) uint32_t *u = NULL;\n");
+	fprintf(f, "__declspec(thread) int64_t *l = NULL;\n");
+	fprintf(f, "__declspec(thread) uint64_t *ul = NULL;\n");
+	fprintf(f, "__declspec(thread) float *f = NULL;\n");
+	fprintf(f, "__declspec(thread) double *d = NULL;\n\n");
 #else
-	fprintf(f, "__thread int32_t *m = NULL;\n");
-	fprintf(f, "__thread double *f = NULL;\n");
-	fprintf(f, "__thread uint32_t *state = NULL;\n\n");
+	fprintf(f, "__thread uint32_t *m = NULL;\n");
+	fprintf(f, "__thread uint32_t *m = NULL;\n");
+	fprintf(f, "__thread int32_t *i = NULL;\n");
+	fprintf(f, "__thread uint32_t *u = NULL;\n");
+	fprintf(f, "__thread int64_t *l = NULL;\n");
+	fprintf(f, "__thread uint64_t *ul = NULL;\n");
+	fprintf(f, "__thread float *f = NULL;\n");
+	fprintf(f, "__thread double *d = NULL;\n\n");
 #endif
 
-	fprintf(f, "static void init_once();\n\n");
+	fprintf(f, "static uint32_t rotl32(uint32_t x, uint32_t n);\n");
+	fprintf(f, "static uint32_t rotr32(uint32_t x, uint32_t n);\n");
+	fprintf(f, "static uint64_t rotl64(uint64_t x, uint64_t n);\n");
+	fprintf(f, "static uint64_t rotr64(uint64_t x, uint64_t n);\n\n");
 
-	fprintf(f, "static const unsigned int mask32 = (CHAR_BIT*sizeof(uint32_t)-1);\n\n");
+	// Include C Source Code For ElasticPL Jobs
+	if (!opt_supernode) {
+		fprintf(f, "#include \"job_%s.h\"\n\n", work_str);
+	}
+	else {
+		for (i = 0; i < g_work_package_cnt; i++) {
+			if (!g_work_package[g_work_package_idx].blacklisted)
+				fprintf(f, "#include \"job_%s.h\"\n\n", g_work_package[i].work_str);
+		}
+	}
 
-	fprintf(f, "static uint32_t rotl32 (uint32_t x, unsigned int n) {\n");
+	fprintf(f, "static const uint32_t mask32 = (CHAR_BIT*sizeof(uint32_t)-1);\n");
+	fprintf(f, "static const uint64_t mask64 = (CHAR_BIT*sizeof(uint64_t)-1);\n\n");
+
+	fprintf(f, "static uint32_t rotl32 (uint32_t x, uint32_t n) {\n");
 	fprintf(f, "\tn &= mask32;  // avoid undef behaviour with NDEBUG.  0 overhead for most types / compilers\n");
 	fprintf(f, "\treturn (x<<n) | (x>>( (-n)&mask32 ));\n");
 	fprintf(f, "}\n\n");
 
-	fprintf(f, "static uint32_t rotr32 (uint32_t x, unsigned int n) {\n");
+	fprintf(f, "static uint32_t rotr32 (uint32_t x, uint32_t n) {\n");
 	fprintf(f, "\tn &= mask32;  // avoid undef behaviour with NDEBUG.  0 overhead for most types / compilers\n");
 	fprintf(f, "\treturn (x>>n) | (x<<( (-n)&mask32 ));\n");
 	fprintf(f, "}\n\n");
 
-	fprintf(f, "static void mangle_state(int x) {\n");
-	fprintf(f, "\tint mod = x %% 32;\n");
-	fprintf(f, "\tint leaf = mod %% 4;\n");
-	fprintf(f, "\tif (leaf == 0) {\n");
-	fprintf(f, "\t\tstate[0] = rotl32(state[0], mod);\n");
-	fprintf(f, "\t\tstate[0] = state[0] ^ x;\n");
-	fprintf(f, "\t}\n");
-	fprintf(f, "\telse if (leaf == 1) {\n");
-	fprintf(f, "\t\tstate[1] = rotl32(state[1], mod);\n");
-	fprintf(f, "\t\tstate[1] = state[1] ^ x;\n");
-	fprintf(f, "\t}\n");
-	fprintf(f, "\telse if (leaf == 2) {\n");
-	fprintf(f, "\t\tstate[2] = rotl32(state[2], mod);\n");
-	fprintf(f, "\t\tstate[2] = state[2] ^ x;\n");
-	fprintf(f, "\t}\n");
-	fprintf(f, "\telse {\n");
-	fprintf(f, "\t\tstate[3] = rotl32(state[3], mod);\n");
-	fprintf(f, "\t\tstate[3] = state[3] ^ x;\n");
-	fprintf(f, "\t}\n");
+	fprintf(f, "static uint64_t rotl64 (uint64_t x, uint64_t n) {\n");
+	fprintf(f, "\tn &= mask64;  // avoid undef behaviour with NDEBUG.  0 overhead for most types / compilers\n");
+	fprintf(f, "\treturn (x<<n) | (x>>( (-n)&mask64 ));\n");
+	fprintf(f, "}\n\n");
+
+	fprintf(f, "static uint64_t rotr64 (uint64_t x, uint64_t n) {\n");
+	fprintf(f, "\tn &= mask64;  // avoid undef behaviour with NDEBUG.  0 overhead for most types / compilers\n");
+	fprintf(f, "\treturn (x>>n) | (x<<( (-n)&mask64 ));\n");
 	fprintf(f, "}\n\n");
 
 #ifdef WIN32
-	fprintf(f, "__declspec(dllexport) void initialize(int32_t *vm_m, double *vm_f, uint32_t *vm_state) {\n");
+	fprintf(f, "__declspec(dllexport) void initialize(uint32_t *vm_m, int32_t *vm_i, uint32_t *vm_u, int64_t *vm_l, uint64_t *vm_ul, float *vm_f, double *vm_d) {\n");
 #else
-	fprintf(f, "void initialize(int32_t *vm_m, double *vm_f, uint32_t *vm_state) {\n");
+	fprintf(f, "void initialize(uint32_t *vm_m, int32_t *vm_i, uint32_t *vm_u, int64_t *vm_l, uint64_t *vm_ul, float *vm_f, double *vm_d) {\n");
 #endif
 	fprintf(f, "\tm = vm_m;\n");
+	fprintf(f, "\ti = vm_i;\n");
+	fprintf(f, "\tu = vm_u;\n");
+	fprintf(f, "\tl = vm_l;\n");
+	fprintf(f, "\tul = vm_ul;\n");
 	fprintf(f, "\tf = vm_f;\n");
-	fprintf(f, "\tstate = vm_state;\n");
-
-	if (use_elasticpl_init) {
-		fprintf(f, "\n\tinit_once();\n");
-	}
+	fprintf(f, "\td = vm_d;\n");
 
 	fprintf(f, "}\n\n");
-#ifdef WIN32
-	fprintf(f, "__declspec(dllexport) int execute() {\n");
-#else
-	fprintf(f, "int execute() {\n");
-#endif
-	fprintf(f, "\tint bounty_found;\n");
-	fprintf(f, "\n\t// The following code created by ElasticPL to C converter\n\n");
-	fprintf(f, "%s", &code[0]);
 
-	if (opt_test_vm) {
-		fprintf(stdout, "\n********************************************************************************\n");
-		fprintf(stdout, "%s", code);
-		fprintf(stdout, "\n********************************************************************************\n");
+#ifdef WIN32
+	fprintf(f, "__declspec(dllexport) int32_t execute( uint64_t work_id ) {\n\n");
+#else
+	fprintf(f, "int execute( uint64_t work_id ) {\n\n");
+#endif
+
+	// Call The Main Function For The Current Job
+	if (!opt_supernode) {
+		fprintf(f, "\treturn main_%s();\n\n", work_str);
 	}
+	else {
+		for (i = 0; i < g_work_package_cnt; i++) {
+			if (!g_work_package[g_work_package_idx].blacklisted) {
+				if (i == 0)
+					fprintf(f, "\tif (work_id == %s)\n", g_work_package[i].work_str);
+				else
+					fprintf(f, "\telse if (work_id == %s)\n", g_work_package[i].work_str);
+				fprintf(f, "\t\treturn main_%s();\n", g_work_package[i].work_str);
+			}
+		}
+		fprintf(f, "\telse\n");
+		fprintf(f, "\t\treturn -1;\n\n");
+	}
+	fprintf(f, "}\n\n");
+
+#ifdef WIN32
+	fprintf(f, "__declspec(dllexport) int32_t verify( uint64_t work_id ) {\n\n");
+#else
+	fprintf(f, "int verify( uint64_t work_id ) {\n\n");
+#endif
+
+	// Call The Verify Function For The Current Job
+	if (!opt_supernode || (g_work_package_cnt == 1)) {
+		fprintf(f, "\treturn verify_%s();\n\n", work_str);
+	}
+	else {
+		for (i = 0; i < g_work_package_cnt; i++) {
+			if (!g_work_package[g_work_package_idx].blacklisted) {
+				if (i == 0)
+					fprintf(f, "\tif (work_id == %s)\n", g_work_package[i].work_str);
+				else
+					fprintf(f, "\telse if (work_id == %s)\n", g_work_package[i].work_str);
+				fprintf(f, "\t\treturn verify_%s();\n", g_work_package[i].work_str);
+			}
+		}
+		fprintf(f, "\telse\n");
+		fprintf(f, "\t\treturn -1;\n\n");
+	}
+	fprintf(f, "}\n\n");
 
 	fclose(f);
-	free(code);
 	return true;
 }
 
-bool compile_and_link(char* lib_name) {
-	char str[1000];
+bool compile_and_link(char *work_str) {
+	char lib_name[50], str[100];
 	int ret = 0;
 
 	applog(LOG_DEBUG, "DEBUG: Converting ElasticPL to C");
 
-	if (!create_c_source()) {
+	if (!create_c_source(work_str)) {
 		applog(LOG_ERR, "Unable to convert ElasticPL to %s code", opt_opencl ? "OpenCL" : "C");
 		return false;
 	}
+
+	if (opt_supernode)
+		sprintf(lib_name, "job_supernode");
+	else
+		sprintf(lib_name, "job_%s", work_str);
 
 	applog(LOG_DEBUG, "DEBUG: Compiling C Library: %s", lib_name);
 
@@ -149,8 +202,14 @@ bool compile_and_link(char* lib_name) {
 	return true;
 }
 
-void create_instance(struct instance* inst, char *lib_name) {
-	char file_name[1000];
+void create_instance(struct instance* inst, char *work_str) {
+	char lib_name[50], file_name[100];
+
+	if (opt_supernode)
+		sprintf(lib_name, "job_supernode");
+	else
+		sprintf(lib_name, "job_%s", work_str);
+
 #ifdef WIN32
 	sprintf(file_name, "./work/%s.dll", lib_name);
 	inst->hndl = LoadLibrary(file_name);
@@ -158,14 +217,15 @@ void create_instance(struct instance* inst, char *lib_name) {
 		fprintf(stderr, "Unable to load library: '%s' (Error - %d)", file_name, GetLastError());
 		exit(EXIT_FAILURE);
 	}
-	inst->initialize = (int(__cdecl *)(int32_t *, double *, uint32_t *))GetProcAddress((HMODULE)inst->hndl, "initialize");
-	inst->execute = (int(__cdecl *)())GetProcAddress((HMODULE)inst->hndl, "execute");
-	if (!inst->initialize || !inst->execute) {
-		fprintf(stderr, "Unable to find library functions");
+	inst->initialize = (int32_t(__cdecl *)(uint32_t *, int32_t *, uint32_t *, int64_t *, uint64_t *, float *, double *))GetProcAddress((HMODULE)inst->hndl, "initialize");
+	inst->execute = (int32_t(__cdecl *)(uint64_t))GetProcAddress((HMODULE)inst->hndl, "execute");
+	inst->verify = (int32_t(__cdecl *)(uint64_t))GetProcAddress((HMODULE)inst->hndl, "verify");
+	if (!inst->initialize || !inst->execute || !inst->verify) {
+			fprintf(stderr, "Unable to find library functions");
 		FreeLibrary((HMODULE)inst->hndl);
 		exit(EXIT_FAILURE);
 	}
-	applog(LOG_DEBUG, "DEBUG: '%s' Loaded", file_name);
+	applog(LOG_DEBUG, "DEBUG: Library '%s' Loaded", lib_name);
 #else
 	sprintf(file_name, "./work/%s.so", lib_name);
 	inst->hndl = dlopen(file_name, RTLD_GLOBAL | RTLD_NOW);
@@ -175,7 +235,8 @@ void create_instance(struct instance* inst, char *lib_name) {
 	}
 	inst->initialize = dlsym(inst->hndl, "initialize");
 	inst->execute = dlsym(inst->hndl, "execute");
-	if (!inst->initialize || !inst->execute) {
+	inst->execute = dlsym(inst->hndl, "verify");
+	if (!inst->initialize || !inst->execute || !inst->verify) {
 		fprintf(stderr, "Unable to find library functions");
 		dlclose(inst->hndl);
 		exit(EXIT_FAILURE);
@@ -223,9 +284,10 @@ extern bool create_opencl_source(char *work_str) {
 	if (!f)
 		return false;
 
-	code = convert_ast_to_c();
-	if (!code)
+// FIX
+	if (!convert_ast_to_c(""))
 		return false;
+// FIX
 
 	fprintf(f, "#pragma OPENCL EXTENSION cl_khr_byte_addressable_store : enable\n");
 	fprintf(f, "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n\n");

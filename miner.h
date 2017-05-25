@@ -2,7 +2,7 @@
 #define __MINER_H__
 
 #define PACKAGE_NAME "xel_miner"
-#define PACKAGE_VERSION "0.9"
+#define PACKAGE_VERSION "0.10"
 
 #define USER_AGENT PACKAGE_NAME "/" PACKAGE_VERSION
 #define MAX_CPUS 16
@@ -49,8 +49,13 @@
 #define MAX_SOURCE_SIZE 1024 * 512	// 512K
 #define VM_INPUTS 12
 
-extern __thread _ALIGN(64) int32_t *vm_m;
-extern __thread _ALIGN(64) double *vm_f;
+extern __thread _ALIGN(64) uint32_t *vm_m;
+extern __thread _ALIGN(64) int32_t *vm_i;
+extern __thread _ALIGN(64) uint32_t *vm_u;
+extern __thread _ALIGN(64) int64_t *vm_l;
+extern __thread _ALIGN(64) uint64_t *vm_ul;
+extern __thread _ALIGN(64) float *vm_f;
+extern __thread _ALIGN(64) double *vm_d;
 extern __thread uint32_t *vm_state;
 extern __thread double vm_param_val[6];
 extern __thread uint32_t vm_param_idx[6];
@@ -73,6 +78,11 @@ extern bool opt_test_vm;
 extern bool opt_opencl;
 extern int opt_opencl_gthreads;
 extern int opt_opencl_vwidth;
+extern bool opt_supernode;
+
+extern struct work_package *g_work_package;
+extern int g_work_package_cnt;
+extern int g_work_package_idx;
 
 extern struct work_restart *work_restart;
 
@@ -103,6 +113,13 @@ struct work_package {
 	uint64_t bty_reward;
 	int pending_bty_cnt;
 	bool blacklisted;
+	uint32_t vm_ints;
+	uint32_t vm_uints;
+	uint32_t vm_longs;
+	uint32_t vm_ulongs;
+	uint32_t vm_floats;
+	uint32_t vm_doubles;
+
 };
 
 struct work {
@@ -184,12 +201,14 @@ struct instance {
 
 #ifdef WIN32
 	HINSTANCE hndl;
-	int(__cdecl* initialize)(int32_t *, double *, uint32_t *);
-	int(__cdecl* execute)();
+	int32_t(__cdecl* initialize)(uint32_t *, int32_t *, uint32_t *, int64_t *, uint64_t *, float *, double *);
+	int32_t(__cdecl* execute)(uint64_t);
+	int32_t(__cdecl* verify)(uint64_t);
 #else
 	void *hndl;
-	int(*initialize)(int32_t *, double *, uint32_t *);
-	int(*execute)();
+	int32_t(*initialize)(uint32_t *, int32_t *, uint32_t *, int64_t *, uint64_t *, float *, double *);
+	int32_t(*execute)(uint64_t);
+	int32_t(*verify)(uint64_t);
 #endif
 
 };
@@ -331,9 +350,9 @@ extern json_t* json_rpc_call(CURL *curl, const char *url, const char *userpass, 
 extern unsigned long genrand_int32(void);
 extern void init_genrand(unsigned long s);
 
-static bool create_c_source(void);
-extern bool compile_and_link(char* file_name);
-extern void create_instance(struct instance* inst, char *file_name);
+static bool create_c_source(char *work_str);
+extern bool compile_and_link(char *work_str);
+extern void create_instance(struct instance* inst, char *work_str);
 extern void free_compiler(struct instance* inst);
 extern bool create_opencl_source(char *work_str);
 static char* convert_opencl(ast* exp);

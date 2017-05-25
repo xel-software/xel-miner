@@ -66,6 +66,7 @@ static int opt_fail_pause = 10;
 static int opt_scantime = 60;  // Get New Work From Server At Least Every 60s
 bool opt_test_miner = false;
 bool opt_test_vm = false;
+bool opt_supernode = false;
 bool opt_opencl = false;
 int opt_opencl_gthreads = 0;
 int opt_opencl_vwidth = 0;
@@ -82,8 +83,13 @@ uint64_t g_cur_work_id;
 unsigned char g_pow_target_str[33];
 uint32_t g_pow_target[4];
 
-__thread _ALIGN(64) int32_t *vm_m = NULL;
-__thread _ALIGN(64) double *vm_f = NULL;
+__thread _ALIGN(64) uint32_t *vm_m = NULL;
+__thread _ALIGN(64) int32_t *vm_i = NULL;
+__thread _ALIGN(64) uint32_t *vm_u = NULL;
+__thread _ALIGN(64) int64_t *vm_l = NULL;
+__thread _ALIGN(64) uint64_t *vm_ul = NULL;
+__thread _ALIGN(64) float *vm_f = NULL;
+__thread _ALIGN(64) double *vm_d = NULL;
 __thread uint32_t *vm_state = NULL;
 __thread double vm_param_val[6];
 __thread uint32_t vm_param_idx[6];
@@ -108,12 +114,13 @@ uint8_t *passphrase = NULL;
 uint8_t publickey[32];
 uint8_t *test_filename;
 
-static struct timeval g_miner_start_time;
-static struct work g_work = { 0 };
-static time_t g_work_time = 0;
-static struct work_package *g_work_package;
-static int g_work_package_cnt = 0;
-static const uint8_t basepoint[32] = { 9 };
+struct timeval g_miner_start_time;
+struct work g_work = { 0 };
+time_t g_work_time = 0;
+struct work_package *g_work_package;
+int g_work_package_cnt = 0;
+int g_work_package_idx = 0;
+const uint8_t basepoint[32] = { 9 };
 
 struct submit_req *g_submit_req;
 int g_submit_req_cnt = 0;
@@ -523,25 +530,23 @@ static void *test_vm_thread(void *userdata) {
 	struct thr_info *mythr = (struct thr_info *) userdata;
 	int thr_id = mythr->id;
 	char test_code[MAX_SOURCE_SIZE];
+	struct work_package work_package;
 	struct instance *inst = NULL;
-	int i, rc;
+	uint32_t i;
+	int rc;
 
-	// Initialize Global Variables
-	vm_state = calloc(4, sizeof(uint32_t));
-	vm_m = calloc(VM_MEMORY_SIZE, sizeof(int32_t));
-	vm_f = calloc(VM_FLOAT_SIZE, sizeof(double));
-
-	if (!vm_m || !vm_f || !vm_state) {
-		applog(LOG_ERR, "%s: Unable to allocate VM memory", mythr->name);
-		exit(EXIT_FAILURE);
-	}
+	// Create A Test Package
+	memset(&work_package, 0, sizeof(struct work_package));
+	work_package.work_id = 0;
+	sprintf(work_package.work_str, "%llu", work_package.work_id);
+	add_work_package(&work_package);
 
 	applog(LOG_DEBUG, "DEBUG: Loading Test File");
 	if (!load_test_file(test_code))
 		exit(EXIT_FAILURE);
 
 	// Convert The Source Code Into ElasticPL AST
-	if (!create_epl_vm(test_code)) {
+	if (!create_epl_vm(test_code, &work_package)) {
 		applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
 		exit(EXIT_FAILURE);
 	}
@@ -552,10 +557,32 @@ static void *test_vm_thread(void *userdata) {
 		exit(EXIT_FAILURE);
 	}
 
+	// Initialize Global Variables
+	vm_m = calloc(12, sizeof(uint32_t));
+	if (work_package.vm_ints) vm_i = calloc(work_package.vm_ints, sizeof(int32_t));
+	if (work_package.vm_uints) vm_u = calloc(work_package.vm_uints, sizeof(uint32_t));
+	if (work_package.vm_longs) vm_l = calloc(work_package.vm_longs, sizeof(int64_t));
+	if (work_package.vm_ulongs) vm_ul = calloc(work_package.vm_ulongs, sizeof(uint64_t));
+	if (work_package.vm_floats) vm_f = calloc(work_package.vm_floats, sizeof(float));
+	if (work_package.vm_doubles) vm_d = calloc(work_package.vm_doubles, sizeof(double));
+
+	//if (!vm_m || !vm_f || !vm_state) {
+	//	applog(LOG_ERR, "%s: Unable to allocate VM memory", mythr->name);
+	//	exit(EXIT_FAILURE);
+	//}
+
 	if (opt_compile) {
 
-		// Convert The ElasticPL Source Into A C Program Library
-		if (!compile_and_link("test")) {
+		use_elasticpl_math = false;
+
+		// Convert The ElasticPL Source Into A C Program
+		if (!convert_ast_to_c(work_package.work_str)) {
+			applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
+			exit(EXIT_FAILURE);
+		}
+
+		// Create A C Program Library
+		if (!compile_and_link(work_package.work_str)) {
 			applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
 			exit(EXIT_FAILURE);
 		}
@@ -564,11 +591,11 @@ static void *test_vm_thread(void *userdata) {
 		if (inst)
 			free_compiler(inst);
 		inst = calloc(1, sizeof(struct instance));
-		create_instance(inst, "test");
-		inst->initialize(vm_m, vm_f, vm_state);
+		create_instance(inst, work_package.work_str);
+		inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d);
 
 		// Execute The VM Logic
-		rc = inst->execute();
+		rc = inst->execute(work_package.work_id);
 
 		free_compiler(inst);
 	}
@@ -585,21 +612,66 @@ static void *test_vm_thread(void *userdata) {
 		rc = interpret_ast(true);
 	}
 
-	applog(LOG_DEBUG, "DEBUG: Bounty Found: %s", rc ? "true" : "false");
+	if (rc < 0) {
+		applog(LOG_ERR, "ERROR: An error was encountered while running job #%s (rc = %d)", g_work_package[g_work_package_idx].work_str, rc);
+		exit(EXIT_FAILURE);
+	}
 
-	for (i = 0; i < 4; i++)
-		applog(LOG_DEBUG, "DEBUG: vm_state[%d]: %11d, Hex: %08X", i, vm_state[i], vm_state[i]);
+	applog(LOG_DEBUG, "DEBUG: Bounty Found: %s", (rc == 1) ? "true" : "false");
 
 	// Dump Non-Zero VM Values
-	printf("\n\t   VM Integers:\n");
-	for (i = 0; i < VM_MEMORY_SIZE; i++) {
+	printf("\n\t   VM Initialized Unsigned Integers:\n");
+	for (i = 0; i < 12; i++) {
 		if (vm_m[i])
-			printf("\t\t  vm_m[%d] = %d\n", i, vm_m[i]);
+			printf("\t\t  vm_m[%d] = %u\n", i, vm_m[i]);
 	}
-	printf("\n\t   VM Floats:\n");
-	for (i = 0; i < VM_FLOAT_SIZE; i++) {
-		if (vm_f[i] != 0.0)
-			printf("\t\t  vm_f[%d] = %f\n", i, vm_f[i]);
+
+	if (max_vm_ints) {
+		printf("\n\t   Integers:\n");
+		for (i = 0; i < max_vm_ints; i++) {
+			if (vm_i[i])
+				printf("\t\t  vm_i[%d] = %d\n", i, vm_i[i]);
+		}
+	}
+
+	if (max_vm_uints) {
+		printf("\n\t   Unsigned Integers:\n");
+		for (i = 0; i < max_vm_uints; i++) {
+			if (vm_u[i])
+				printf("\t\t  vm_u[%d] = %u\n", i, vm_u[i]);
+		}
+	}
+
+	if (max_vm_longs) {
+		printf("\n\t   Longs:\n");
+		for (i = 0; i < max_vm_longs; i++) {
+			if (vm_l[i])
+				printf("\t\t  vm_l[%d] = %lld\n", i, vm_l[i]);
+		}
+	}
+
+	if (max_vm_ulongs) {
+		printf("\n\t   Unsigned Longs:\n");
+		for (i = 0; i < max_vm_ulongs; i++) {
+			if (vm_ul[i])
+				printf("\t\t  vm_ul[%d] = %llu\n", i, vm_ul[i]);
+		}
+	}
+
+	if (max_vm_floats) {
+		printf("\n\t   Floats:\n");
+		for (i = 0; i < max_vm_floats; i++) {
+			if (vm_f[i])
+				printf("\t\t  vm_f[%d] = %f\n", i, vm_f[i]);
+		}
+	}
+
+	if (max_vm_doubles) {
+		printf("\n\t   Doubles:\n");
+		for (i = 0; i < max_vm_doubles; i++) {
+			if (vm_d[i])
+				printf("\t\t  vm_d[%d] = %f\n", i, vm_d[i]);
+		}
 	}
 	printf("\n");
 
@@ -608,8 +680,13 @@ static void *test_vm_thread(void *userdata) {
 
 	if (inst) free(inst);
 	if (vm_m) free(vm_m);
+	if (vm_i) free(vm_i);
+	if (vm_u) free(vm_u);
+	if (vm_l) free(vm_l);
+	if (vm_ul) free(vm_ul);
 	if (vm_f) free(vm_f);
-	if (vm_state) free(vm_state);
+	if (vm_d) free(vm_d);
+	//	if (vm_state) free(vm_state);
 
 	tq_freeze(mythr->q);
 
@@ -710,7 +787,7 @@ static int execute_vm(int thr_id, struct work *work, struct instance *inst, long
 
 		// Execute The VM Logic
 		if (opt_compile)
-			rc = inst->execute();
+			rc = inst->execute(work->work_id);
 		else
 			rc = interpret_ast(new_work);
 
@@ -983,11 +1060,13 @@ static int work_decode(const json_t *val, struct work *work) {
 				applog(LOG_DEBUG, "DEBUG: ElasticPL Source Code -\n%s", elastic_src);
 
 			// Convert ElasticPL Into AST
-			if (!create_epl_vm(elastic_src)) {
+			if (!create_epl_vm(elastic_src, &work_package)) {
 				work_package.blacklisted = true;
 				applog(LOG_ERR, "ERROR: Unable to convert 'source' to AST for work_id: %s\n\n%s\n", work_package.work_str, str);
+// FIX WHEN SN DONE
 //				free(elastic_src);
 //				return 0;
+// FIX WHEN SN DONE
 				continue;
 			}
 
@@ -1001,16 +1080,28 @@ static int work_decode(const json_t *val, struct work *work) {
 				return 0;
 			}
 
+			// Convert The ElasticPL Source Into A C Program
+			if (!convert_ast_to_c(work_package.work_str)) {
+				work_package.blacklisted = true;
+				applog(LOG_ERR, "ERROR: Unable to convert 'source' to C for work_id: %s\n\n%s\n", work_package.work_str, str);
+				return 0;
+			}
+
 			// Convert The ElasticPL Source Into A C Program Library
 			if (opt_compile) {
 				if (!compile_and_link(work_package.work_str)) {
 					work_package.blacklisted = true;
-					applog(LOG_ERR, "ERROR: Unable to convert 'source' to C for work_id: %s\n\n%s\n", work_package.work_str, str);
+					applog(LOG_ERR, "ERROR: Unable to create C Library for work_id: %s\n\n%s\n", work_package.work_str, str);
 					return 0;
 				}
 			}
 			else if (opt_opencl) {
-				if (!create_opencl_source(work_package.work_str)) {
+
+// FIX
+// FIX
+				if (!create_opencl_source(NULL)) {
+// FIX
+// FIX
 					work_package.blacklisted = true;
 					applog(LOG_ERR, "ERROR: Unable to convert 'source' to OpenCL for work_id: %s\n\n%s\n", work_package.work_str, str);
 					return 0;
@@ -1101,7 +1192,7 @@ static int work_decode(const json_t *val, struct work *work) {
 			applog(LOG_DEBUG, "DEBUG: ElasticPL Source Code -\n%s", elastic_src);
 
 		// Convert ElasticPL Into AST
-		if (!create_epl_vm(elastic_src)) {
+		if (!create_epl_vm(elastic_src, &g_work_package[best_pkg])) {
 			g_work_package[best_pkg].blacklisted = true;
 			applog(LOG_ERR, "ERROR: Unable to convert 'source' to AST for work_id: %s\n\n%s\n", g_work_package[best_pkg].work_str, str);
 			free(elastic_src);
@@ -1328,7 +1419,14 @@ static void *cpu_miner_thread(void *userdata) {
 					free_compiler(inst);
 				inst = calloc(1, sizeof(struct instance));
 				create_instance(inst, work.work_str);
-				inst->initialize(vm_m, vm_f, vm_state);
+
+// FIX
+								
+				//				inst->initialize(vm_m, vm_f, vm_state);
+
+
+// FIX
+
 			}
 		}
 		// Otherwise, Just Update POW Target
