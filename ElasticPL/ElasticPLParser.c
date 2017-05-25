@@ -9,6 +9,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <float.h>
 
 #include "ElasticPL.h"
 #include "../miner.h"
@@ -263,42 +264,42 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 					applog(LOG_ERR, "Syntax Error: Line: %d - Int array already declared", token->line_num);
 					return false;
 				}
-				max_vm_ints = stack_exp[stack_exp_idx]->uvalue;
+				max_vm_ints = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
 				break;
 			case NODE_ARRAY_UINT:
 				if (max_vm_uints != 0) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Unsigned Int array already declared", token->line_num);
 					return false;
 				}
-				max_vm_uints = stack_exp[stack_exp_idx]->uvalue;
+				max_vm_uints = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
 				break;
 			case NODE_ARRAY_LONG:
 				if (max_vm_longs != 0) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Long array already declared", token->line_num);
 					return false;
 				}
-				max_vm_longs = stack_exp[stack_exp_idx]->uvalue;
+				max_vm_longs = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
 				break;
 			case NODE_ARRAY_ULONG:
 				if (max_vm_ulongs != 0) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Unsigned Long array already declared", token->line_num);
 					return false;
 				}
-				max_vm_ulongs = stack_exp[stack_exp_idx]->uvalue;
+				max_vm_ulongs = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
 				break;
 			case NODE_ARRAY_FLOAT:
 				if (max_vm_floats != 0) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Float array already declared", token->line_num);
 					return false;
 				}
-				max_vm_floats = stack_exp[stack_exp_idx]->uvalue;
+				max_vm_floats = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
 				break;
 			case NODE_ARRAY_DOUBLE:
 				if (max_vm_doubles != 0) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Double array already declared", token->line_num);
 					return false;
 				}
-				max_vm_doubles = stack_exp[stack_exp_idx]->uvalue;
+				max_vm_doubles = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
 				break;
 			}
 
@@ -807,13 +808,12 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 						return false;
 					}
 
-					//if ((val_double < ?) || (val_double > ?)) {
-					//	is_64bit = false;
-					//	token->data_type = DT_FLOAT;
-					//}
-					//else {
+					if ((val_double >= FLT_MIN) && (val_double <= FLT_MAX)) {
+						data_type = DT_FLOAT;
+					}
+					else {
 						data_type = DT_DOUBLE;
-//					}
+					}
 				}
 				else {
 					svalue = calloc(1, strlen(token->literal) + 1);
@@ -884,7 +884,7 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 				return false;
 			}
 
-			if ((left->type == NODE_CONSTANT) && (left->uvalue > val_int64)) {
+			if ((left->type == NODE_CONSTANT) && (left->uvalue > (uint64_t)val_int64)) {
 				applog(LOG_ERR, "Syntax Error: Line: %d - Number of iterations exceeds maximum", token->line_num);
 				return false;
 			}
@@ -1444,4 +1444,3 @@ static bool validate_function_calls() {
 	}
 	return true;
 }
-

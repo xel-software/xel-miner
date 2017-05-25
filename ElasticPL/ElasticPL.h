@@ -22,21 +22,20 @@
 #define REPEAT_STACK_SIZE 33
 #define CODE_STACK_SIZE 10000
 
+#define MAX_AST_DEPTH 20000
+
 #define MAX_VM_MEMORY_SIZE	100000		// Maximum Number Of Bytes That Can Be Used By VM Memory Model
 #define VM_MEMORY_SIZE	64000			// Number Of Integers Supported By ElasticPL
 #define VM_FLOAT_SIZE	1000			// Number Of Doubles Supported By ElasticPL
 #define MAX_VM_M_ARRAY	12				// Number Of Unsigned Ints Initialized By VM
 
 // Max Array Variable Index For Each Data Type
-uint64_t max_vm_ints;
-uint64_t max_vm_uints;
-uint64_t max_vm_longs;
-uint64_t max_vm_ulongs;
-uint64_t max_vm_floats;
-uint64_t max_vm_doubles;
-
-// Work ID Used To Make ElasticPL Functions Unique Per Job
-char job_suffix[22];
+uint32_t max_vm_ints;
+uint32_t max_vm_uints;
+uint32_t max_vm_longs;
+uint32_t max_vm_ulongs;
+uint32_t max_vm_floats;
+uint32_t max_vm_doubles;
 
 // Index Value Of Main & Verify Functions In AST Array
 int ast_func_idx;
@@ -297,12 +296,8 @@ int top_op;
 int *stack_op;		// List Of Operators For Parsing
 ast **stack_exp;	// List Of Expresions For Parsing / Final Expression List
 
-int vm_ast_cnt;		// Number Of AST Root Nodes In VM
-ast **vm_ast;		// Final AST List For VM
-
 // Function Declarations
-extern bool create_epl_vm(char *source);
-static bool delete_epl_vm();
+extern bool create_epl_vm(char *source, struct work_package *work_package);
 
 extern bool init_token_list(SOURCE_TOKEN_LIST *token_list, size_t size);
 static DATA_TYPE validate_literal(char *str);
@@ -328,14 +323,16 @@ static bool validate_ast();
 static bool validate_functions();
 static bool validate_function_calls();
 
+extern bool convert_ast_to_c(char *work_str);
 static bool convert_function(ast* root);
 static bool convert_node(ast* node);
 static void get_cast(char *lcast, char *rcast, DATA_TYPE ldata_type, DATA_TYPE rdata_type, bool right_only);
 static bool get_node_inputs(ast* node, char **lstr, char **rstr);
 
 extern uint32_t calc_wcet();
-static uint32_t calc_weight(ast* root, uint32_t *depth);
+static uint32_t calc_function_weight(ast* root, uint32_t *depth);
 static uint32_t get_node_weight(ast* node);
+
 extern int interpret_ast(bool first_run);
 static double interpret(ast* exp);
 static void mangle_state(int x);

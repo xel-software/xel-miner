@@ -17,53 +17,59 @@
 #include "ElasticPLFunctions.h"
 #include "../miner.h"
 
-char *tab[] = { "\t", "\t\t", "\t\t\t", "\t\t\t\t", "\t\t\t\t\t", "\t\t\t\t\t\t", "\t\t\t\t\t\t\t", "\t\t\t\t\t\t\t" };
-int tabs;
-
 char *stack_code[CODE_STACK_SIZE];
 int stack_code_idx;
 
-static void push(char *str) {
+// Work ID Used To Make ElasticPL Functions Unique Per Job
+char job_suffix[22];
+
+// Hard Coded Tabs...Could Make This Dynamic
+char *tab[] = { "\t", "\t\t", "\t\t\t", "\t\t\t\t", "\t\t\t\t\t", "\t\t\t\t\t\t", "\t\t\t\t\t\t\t", "\t\t\t\t\t\t\t" };
+int tabs;
+
+
+static void push_code(char *str) {
 	stack_code[stack_code_idx++] = str;
 }
 
-static char* pop() {
+static char* pop_code() {
 	if (stack_code_idx > 0)
 		return stack_code[--stack_code_idx];
 	else
 		return NULL;
 }
 
-extern char* convert_ast_to_c() {
+extern bool convert_ast_to_c(char *work_str) {
 	int i, j;
+	char file_name[100];
 
-	char file_name[1000];
-	sprintf(file_name, "./work/job_%s.c", job_suffix);
+	// Copy WorkID To Job Suffix
+	sprintf(job_suffix, "%s", work_str);
+
+	sprintf(file_name, "./work/job_%s.h", job_suffix);
 
 	FILE* f = fopen(file_name, "w");
 	if (!f)
 		return false;
 
-	use_elasticpl_math = false;
-
 	// Write Function Declarations
-	fprintf(f, "/********************************************************************************\n");
-	fprintf(f, " Job # %s\n", job_suffix);
-	fprintf(f, "*********************************************************************************/\n\n");
-	for (i = ast_func_idx; i < vm_ast_cnt; i++) {
-		fprintf(f, "void %s_%s();\n", vm_ast[i]->svalue, job_suffix);
+	for (i = ast_func_idx; i <= stack_exp_idx; i++) {
+		if ((i == ast_main_idx) || (i == ast_verify_idx))
+			fprintf(f, "uint32_t %s_%s();\n", stack_exp[i]->svalue, job_suffix);
+		else
+			fprintf(f, "void %s_%s();\n", stack_exp[i]->svalue, job_suffix);
 	}
 	fprintf(f, "\n");
 
 	// Write Function Definitions
-	for (i = ast_func_idx; i < vm_ast_cnt; i++) {
+	for (i = ast_func_idx; i <= stack_exp_idx; i++) {
 
 		stack_code_idx = 0;
 		tabs = 0;
 
-		if (!convert_function(vm_ast[i])) {
+		if (!convert_function(stack_exp[i])) {
 			fclose(f);
-			return NULL;
+			return false;
 		}
 
 		for (j = 0; j < stack_code_idx; j++) {
@@ -78,7 +84,7 @@ extern char* convert_ast_to_c() {
 
 	fclose(f);
 
-	return NULL;
+	return true;
 }
 
 static bool convert_function(ast* root) {
@@ -181,13 +187,7 @@ static bool convert_node(ast* node) {
 	case NODE_FUNCTION:
 		str = malloc(256);
 		if ((!strcmp(node->svalue, "main")) || (!strcmp(node->svalue, "verify")))
-
-#ifdef WIN32
-			sprintf(str, "__declspec(dllexport) void %s_%s() {\n", node->svalue, job_suffix);
-#else
-			sprintf(str, "void %s_%s() {\n", node->svalue, job_suffix);
-#endif
-
+			sprintf(str, "uint32_t %s_%s() {\n", node->svalue, job_suffix);
 		else
 			sprintf(str, "void %s_%s() {\n", node->svalue, job_suffix);
 		break;
@@ -196,8 +196,8 @@ static bool convert_node(ast* node) {
 		sprintf(str, "%s_%s()", node->svalue, job_suffix);
 		break;
 	case NODE_RESULT:
-		str = malloc(strlen(lstr) + 40);
-		sprintf(str, "bounty_found = (%s != 0 ? 1 : 0)", lstr);
+		str = malloc(strlen(lstr) + 50);
+		sprintf(str, "return (%s != 0 ? 1 : 0)", lstr);
 		break;
 	case NODE_CONSTANT:
 		str = malloc(25);
@@ -299,9 +299,14 @@ static bool convert_node(ast* node) {
 		sprintf(str, "%sint loop%d;\n%sfor (loop%d = 0; loop%d < (%s); loop%d++) {\n%s\tif (loop%d >= %lld) break;\n%s\tu[%lld] = loop%d;\n", tab[tabs - 1], node->token_num, tab[tabs - 1], node->token_num, node->token_num, lstr, node->token_num, tab[tabs - 1], node->token_num, node->ivalue, tab[tabs - 1], node->uvalue, node->token_num);
 		break;
 	case NODE_BLOCK:
-		str = malloc(20);
-		if (node->parent->type == NODE_FUNCTION)
-			sprintf(str, "}\n");
+		str = malloc(50);
+		if (node->parent->type == NODE_FUNCTION) {
+			// Call Verify Function At End Of Main Function
+			if (!strcmp(node->parent->svalue, "main"))
+				sprintf(str, "\n\treturn verify_%s();\n}\n", job_suffix);
+			else
+				sprintf(str, "}\n");
+		}
 		else
 			sprintf(str, "%s}\n", tab[tabs]);
 		break;
@@ -315,7 +320,7 @@ static bool convert_node(ast* node) {
 		break;
 
 	case NODE_CONDITIONAL:
-		tmp = pop();
+		tmp = pop_code();
 		if (!tmp) {
 			applog(LOG_ERR, "Compiler Error: Corupted code stack at Line: %d", node->line_num);
 			return false;
@@ -603,10 +608,10 @@ static bool convert_node(ast* node) {
 		tmp = malloc(strlen(str) + 20);
 		sprintf(tmp, "%s%s;\n", tab[tabs], str);
 		free(str);
-		push(tmp);
+		push_code(tmp);
 	}
 	else {
-		push(str);
+		push_code(str);
 	}
 
 	return true;
@@ -693,7 +698,7 @@ static bool get_node_inputs(ast* node, char **lstr, char **rstr) {
 	case NODE_FLOOR:
 	case NODE_ABS:
 	case NODE_FABS:
-		*lstr = pop();
+		*lstr = pop_code();
 		if (!lstr) {
 			applog(LOG_ERR, "Compiler Error: Corupted code stack at Line: %d", node->line_num);
 			return false;
@@ -735,8 +740,8 @@ static bool get_node_inputs(ast* node, char **lstr, char **rstr) {
 	case NODE_ATAN2:
 	case NODE_FMOD:
 	case NODE_GCD:
-		*rstr = pop();
-		*lstr = pop();
+		*rstr = pop_code();
+		*lstr = pop_code();
 		if (!lstr || !rstr) {
 			applog(LOG_ERR, "Compiler Error: Corupted code stack at Line: %d", node->line_num);
 			return false;

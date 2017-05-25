@@ -18,10 +18,42 @@
 #include "ElasticPLFunctions.h"
 #include "../miner.h"
 
-//#define MAX_AST_DEPTH 1000
-#define MAX_AST_DEPTH 20000
+extern uint32_t calc_wcet() {
+	int i, call_depth = 0;
+	uint32_t ast_depth, wcet;
 
-static uint32_t calc_weight(ast* root, uint32_t *ast_depth) {
+	// Get Max Function Call Depth
+	for (i = ast_func_idx; i <= stack_exp_idx; i++) {
+		if (stack_exp[i]->uvalue > call_depth)
+			call_depth = stack_exp[i]->uvalue;
+	}
+
+	// Calculate WCET For Each Function Beginning With The Lowest One In Call Stack
+	while (call_depth >= 0) {
+		for (i = ast_func_idx; i <= stack_exp_idx; i++) {
+			if (stack_exp[i]->uvalue == call_depth) {
+				ast_depth = 0;
+				wcet = calc_function_weight(stack_exp[i], &ast_depth);
+				applog(LOG_DEBUG, "DEBUG: Function '%s' WCET = %lu,\tDepth = %lu", stack_exp[i]->svalue, wcet, ast_depth);
+
+				if (ast_depth > MAX_AST_DEPTH) {
+					applog(LOG_ERR, "ERROR: Max allowed AST depth exceeded (%lu)", ast_depth);
+					return 0;
+				}
+
+				// Store WCET Value In Function's 'fvalue' Field
+				stack_exp[i]->fvalue = wcet;
+			}
+		}
+		call_depth--;
+	}
+
+	applog(LOG_DEBUG, "DEBUG: Total WCET = %lu", (uint32_t)stack_exp[ast_main_idx]->fvalue);
+
+	return (uint32_t)stack_exp[ast_main_idx]->fvalue;
+}
+
+static uint32_t calc_function_weight(ast* root, uint32_t *ast_depth) {
 	uint32_t depth = 0, weight = 0, total_weight = 0;
 	uint32_t block_weight[REPEAT_STACK_SIZE];
 	int block_level = -1;
@@ -113,9 +145,9 @@ static uint32_t calc_weight(ast* root, uint32_t *ast_depth) {
 		// Get Total weight For The "Repeat" Block
 		if ((block_level >= 0) && (ast_ptr->type == NODE_REPEAT)) {
 			if (block_level == 0)
-				total_weight += (ast_ptr->ivalue * block_weight[block_level]);
+				total_weight += ((uint32_t)ast_ptr->ivalue * block_weight[block_level]);
 			else
-				block_weight[block_level - 1] += (ast_ptr->ivalue * block_weight[block_level]);
+				block_weight[block_level - 1] += ((uint32_t)ast_ptr->ivalue * block_weight[block_level]);
 			block_level--;
 		}
 	}
@@ -251,7 +283,7 @@ static uint32_t get_node_weight(ast* node) {
 
 		// Function Calls (4 + Weight Of Called Function)
 		case NODE_CALL_FUNCTION:
-			return 4 + vm_ast[node->uvalue]->fvalue;
+			return 4 + (uint32_t)stack_exp[node->uvalue]->fvalue;
 
 		case NODE_BLOCK:
 		case NODE_PARAM:
@@ -264,72 +296,17 @@ static uint32_t get_node_weight(ast* node) {
 	return 0;
 }
 
-extern uint32_t calc_wcet() {
-	int i, call_depth = 0;
-	uint32_t ast_depth, wcet, total = 0;
-
-	// Get Max Function Call Depth
-	for (i = ast_func_idx; i < vm_ast_cnt; i++) {
-		if (vm_ast[i]->uvalue > call_depth)
-			call_depth = vm_ast[i]->uvalue;
-	}
-
-	// Calculate WCET For Each Function Beginning With The Lowest One In Call Stack
-	while (call_depth >= 0) {
-		for (i = ast_func_idx; i < vm_ast_cnt; i++) {
-			if (vm_ast[i]->uvalue == call_depth) {
-				ast_depth = 0;
-				wcet = calc_weight(vm_ast[i], &ast_depth);
-				applog(LOG_DEBUG, "DEBUG: Function '%s' WCET = %lu,\tDepth = %lu", vm_ast[i]->svalue, wcet, ast_depth);
-
-				if (ast_depth > MAX_AST_DEPTH) {
-					applog(LOG_ERR, "ERROR: Max allowed AST depth exceeded (%lu)", ast_depth);
-					return 0;
-				}
-
-				// Store WCET Value In Function's 'fvalue' Field
-				vm_ast[i]->fvalue = wcet;
-			}
-		}
-		call_depth--;
-	}
-
-
-	//for (i = 0; i < vm_ast_cnt; i++) {
-	//	ast_depth = 0;
-	//	wcet = calc_weight(vm_ast[i], &ast_depth);
-	//	applog(LOG_DEBUG, "DEBUG: Statement WCET = %lu,\tDepth = %lu", wcet, ast_depth);
-
-	//	if (ast_depth > MAX_AST_DEPTH) {
-	//		applog(LOG_ERR, "ERROR: Max allowed AST depth exceeded (%lu)", ast_depth);
-	//		return 0;
-	//	}
-
-	//	if (wcet >(0xFFFFFFFF - total)) {
-	//		total = 0xFFFFFFFF;
-	//		break;
-	//	}
-	//	else
-	//		total += wcet;
-	//}
-
-	//applog(LOG_DEBUG, "DEBUG: Total WCET = %lu", total);
-
-	return 1;
-//	return total;
-}
-
 extern int interpret_ast(bool first_run) {
 	int i, idx = 0;
 
-	vm_bounty = false;
-	vm_break = false;
-	vm_continue = false;
+	//vm_bounty = false;
+	//vm_break = false;
+	//vm_continue = false;
 
-	for (i = idx; i < vm_ast_cnt; i++) {
-		if (!interpret(vm_ast[i]) && (vm_ast[i]->type != NODE_VAR_CONST) && (vm_ast[i]->type != NODE_VAR_EXP) && (vm_ast[i]->type != NODE_CONSTANT))
-				return 0;
-	}
+	//for (i = idx; i < vm_ast_cnt; i++) {
+	//	if (!interpret(vm_ast[i]) && (vm_ast[i]->type != NODE_VAR_CONST) && (vm_ast[i]->type != NODE_VAR_EXP) && (vm_ast[i]->type != NODE_CONSTANT))
+	//			return 0;
+	//}
 
 	return vm_bounty;
 }

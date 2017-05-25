@@ -12,14 +12,14 @@
 #include "ElasticPL.h"
 #include "../miner.h"
 
-uint64_t max_vm_ints = 0;
-uint64_t max_vm_uints = 0;
-uint64_t max_vm_longs = 0;
-uint64_t max_vm_ulongs = 0;
-uint64_t max_vm_floats = 0;
-uint64_t max_vm_doubles = 0;
+uint32_t max_vm_ints = 0;
+uint32_t max_vm_uints = 0;
+uint32_t max_vm_longs = 0;
+uint32_t max_vm_ulongs = 0;
+uint32_t max_vm_floats = 0;
+uint32_t max_vm_doubles = 0;
 
-extern bool create_epl_vm(char *source) {
+extern bool create_epl_vm(char *source, struct work_package *work_package) {
 	int i;
 	SOURCE_TOKEN_LIST token_list;
 
@@ -28,16 +28,33 @@ extern bool create_epl_vm(char *source) {
 		return false;
 	}
 
-	stack_op_idx = -1;
-	stack_exp_idx = -1;
-	top_op = -1;
-	stack_op = calloc(PARSE_STACK_SIZE * 2, sizeof(int));
-	stack_exp = calloc(PARSE_STACK_SIZE, sizeof(ast));
+	// Allocate Operator Stack
+	if (!stack_op)
+		stack_op = calloc(PARSE_STACK_SIZE * 2, sizeof(int));
+	else
+		memset(stack_op, 0, sizeof(stack_op));
+
+	// Allocate Expression Stack
+	if (!stack_exp)
+		stack_exp = calloc(PARSE_STACK_SIZE, sizeof(ast));
+	else {
+		// Free Memory For Old String Values
+		for (i = 0; i <= stack_exp_idx; i++) {
+			if (stack_exp[i]->svalue)
+				free(stack_exp[i]->svalue);
+		}
+		memset(stack_exp, 0, sizeof(stack_exp));
+	}
 
 	if (!stack_op || !stack_exp) {
 		applog(LOG_ERR, "ERROR: Unable To Allocate VM Parser Stack!");
 		return false;
 	}
+
+	// Reset Stack Counters
+	stack_op_idx = -1;
+	stack_exp_idx = -1;
+	top_op = -1;
 
 	// Reset Global Variable Array Size
 	max_vm_ints = 0;
@@ -46,9 +63,6 @@ extern bool create_epl_vm(char *source) {
 	max_vm_ulongs = 0;
 	max_vm_floats = 0;
 	max_vm_doubles = 0;
-
-	// Copy WorkID To Job Suffix
-	sprintf(job_suffix, "%s", "9282876192505564533");
 
 	if (!init_token_list(&token_list, TOKEN_LIST_SIZE)) {
 		applog(LOG_ERR, "ERROR: Unable To Allocate Token List For Parser!");
@@ -66,53 +80,23 @@ extern bool create_epl_vm(char *source) {
 		return false;
 	}
 
-	// Free VM Memory
-	if (vm_ast)
-		delete_epl_vm();
-
-	// Copy Parsed Statements Into VM Array
-	vm_ast_cnt = stack_exp_idx + 1;
-
-	vm_ast = calloc(vm_ast_cnt, sizeof(ast*));
-	memcpy(vm_ast, stack_exp, vm_ast_cnt * sizeof(ast*));
+	// Copy Global Array Sizes Into Work Package
+	work_package->vm_ints = max_vm_ints;
+	work_package->vm_uints = max_vm_uints;
+	work_package->vm_longs = max_vm_longs;
+	work_package->vm_ulongs = max_vm_ulongs;
+	work_package->vm_floats = max_vm_floats;
+	work_package->vm_doubles = max_vm_doubles;
 
 	if (opt_debug_epl) {
 		fprintf(stdout, "\n*********************************************************\n");
 		fprintf(stdout, "AST Dump\n");
 		fprintf(stdout, "*********************************************************\n");
-		for (i = 0; i<vm_ast_cnt; i++) {
-			dump_vm_ast(vm_ast[i]);
+		for (i = 0; i <= stack_exp_idx; i++) {
+			dump_vm_ast(stack_exp[i]);
 			fprintf(stdout, "---------------------------------------------------------\n");
 		}
 	}
-
-	// Cleanup Stack Memory
-	//for (i = 0; i < vm_ast_cnt; i++) {
-	//	if (stack_exp[i]->svalue)
-	//		free(stack_exp[i]->svalue);
-	//}
-	//free(stack_exp);
-	//free(stack_op);
-
-	if (!vm_ast) {
-		applog(LOG_ERR, "ERROR: ElasticPL Parser Failed!");
-		return false;
-	}
-
-	return true;
-}
-
-static bool delete_epl_vm() {
-	int i;
-
-	if (!vm_ast)
-		return true;
-
-	for (i = 0; i < vm_ast_cnt; i++) {
-		if (vm_ast[i]->svalue)
-			free(vm_ast[i]->svalue);
-	}
-	free(vm_ast);
 
 	return true;
 }
@@ -316,7 +300,6 @@ extern char* get_node_str(NODE_TYPE node_type) {
 	case NODE_FUNCTION:		return "function";
 	case NODE_CALL_FUNCTION:return "";
 	case NODE_RESULT:		return "result";
-//	case NODE_VERIFY:		return "verify";
 	case NODE_ASSIGN:		return "=";
 	case NODE_OR:			return "||";
 	case NODE_AND:			return "&&";
