@@ -54,7 +54,7 @@ extern uint32_t calc_wcet() {
 }
 
 static uint32_t calc_function_weight(ast* root, uint32_t *ast_depth) {
-	uint32_t weight = 0, total_weight = 0;
+	uint32_t depth = 0, weight = 0, total_weight = 0;
 	uint32_t block_weight[REPEAT_STACK_SIZE];
 	int block_level = -1;
 	bool downward = true;
@@ -64,6 +64,7 @@ static uint32_t calc_function_weight(ast* root, uint32_t *ast_depth) {
 		return 0;
 
 	ast_ptr = root;
+	depth = 1;
 
 	while (ast_ptr) {
 		weight = 0;
@@ -75,17 +76,15 @@ static uint32_t calc_function_weight(ast* root, uint32_t *ast_depth) {
 			while (ast_ptr->left) {
 				ast_ptr = ast_ptr->left;
 
-				if ((ast_ptr->type == NODE_IF) || (ast_ptr->type == NODE_ELSE))
-					weight = get_node_weight(ast_ptr);
-
 				// Check For "Repeat" Blocks
 				if (ast_ptr->type == NODE_REPEAT) {
-					weight = get_node_weight(ast_ptr);
-					weight += get_node_weight(ast_ptr->left);
+					total_weight += weight;
 					block_level++;
 					block_weight[block_level] = 0;
 					break;
 				}
+
+				if (++depth > *ast_depth) *ast_depth = depth;
 			}
 
 			// If There Is A Right Node, Switch To It
@@ -97,6 +96,28 @@ static uint32_t calc_function_weight(ast* root, uint32_t *ast_depth) {
 				weight = get_node_weight(ast_ptr);
 				downward = false;
 			}
+
+			//// Check For "Repeat" Blocks
+			//if (ast_ptr->type == NODE_REPEAT) {
+			//	total_weight += weight;
+			//	block_level++;
+			//	block_weight[block_level] = 0;
+			//}
+
+			//// Switch To Right Node
+			//if (new_ptr->right) {
+			//	new_ptr = new_ptr->right;
+			//	if (++depth > *ast_depth) *ast_depth = depth;
+			//}
+			//else {
+			//	// Get Weight Of Right Node & Navigate Back Up The Tree
+			//	if (old_ptr != root) {
+			//		weight = get_node_weight(new_ptr);
+			//		new_ptr = old_ptr->parent;
+			//		depth--;
+			//	}
+			//	downward = false;
+			//}
 		}
 
 		// Navigate Back Up The Tree
@@ -106,40 +127,23 @@ static uint32_t calc_function_weight(ast* root, uint32_t *ast_depth) {
 
 			// Check If We Need To Navigate Back Down A Right Branch
 			if ((ast_ptr == ast_ptr->parent->left) && (ast_ptr->parent->right)) {
-
+				weight = get_node_weight(ast_ptr->parent);
 				ast_ptr = ast_ptr->parent->right;
 				downward = true;
-
-				if ((ast_ptr->type == NODE_IF) || (ast_ptr->type == NODE_ELSE))
-					weight = get_node_weight(ast_ptr);
-
-				// Check For "Repeat" Blocks
-				if (ast_ptr->type == NODE_REPEAT) {
-					weight = get_node_weight(ast_ptr);
-					weight += get_node_weight(ast_ptr->left);
-					block_level++;
-					block_weight[block_level] = 0;
-					ast_ptr = ast_ptr->right;
-				}
-				else {
-					weight = get_node_weight(ast_ptr->parent);
-				}
-
 			}
 			else {
-				if (((ast_ptr->type == NODE_IF) && (ast_ptr->right->type != NODE_ELSE) ) || (ast_ptr->type == NODE_ELSE))
-					weight = get_node_weight(ast_ptr);
 				ast_ptr = ast_ptr->parent;
+				depth--;
 			}
 		}
 
-		if ((block_level >= 0) && (ast_ptr->parent->type != NODE_REPEAT))
+		if (block_level >= 0)
 			block_weight[block_level] += weight;
 		else
 			total_weight += (total_weight < (0xFFFFFFFF - weight) ? weight : 0);
 
 		// Get Total weight For The "Repeat" Block
-		if ((!downward) && (block_level >= 0) && (ast_ptr->type == NODE_REPEAT)) {
+		if ((block_level >= 0) && (ast_ptr->type == NODE_REPEAT)) {
 			if (block_level == 0)
 				total_weight += ((uint32_t)ast_ptr->ivalue * block_weight[block_level]);
 			else
@@ -148,27 +152,40 @@ static uint32_t calc_function_weight(ast* root, uint32_t *ast_depth) {
 		}
 	}
 
+	// Get weight Of Root Node
+	weight = get_node_weight(ast_ptr);
+	total_weight += (total_weight < (0xFFFFFFFF - weight) ? weight : 0);
+
 	return total_weight;
 }
 
 static uint32_t get_node_weight(ast* node) {
 	uint32_t weight = 1;
 
+	bool l_is_float = false;
+	bool r_is_float = false;
+
 	if (!node)
 		return 0;
 
-	// Increase Weight For 64bit Operations
-	if (node->is_64bit)
+	// Check If Leafs Are Float Or Int To Determine Weight
+	if (node->left != NULL)
+		l_is_float = (node->left->is_float);
+	if (node->right != NULL)
+		r_is_float = (node->right->is_float);
+
+	node->is_float = node->is_float | l_is_float | r_is_float;
+
+	// Increase Weight For Double Operations
+	if (node->is_float)
 		weight = 2;
 
 	switch (node->type) {
 		case NODE_IF:
 		case NODE_ELSE:
+		case NODE_REPEAT:
 		case NODE_COND_ELSE:
 			return weight * 4;
-
-		case NODE_REPEAT:
-			return weight * 10;
 
 		case NODE_BREAK:
 		case NODE_CONTINUE:
