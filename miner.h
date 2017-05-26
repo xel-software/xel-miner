@@ -124,6 +124,7 @@ struct work_package {
 
 struct work {
 	int thr_id;
+	int package_id;
 	uint64_t block_id;
 	uint64_t work_id;
 	unsigned char work_str[22];
@@ -324,6 +325,7 @@ static void show_version_and_exit(void);
 static bool load_test_file(char *test_source);
 static bool get_vm_input(struct work *work);
 static int execute_vm(int thr_id, struct work *work, struct instance *inst, long *hashes_done, char* hash, bool new_work);
+static void dump_vm(int idx);
 
 static bool get_work(CURL *curl);
 static int work_decode(const json_t *val, struct work *work);

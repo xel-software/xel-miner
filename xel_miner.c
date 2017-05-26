@@ -476,20 +476,20 @@ static void thread_low_priority() {
 #endif
 }
 
-static bool load_test_file(char *buf) {
+static bool load_test_file(char *file_name, char *buf) {
 	int i, fsize, len, bytes;
 	char *ptr;
 	FILE *fp;
 
-	fp = fopen(test_filename, "r");
+	fp = fopen(file_name, "r");
 
 	if (!fp) {
-		applog(LOG_ERR, "ERROR: Unable to open test file: '%s'\n", test_filename);
+		applog(LOG_ERR, "ERROR: Unable to open test file: '%s'\n", file_name);
 		return false;
 	}
 
 	if (0 != fseek(fp, 0, SEEK_END)) {
-		applog(LOG_ERR, "ERROR: Unable to determine size of test file: '%s'\n", test_filename);
+		applog(LOG_ERR, "ERROR: Unable to determine size of test file: '%s'\n", file_name);
 		fclose(fp);
 		return false;
 	}
@@ -511,7 +511,7 @@ static bool load_test_file(char *buf) {
 			if (feof(fp))
 				break;
 			else
-				applog(LOG_ERR, "ERROR: Unable to read test file: '%s'\n", test_filename);
+				applog(LOG_ERR, "ERROR: Unable to read test file: '%s'\n", file_name);
 			return false;
 		}
 		len -= bytes;
@@ -529,42 +529,66 @@ static bool load_test_file(char *buf) {
 static void *test_vm_thread(void *userdata) {
 	struct thr_info *mythr = (struct thr_info *) userdata;
 	int thr_id = mythr->id;
+	char file_name[100];
 	char test_code[MAX_SOURCE_SIZE];
 	struct work_package work_package;
 	struct instance *inst = NULL;
 	uint32_t i;
-	int rc;
+	int package_idx, rc;
 
-	// Create A Test Package
+	// Create Up To 3 Packages (1 For Miner Test, 3 For SN Test)
 	memset(&work_package, 0, sizeof(struct work_package));
-	work_package.work_id = 0;
-	sprintf(work_package.work_str, "%llu", work_package.work_id);
-	add_work_package(&work_package);
+	for (i = 0; i < 3; i++) {
 
-	applog(LOG_DEBUG, "DEBUG: Loading Test File");
-	if (!load_test_file(test_code))
-		exit(EXIT_FAILURE);
+		// Create A Test Package
+		work_package.work_id = i;
+		sprintf(work_package.work_str, "%llu", work_package.work_id);
+		add_work_package(&work_package);
+		package_idx = i;
 
-	// Convert The Source Code Into ElasticPL AST
-	if (!create_epl_vm(test_code, &work_package)) {
-		applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
-		exit(EXIT_FAILURE);
+		if (opt_supernode)
+			sprintf(file_name, "sn%d.epl", i);
+		else
+			sprintf(file_name, "%s", test_filename);
+
+		applog(LOG_DEBUG, "DEBUG: Loading Test File '%s'", file_name);
+		if (!load_test_file(file_name, test_code))
+			exit(EXIT_FAILURE);
+
+		// Convert The Source Code Into ElasticPL AST
+		if (!create_epl_vm(test_code, &g_work_package[i])) {
+			applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
+			exit(EXIT_FAILURE);
+		}
+
+		// Calculate WCET
+		if (!calc_wcet()) {
+			applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
+			exit(EXIT_FAILURE);
+		}
+
+		if (opt_compile) {
+			use_elasticpl_math = false;
+
+			// Convert The ElasticPL Source Into A C Program
+			if (!convert_ast_to_c(g_work_package[i].work_str)) {
+				applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
+				exit(EXIT_FAILURE);
+			}
+
+		}
+
+		if (!opt_supernode)
+			break;
 	}
-
-	// Calculate WCET
-	if (!calc_wcet()) {
-		applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
-		exit(EXIT_FAILURE);
-	}
-
 	// Initialize Global Variables
 	vm_m = calloc(12, sizeof(uint32_t));
-	if (work_package.vm_ints) vm_i = calloc(work_package.vm_ints, sizeof(int32_t));
-	if (work_package.vm_uints) vm_u = calloc(work_package.vm_uints, sizeof(uint32_t));
-	if (work_package.vm_longs) vm_l = calloc(work_package.vm_longs, sizeof(int64_t));
-	if (work_package.vm_ulongs) vm_ul = calloc(work_package.vm_ulongs, sizeof(uint64_t));
-	if (work_package.vm_floats) vm_f = calloc(work_package.vm_floats, sizeof(float));
-	if (work_package.vm_doubles) vm_d = calloc(work_package.vm_doubles, sizeof(double));
+	if (g_work_package[package_idx].vm_ints) vm_i = calloc(g_work_package[package_idx].vm_ints, sizeof(int32_t));
+	if (g_work_package[package_idx].vm_uints) vm_u = calloc(g_work_package[package_idx].vm_uints, sizeof(uint32_t));
+	if (g_work_package[package_idx].vm_longs) vm_l = calloc(g_work_package[package_idx].vm_longs, sizeof(int64_t));
+	if (g_work_package[package_idx].vm_ulongs) vm_ul = calloc(g_work_package[package_idx].vm_ulongs, sizeof(uint64_t));
+	if (g_work_package[package_idx].vm_floats) vm_f = calloc(g_work_package[package_idx].vm_floats, sizeof(float));
+	if (g_work_package[package_idx].vm_doubles) vm_d = calloc(g_work_package[package_idx].vm_doubles, sizeof(double));
 
 	//if (!vm_m || !vm_f || !vm_state) {
 	//	applog(LOG_ERR, "%s: Unable to allocate VM memory", mythr->name);
@@ -573,16 +597,16 @@ static void *test_vm_thread(void *userdata) {
 
 	if (opt_compile) {
 
-		use_elasticpl_math = false;
+		//use_elasticpl_math = false;
 
-		// Convert The ElasticPL Source Into A C Program
-		if (!convert_ast_to_c(work_package.work_str)) {
-			applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
-			exit(EXIT_FAILURE);
-		}
+		//// Convert The ElasticPL Source Into A C Program
+		//if (!convert_ast_to_c(g_work_package[package_idx].work_str)) {
+		//	applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
+		//	exit(EXIT_FAILURE);
+		//}
 
 		// Create A C Program Library
-		if (!compile_and_link(work_package.work_str)) {
+		if (!compile_and_link(g_work_package[package_idx].work_str)) {
 			applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
 			exit(EXIT_FAILURE);
 		}
@@ -591,11 +615,11 @@ static void *test_vm_thread(void *userdata) {
 		if (inst)
 			free_compiler(inst);
 		inst = calloc(1, sizeof(struct instance));
-		create_instance(inst, work_package.work_str);
+		create_instance(inst, g_work_package[package_idx].work_str);
 		inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d);
 
 		// Execute The VM Logic
-		rc = inst->execute(work_package.work_id);
+		rc = inst->execute(g_work_package[package_idx].work_id);
 
 		free_compiler(inst);
 	}
@@ -619,61 +643,7 @@ static void *test_vm_thread(void *userdata) {
 
 	applog(LOG_DEBUG, "DEBUG: Bounty Found: %s", (rc == 1) ? "true" : "false");
 
-	// Dump Non-Zero VM Values
-	printf("\n\t   VM Initialized Unsigned Integers:\n");
-	for (i = 0; i < 12; i++) {
-		if (vm_m[i])
-			printf("\t\t  vm_m[%d] = %u\n", i, vm_m[i]);
-	}
-
-	if (max_vm_ints) {
-		printf("\n\t   Integers:\n");
-		for (i = 0; i < max_vm_ints; i++) {
-			if (vm_i[i])
-				printf("\t\t  vm_i[%d] = %d\n", i, vm_i[i]);
-		}
-	}
-
-	if (max_vm_uints) {
-		printf("\n\t   Unsigned Integers:\n");
-		for (i = 0; i < max_vm_uints; i++) {
-			if (vm_u[i])
-				printf("\t\t  vm_u[%d] = %u\n", i, vm_u[i]);
-		}
-	}
-
-	if (max_vm_longs) {
-		printf("\n\t   Longs:\n");
-		for (i = 0; i < max_vm_longs; i++) {
-			if (vm_l[i])
-				printf("\t\t  vm_l[%d] = %lld\n", i, vm_l[i]);
-		}
-	}
-
-	if (max_vm_ulongs) {
-		printf("\n\t   Unsigned Longs:\n");
-		for (i = 0; i < max_vm_ulongs; i++) {
-			if (vm_ul[i])
-				printf("\t\t  vm_ul[%d] = %llu\n", i, vm_ul[i]);
-		}
-	}
-
-	if (max_vm_floats) {
-		printf("\n\t   Floats:\n");
-		for (i = 0; i < max_vm_floats; i++) {
-			if (vm_f[i])
-				printf("\t\t  vm_f[%d] = %f\n", i, vm_f[i]);
-		}
-	}
-
-	if (max_vm_doubles) {
-		printf("\n\t   Doubles:\n");
-		for (i = 0; i < max_vm_doubles; i++) {
-			if (vm_d[i])
-				printf("\t\t  vm_d[%d] = %f\n", i, vm_d[i]);
-		}
-	}
-	printf("\n");
+	dump_vm(package_idx);
 
 	applog(LOG_NOTICE, "DEBUG: Compiler Test Complete");
 	applog(LOG_WARNING, "Exiting " PACKAGE_NAME);
@@ -783,13 +753,18 @@ static int execute_vm(int thr_id, struct work *work, struct instance *inst, long
 
 		// Reset VM Memory / State
 		memcpy(vm_m, work->vm_input, VM_INPUTS * sizeof(int));
-		memset(vm_state, 0, 4 * sizeof(int));
+//		memset(vm_state, 0, 4 * sizeof(int));
 
 		// Execute The VM Logic
 		if (opt_compile)
 			rc = inst->execute(work->work_id);
 		else
 			rc = interpret_ast(new_work);
+
+		if (opt_test_miner) {
+			dump_vm(work->package_id);
+			exit(EXIT_FAILURE);
+		}
 
 		// Hee, we have found a bounty, exit immediately
 		if (rc == 1)
@@ -830,6 +805,65 @@ static int execute_vm(int thr_id, struct work *work, struct instance *inst, long
 	return 0;
 }
 
+static void dump_vm(int idx) {
+	int i;
+
+	// Dump Non-Zero VM Values
+	printf("\n\t   VM Initialized Unsigned Integers:\n");
+	for (i = 0; i < 12; i++) {
+		if (vm_m[i])
+			printf("\t\t  vm_m[%d] = %u\n", i, vm_m[i]);
+	}
+
+	if (g_work_package[idx].vm_ints) {
+		printf("\n\t   Integers:\n");
+		for (i = 0; i < g_work_package[idx].vm_ints; i++) {
+			if (vm_i[i])
+				printf("\t\t  vm_i[%d] = %d\n", i, vm_i[i]);
+		}
+	}
+
+	if (g_work_package[idx].vm_uints) {
+		printf("\n\t   Unsigned Integers:\n");
+		for (i = 0; i < g_work_package[idx].vm_uints; i++) {
+			if (vm_u[i])
+				printf("\t\t  vm_u[%d] = %u\n", i, vm_u[i]);
+		}
+	}
+
+	if (g_work_package[idx].vm_longs) {
+		printf("\n\t   Longs:\n");
+		for (i = 0; i < g_work_package[idx].vm_longs; i++) {
+			if (vm_l[i])
+				printf("\t\t  vm_l[%d] = %lld\n", i, vm_l[i]);
+		}
+	}
+
+	if (g_work_package[idx].vm_ulongs) {
+		printf("\n\t   Unsigned Longs:\n");
+		for (i = 0; i < g_work_package[idx].vm_ulongs; i++) {
+			if (vm_ul[i])
+				printf("\t\t  vm_ul[%d] = %llu\n", i, vm_ul[i]);
+		}
+	}
+
+	if (g_work_package[idx].vm_floats) {
+		printf("\n\t   Floats:\n");
+		for (i = 0; i < g_work_package[idx].vm_floats; i++) {
+			if (vm_f[i])
+				printf("\t\t  vm_f[%d] = %f\n", i, vm_f[i]);
+		}
+	}
+
+	if (g_work_package[idx].vm_doubles) {
+		printf("\n\t   Doubles:\n");
+		for (i = 0; i < g_work_package[idx].vm_doubles; i++) {
+			if (vm_d[i])
+				printf("\t\t  vm_d[%d] = %f\n", i, vm_d[i]);
+		}
+	}
+	printf("\n");
+}
 
 static void update_pending_cnt(uint64_t work_id, bool add) {
 	int i;
@@ -1203,6 +1237,7 @@ static int work_decode(const json_t *val, struct work *work) {
 	}
 
 	// Copy Work Package Details To Work
+	work->package_id = best_pkg;
 	work->block_id = g_work_package[best_pkg].block_id;
 	work->work_id = g_work_package[best_pkg].work_id;
 	strncpy(work->work_str, g_work_package[best_pkg].work_str, 21);
@@ -1382,14 +1417,12 @@ static void *cpu_miner_thread(void *userdata) {
 		thread_low_priority();
 
 	// Initialize Global Variables
-	vm_state = calloc(4, sizeof(uint32_t));
-	vm_m = calloc(VM_MEMORY_SIZE, sizeof(int32_t));
-	vm_f = calloc(VM_FLOAT_SIZE, sizeof(double));
+	vm_m = calloc(12, sizeof(int32_t));
 
-	if (!vm_m || !vm_f || !vm_state) {
-		applog(LOG_ERR, "CPU%d: Unable to allocate VM memory", thr_id);
-		goto out;
-	}
+	//if (!vm_m || !vm_f || !vm_state) {
+	//	applog(LOG_ERR, "CPU%d: Unable to allocate VM memory", thr_id);
+	//	goto out;
+	//}
 
 	hashes_done = 0;
 	memset(&work, 0, sizeof(work));
@@ -1413,20 +1446,27 @@ static void *cpu_miner_thread(void *userdata) {
 			work.thr_id = thr_id;
 			new_work = true;
 
+			// Initialize Global Variables
+			if (!vm_i && g_work_package[work.package_id].vm_ints)
+				vm_i = calloc(g_work_package[work.package_id].vm_ints, sizeof(int32_t));
+			if (!vm_u && g_work_package[work.package_id].vm_uints)
+				vm_u = calloc(g_work_package[work.package_id].vm_uints, sizeof(uint32_t));
+			if (!vm_l && g_work_package[work.package_id].vm_longs)
+				vm_l = calloc(g_work_package[work.package_id].vm_longs, sizeof(int64_t));
+			if (!vm_ul && g_work_package[work.package_id].vm_ulongs)
+				vm_ul = calloc(g_work_package[work.package_id].vm_ulongs, sizeof(uint64_t));
+			if (!vm_f && g_work_package[work.package_id].vm_floats)
+				vm_f = calloc(g_work_package[work.package_id].vm_floats, sizeof(float));
+			if (!vm_d && g_work_package[work.package_id].vm_doubles)
+				vm_d = calloc(g_work_package[work.package_id].vm_doubles, sizeof(double));
+
 			// Create A Compiled VM Instance For The Thread
 			if (opt_compile) {
 				if (inst)
 					free_compiler(inst);
 				inst = calloc(1, sizeof(struct instance));
 				create_instance(inst, work.work_str);
-
-// FIX
-								
-				//				inst->initialize(vm_m, vm_f, vm_state);
-
-
-// FIX
-
+				inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d);
 			}
 		}
 		// Otherwise, Just Update POW Target
