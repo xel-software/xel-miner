@@ -590,10 +590,16 @@ static void *test_vm_thread(void *userdata) {
 	if (g_work_package[package_idx].vm_floats) vm_f = calloc(g_work_package[package_idx].vm_floats, sizeof(float));
 	if (g_work_package[package_idx].vm_doubles) vm_d = calloc(g_work_package[package_idx].vm_doubles, sizeof(double));
 
-	//if (!vm_m || !vm_f || !vm_state) {
-	//	applog(LOG_ERR, "%s: Unable to allocate VM memory", mythr->name);
-	//	exit(EXIT_FAILURE);
-	//}
+	if ((g_work_package[package_idx].vm_ints && !vm_i) ||
+		(g_work_package[package_idx].vm_uints && !vm_u) ||
+		(g_work_package[package_idx].vm_longs && !vm_l) ||
+		(g_work_package[package_idx].vm_ulongs && !vm_ul) ||
+		(g_work_package[package_idx].vm_floats && !vm_f) ||
+		(g_work_package[package_idx].vm_doubles && !vm_d)) {
+
+		applog(LOG_ERR, "%s: Unable to allocate VM memory", "'test-vm'");
+		exit(EXIT_FAILURE);
+	}
 
 	if (opt_compile) {
 
@@ -1454,6 +1460,9 @@ static void *cpu_miner_thread(void *userdata) {
 			work.thr_id = thr_id;
 			new_work = true;
 
+// FIX
+// Need to reallocate when switching jobs
+// FIX
 			// Initialize Global Variables
 			if (!vm_i && g_work_package[work.package_id].vm_ints)
 				vm_i = calloc(g_work_package[work.package_id].vm_ints, sizeof(int32_t));
@@ -1467,6 +1476,17 @@ static void *cpu_miner_thread(void *userdata) {
 				vm_f = calloc(g_work_package[work.package_id].vm_floats, sizeof(float));
 			if (!vm_d && g_work_package[work.package_id].vm_doubles)
 				vm_d = calloc(g_work_package[work.package_id].vm_doubles, sizeof(double));
+
+			if ((g_work_package[work.package_id].vm_ints && !vm_i) ||
+				(g_work_package[work.package_id].vm_uints && !vm_u) ||
+				(g_work_package[work.package_id].vm_longs && !vm_l) ||
+				(g_work_package[work.package_id].vm_ulongs && !vm_ul) ||
+				(g_work_package[work.package_id].vm_floats && !vm_f) ||
+				(g_work_package[work.package_id].vm_doubles && !vm_d)) {
+
+				applog(LOG_ERR, "CPU%d: Unable to allocate VM memory", thr_id);
+				goto out;
+			}
 
 			// Create A Compiled VM Instance For The Thread
 			if (opt_compile) {
