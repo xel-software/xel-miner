@@ -619,7 +619,15 @@ static void *test_vm_thread(void *userdata) {
 		inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d);
 
 		// Execute The VM Logic
-		rc = inst->execute(g_work_package[package_idx].work_id);
+//		rc = inst->execute(g_work_package[package_idx].work_id);
+
+		for (i = 0; i < 0xFFFFFFFF; i++) {
+			vm_m[1] = i;
+			rc = inst->execute(g_work_package[package_idx].work_id);
+			if (rc == 1)
+				break;
+		}
+
 
 		free_compiler(inst);
 	}
@@ -812,14 +820,14 @@ static void dump_vm(int idx) {
 	printf("\n\t   VM Initialized Unsigned Integers:\n");
 	for (i = 0; i < 12; i++) {
 		if (vm_m[i])
-			printf("\t\t  vm_m[%d] = %u\n", i, vm_m[i]);
+			printf("\t\t  vm_m[%d] = %u\t%08X\n", i, vm_m[i], vm_m[i]);
 	}
 
 	if (g_work_package[idx].vm_ints) {
 		printf("\n\t   Integers:\n");
 		for (i = 0; i < g_work_package[idx].vm_ints; i++) {
 			if (vm_i[i])
-				printf("\t\t  vm_i[%d] = %d\n", i, vm_i[i]);
+				printf("\t\t  vm_i[%d] = %d\t%08X\n", i, vm_i[i], vm_i[i]);
 		}
 	}
 
@@ -827,7 +835,7 @@ static void dump_vm(int idx) {
 		printf("\n\t   Unsigned Integers:\n");
 		for (i = 0; i < g_work_package[idx].vm_uints; i++) {
 			if (vm_u[i])
-				printf("\t\t  vm_u[%d] = %u\n", i, vm_u[i]);
+				printf("\t\t  vm_u[%*d] = %*u\t%08X\n", 4, i, 10, vm_u[i], vm_u[i]);
 		}
 	}
 
