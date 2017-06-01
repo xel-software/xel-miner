@@ -174,6 +174,7 @@ Options:\n\
   -s, --scan-time <n>         Max time to scan work before requesting new work (Default: 60 sec)\n\
       --test-miner <file>     Run the Miner using JSON formatted work in <file>\n\
       --test-vm <file>        Run the Parser / Compiler using the ElasticPL source code in <file>\n\
+  -S, --supernode             Enable SuperNode Validation\n\
   -t, --threads <n>           Number of miner threads (Default: Number of CPUs)\n\
   -u, --user <username>       Username for mining server\n\
   -T, --timeout <n>           Timeout for rpc calls (Default: 30 sec)\n\
@@ -185,7 +186,7 @@ Options while mining ----------------------------------------------------------\
    q + <enter>                Toggle Quite mode\n\
 ";
 
-static char const short_options[] = "c:Dk:hm:o:p:P:qr:R:s:t:T:u:VX";
+static char const short_options[] = "c:Dk:hm:o:p:P:qr:R:s:St:T:u:VX";
 
 static struct option const options[] = {
 	{ "config",			1, NULL, 'c' },
@@ -207,6 +208,7 @@ static struct option const options[] = {
 	{ "retries",		1, NULL, 'r' },
 	{ "retry-pause",	1, NULL, 'R' },
 	{ "scan-time",		1, NULL, 's' },
+	{ "supernode",		0, NULL, 'S' },
 	{ "test-miner",		1, NULL, 1004 },
 	{ "test-vm",		1, NULL, 1005 },
 	{ "threads",		1, NULL, 't' },
@@ -352,6 +354,9 @@ void parse_arg(int key, char *arg)
 		if (v < 1 || v > 9999)
 			show_usage_and_exit(1);
 		opt_scantime = v;
+		break;
+	case 'S':
+		opt_supernode = true;
 		break;
 	case 't':
 		v = atoi(arg);
@@ -2283,79 +2288,103 @@ int main(int argc, char **argv) {
 		return 0;
 	}
 
-	// Init workio Thread Info
-	work_thr_id = opt_n_threads;
-	thr = &thr_info[work_thr_id];
-	thr->id = work_thr_id;
-	thr->q = tq_new();
-	if (!thr->q)
-		return 1;
+	// Miner Threads
+	if (!opt_supernode) {
 
-	// Start workio Thread
-	if (thread_create(thr, workio_thread)) {
-		applog(LOG_ERR, "work thread create failed");
-		return 1;
-	}
-
-	applog(LOG_INFO, "Attempting to start %d miner threads", opt_n_threads);
-
-	thr_idx = 0;
-
-	// Start Mining Threads
-	for (i = 0; i < opt_n_threads; i++) {
-		thr = &thr_info[thr_idx];
-
-		thr->id = thr_idx++;
+		// Init workio Thread Info
+		work_thr_id = opt_n_threads;
+		thr = &thr_info[work_thr_id];
+		thr->id = work_thr_id;
 		thr->q = tq_new();
 		if (!thr->q)
 			return 1;
-		if (opt_opencl) {
-#ifdef USE_OPENCL
-			err = thread_create(thr, gpu_miner_thread);
-#endif
-			sprintf(thr->name, "GPU%d", i);
-		}
-		else {
-			err = thread_create(thr, cpu_miner_thread);
-			sprintf(thr->name, "CPU%d", i);
-		}
-		if (err) {
-			applog(LOG_ERR, "%s mining thread create failed!", thr->name);
+
+		// Start workio Thread
+		if (thread_create(thr, workio_thread)) {
+			applog(LOG_ERR, "work thread create failed");
 			return 1;
 		}
+
+		applog(LOG_INFO, "Attempting to start %d miner threads", opt_n_threads);
+
+		thr_idx = 0;
+
+		// Start Mining Threads
+		for (i = 0; i < opt_n_threads; i++) {
+			thr = &thr_info[thr_idx];
+
+			thr->id = thr_idx++;
+			thr->q = tq_new();
+			if (!thr->q)
+				return 1;
+			if (opt_opencl) {
+#ifdef USE_OPENCL
+				err = thread_create(thr, gpu_miner_thread);
+#endif
+				sprintf(thr->name, "GPU%d", i);
+			}
+			else {
+				err = thread_create(thr, cpu_miner_thread);
+				sprintf(thr->name, "CPU%d", i);
+			}
+			if (err) {
+				applog(LOG_ERR, "%s mining thread create failed!", thr->name);
+				return 1;
+			}
+		}
+
+		applog(LOG_INFO, "%d mining threads started", opt_n_threads);
+
+		gettimeofday(&g_miner_start_time, NULL);
+
+		// Start Longpoll Thread
+		thr = &thr_info[opt_n_threads + 1];
+		thr->id = opt_n_threads + 1;
+		thr->q = tq_new();
+		if (!thr->q)
+			return 1;
+		if (thread_create(thr, longpoll_thread)) {
+			applog(LOG_ERR, "Longpoll thread create failed");
+			return 1;
+		}
+
+		// Start Key Monitor Thread
+		thr = &thr_info[opt_n_threads + 2];
+		thr->id = opt_n_threads + 2;
+		thr->q = tq_new();
+		if (!thr->q)
+			return 1;
+		if (thread_create(thr, key_monitor_thread)) {
+			applog(LOG_ERR, "Key monitor thread create failed");
+			return 1;
+		}
+
+		// Main Loop - Wait for workio thread to exit
+		pthread_join(thr_info[work_thr_id].pth, NULL);
 	}
 
-	applog(LOG_INFO, "%d mining threads started", opt_n_threads);
+	// SuperNode Threads
+	else {
 
-	gettimeofday(&g_miner_start_time, NULL);
+		// Start SuperNode Interface
+		thr = &thr_info[0];
+		thr->id = 0;
+		thr->q = tq_new();
+		if (!thr->q)
+			return 1;
+		if (thread_create(thr, supernode_thread)) {
+			applog(LOG_ERR, "SuperNode WebSocket thread create failed");
+			return 1;
+		}
 
-	// Start Longpoll Thread
-	thr = &thr_info[opt_n_threads + 1];
-	thr->id = opt_n_threads + 1;
-	thr->q = tq_new();
-	if (!thr->q)
-		return 1;
-	if (thread_create(thr, longpoll_thread)) {
-		applog(LOG_ERR, "Longpoll thread create failed");
-		return 1;
+		// Main Loop - Wait for SuperNode thread to exit
+		pthread_join(thr_info[0].pth, NULL);
 	}
-
-	// Start Key Monitor Thread
-	thr = &thr_info[opt_n_threads + 2];
-	thr->id = opt_n_threads + 2;
-	thr->q = tq_new();
-	if (!thr->q)
-		return 1;
-	if (thread_create(thr, key_monitor_thread)) {
-		applog(LOG_ERR, "Key monitor thread create failed");
-		return 1;
-	}
-
-	// Main Loop - Wait for workio thread to exit
-	pthread_join(thr_info[work_thr_id].pth, NULL);
 
 	applog(LOG_WARNING, "Exiting " PACKAGE_NAME);
 
-	free(test_filename);
+	if (test_filename)
+		free(test_filename);
+
 	return 0;
 }

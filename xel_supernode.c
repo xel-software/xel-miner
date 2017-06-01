@@ -41,8 +41,9 @@
 #define MAX_QUEUED_CONNECTIONS 1
 #define SOCKET_BUF_SIZE 100000	// Need To Fix This
 
-static void sn_get_request()
+extern void *supernode_thread(void *userdata)
 {
+	struct thr_info *mythr = (struct thr_info*)userdata;
 	char ip[] = "127.0.0.1";	// For Now All Connections Are On LocalHost
 	unsigned short port = 4016;
 	char buf[SOCKET_BUF_SIZE];
@@ -59,8 +60,19 @@ static void sn_get_request()
 	long s, core;
 #endif
 
+	applog(LOG_NOTICE, "Starting SuperNode Thread...");
 
-	sleep(1);
+	// Initialize The WebSocket
+#ifdef WIN32
+	WSADATA wsa;
+	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
+	{
+		applog(LOG_ERR, "ERROR: Unable to initialize SuperNode socket (%s)", strerror(errno));
+		goto out;
+	}
+#else
+	// Need Linux init logic
+#endif
 
 	// Create Socket For Core Server To Connect To
 	s = socket(AF_INET, SOCK_STREAM, 0);
@@ -94,68 +106,83 @@ static void sn_get_request()
 	}
 
 	// Listen For Incoming Connections
-	if (listen(s, MAX_QUEUED_CONNECTIONS) < 0 ) {
+	if (listen(s, MAX_QUEUED_CONNECTIONS) < 0) {
 		applog(LOG_ERR, "ERROR: Unable to set Queue for SuperNode socket (%s)", strerror(errno));
 		goto out;
 	}
 
 
-// TODO:  Add loop to reconnect
-
-	// Accept Connection From Core Server
-	len = sizeof(struct sockaddr_in);
-	core = accept(s, (struct sockaddr *)&client, &len);
-	if (core < 0) {
-		applog(LOG_ERR, "ERROR: Unable to accept connection to SuperNode (%s)", strerror(errno));
-		goto out;
-	}
-
-	if (client.sin_addr.S_un.S_addr != server.sin_addr.S_un.S_addr)
-		applog(LOG_NOTICE, "SuperNode connected to Elastic Core Server");
-	else {
-		applog(LOG_ERR, "ERROR: SuperNode blocked connection from IP: %s", inet_ntoa(client.sin_addr));
-//		continue;
-	}
-
+	// Main Loop To Reconnect If Connection Is Lost
 	while (1) {
 
-		// Read Request Into Buffer
-		n = recv(core, &buf[0], SOCKET_BUF_SIZE, 0);
-		buf[n] = '\0';
-
-		// Get Request ID / Type From JSON
-		val = JSON_LOADS(buf, &err);
-		if (!val) {
-			applog(LOG_ERR, "ERROR: JSON decode failed (code=%d): %s", err.line, err.text);
-
-			// Send Acknowledgment To Core Server (Error)
-			n = send(core, "ERROR", 6, 0);
+		// Accept Connection From Core Server
+		len = sizeof(struct sockaddr_in);
+		core = accept(s, (struct sockaddr *)&client, &len);
+		if (core < 0) {
+			applog(LOG_ERR, "ERROR: Unable to accept connection to SuperNode (%s)", strerror(errno));
+			goto out;
 		}
-		else {
-			// Send Acknowledgment To Core Server (OK)
-			n = send(core, "OK", 3, 0);
 
-			//		if (opt_protocol) {
+		if (client.sin_addr.S_un.S_addr == server.sin_addr.S_un.S_addr)
+			applog(LOG_NOTICE, "SuperNode connected to Elastic Core Server");
+		else {
+			applog(LOG_ERR, "ERROR: SuperNode blocked connection from IP: %s", inet_ntoa(client.sin_addr));
+			continue;
+		}
+
+		// Secondary Loop To Read Requests From Core Server
+		while (1) {
+
+			// Read Request Into Buffer
+			n = recv(core, &buf[0], SOCKET_BUF_SIZE, 0);
+
+			// Reset If There Is A Connection Error
+			if (n <= 0)
+				break;
+
+			// Make Sure Request Is Zero Terminated
+			buf[n] = '\0';
+
+			// Get Request ID / Type From JSON
+			val = JSON_LOADS(buf, &err);
+			if (!val) {
+				applog(LOG_ERR, "ERROR: JSON decode failed (code=%d): %s", err.line, err.text);
+
+				// Send Acknowledgment To Core Server (Error)
+				n = send(core, "ERROR", 6, 0);
+			}
+			else {
+				// Send Acknowledgment To Core Server (OK)
+				n = send(core, "OK", 3, 0);
+
+				//		if (opt_protocol) {
 				char *str = json_dumps(val, JSON_INDENT(3));
 				applog(LOG_DEBUG, "DEBUG: JSON SuperNode Request -\n%s", str);
 				free(str);
-			//		}
+				//		}
 
-			req_id = (uint32_t)json_integer_value(json_object_get(val, "req_id"));
-			req_type = (uint32_t)json_integer_value(json_object_get(val, "req_type"));
+				req_id = (uint32_t)json_integer_value(json_object_get(val, "req_id"));
+				req_type = (uint32_t)json_integer_value(json_object_get(val, "req_type"));
 
-			json_decref(val);
+				json_decref(val);
 
-			applog(LOG_DEBUG, "DEBUG: Req_Id: %d, Req_Type: %d Received", req_id, req_type);
-		}
+				applog(LOG_DEBUG, "DEBUG: Req_Id: %d, Req_Type: %d Received", req_id, req_type);
+			}
 
-		// Reset If There Is A Connection Error
-		if (n <= 0)
-			break;
 
 
 // TODO Create Queues For Each Req Type
 
+
+		}
+
+#ifdef WIN32
+		if (core != INVALID_SOCKET)
+			closesocket(core);
+#else
+		if (core)
+			close(core);
+#endif
 
 	}
 
@@ -169,17 +196,6 @@ out:
 		close(s);
 #endif
 
-	return;
-}
-
-
-extern void *supernode_thread(void *userdata)
-{
-	struct thr_info *mythr = (struct thr_info*)userdata;
-
-	applog(LOG_NOTICE, "Starting SuperNode Thread...");
-	sn_get_request();
 	tq_freeze(mythr->q);
-
 	return NULL;
 }

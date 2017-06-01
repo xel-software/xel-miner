@@ -78,7 +78,7 @@ System.out.println("Attempting to send '"+cmd+"' to "+ip.getHostAddress()+":"+po
 			ps.flush();
 
 			InputStreamReader isr = new InputStreamReader(socket.getInputStream());
-			while (1)
+			while (true)
 			{
 				len = isr.read(buf, 0, MAXRECEIVESIZE);
 				if (len < 1)
@@ -87,8 +87,6 @@ System.out.println("Attempting to send '"+cmd+"' to "+ip.getHostAddress()+":"+po
 				if (buf[len-1] == '\0')
 					break;
 			}
-
-//			closeAll();
 		}
 		catch (IOException ioe)
 		{
@@ -134,6 +132,7 @@ System.out.println("Attempting to send '"+cmd+"' to "+ip.getHostAddress()+":"+po
 
 	public static void main(String[] params) throws Exception
 	{
+		String req;
 		String ip = "127.0.0.1";
 		String port = "4016";
 
@@ -151,19 +150,24 @@ System.out.println("Attempting to send '"+cmd+"' to "+ip.getHostAddress()+":"+po
 			key = (char) br.read();
 
 			if (key == '1') {
-				command = "{\"req_id\": 123,\"req_type\": 1,\"source\": \"\",\"input\": \"\",\"state\": \"\"}";
-				new API(command, ip, port);
+				req = "{\"req_id\": 111,\"req_type\": 1}";
+				new API(req, ip, port);
 			}
 			else if (key == '2') {
-				command = "{\"req_id\": 456,\"req_type\": 1,\"source\": \"@<-BsH!b9'F<D\\K0eb<h@<-BsH!b].DKI!D0eb@E$=Rsq@<l3rDf021+>GQ+3soD:Eaa6#F_ku6B-8o_1cl%QEcPT6?Y4+m@<<VH0Jtp!@<-BsH!b*#F^f/u+>GQ.3sl=,F`(]2Bl@l3D..-r+F=G%Bj3;t+?^i%3sl::>;BJ,4WlLA$41NQ1L2+d+>Z(d$$C&g1gM4e+>c.e$\"dC!>p)9Q2(gUF$416I2I.Fg+>ti-3spBC$>+Eu@ruF'DBO+6EbT-2+F=G<+ED%7F_l.B-o*4YI/\",\"input\": \"\",\"state\": \"\"}";
-				new API(command, ip, port);
+				req = "{\"req_id\": 222,\"req_type\": 2,\"source\": \"@<-BsH!b9'F<D\\K0eb<h@<-BsH!b].DKI!D0eb@E$=Rsq@<l3rDf021+>GQ+3soD:Eaa6#F_ku6B-8o_1cl%QEcPT6?Y4+m@<<VH0Jtp!@<-BsH!b*#F^f/u+>GQ.3sl=,F`(]2Bl@l3D..-r+F=G%Bj3;t+?^i%3sl::>;BJ,4WlLA$41NQ1L2+d+>Z(d$$C&g1gM4e+>c.e$\"dC!>p)9Q2(gUF$416I2I.Fg+>ti-3spBC$>+Eu@ruF'DBO+6EbT-2+F=G<+ED%7F_l.B-o*4YI/\"}";
+				new API(req, ip, port);
 			}
 			else if (key == '3') {
-				command = "{\"req_id\": 789,\"req_type\": 1,\"source\": \"\",\"input\": \"abc\",\"state\": \"def\"}";
-				new API(command, ip, port);
+				req = "{\"req_id\": 333,\"req_type\": 3,\"input\": \"abc\",\"state\": \"def\"}";
+				new API(req, ip, port);
+			}
+			else if (key == '4') {
+				req = "{\"req_id\": 444,\"req_type\": 4,\"input\": \"def\",\"state\": \"abc\"}";
+				new API(req, ip, port);
 			}
 
 		} while(key != 'q');
 	
+		socket.close();
 	}
 }
