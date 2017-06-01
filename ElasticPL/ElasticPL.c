@@ -81,12 +81,14 @@ extern bool create_epl_vm(char *source, struct work_package *work_package) {
 	}
 
 	// Copy Global Array Sizes Into Work Package
-	work_package->vm_ints = max_vm_ints;
-	work_package->vm_uints = max_vm_uints;
-	work_package->vm_longs = max_vm_longs;
-	work_package->vm_ulongs = max_vm_ulongs;
-	work_package->vm_floats = max_vm_floats;
-	work_package->vm_doubles = max_vm_doubles;
+	if (work_package) {
+		work_package->vm_ints = max_vm_ints;
+		work_package->vm_uints = max_vm_uints;
+		work_package->vm_longs = max_vm_longs;
+		work_package->vm_ulongs = max_vm_ulongs;
+		work_package->vm_floats = max_vm_floats;
+		work_package->vm_doubles = max_vm_doubles;
+	}
 
 	if (opt_debug_epl) {
 		fprintf(stdout, "\n*********************************************************\n");
