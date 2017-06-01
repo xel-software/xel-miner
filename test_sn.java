@@ -68,15 +68,15 @@ class API
 		char buf[] = new char[MAXRECEIVESIZE];
 		int len = 0;
 
-System.out.println("Attempting to send '"+cmd+"' to "+ip.getHostAddress()+":"+port);
+		System.out.println("Attempting to send '"+cmd+"' to "+ip.getHostAddress()+":"+port);
 
 		try
 		{
-//			socket = new Socket(ip, port);
 			PrintStream ps = new PrintStream(socket.getOutputStream());
 			ps.print(cmd.toCharArray());
 			ps.flush();
 
+			// Need To Put This On It's Own Thread
 			InputStreamReader isr = new InputStreamReader(socket.getInputStream());
 			while (true)
 			{
@@ -97,7 +97,7 @@ System.out.println("Attempting to send '"+cmd+"' to "+ip.getHostAddress()+":"+po
 
 		String result = sb.toString();
 
-		System.out.println("Answer='"+result+"'");
+		System.out.println("Response = '" + result + "'");
 
 		display(result);
 	}
@@ -152,9 +152,9 @@ System.out.println("Attempting to send '"+cmd+"' to "+ip.getHostAddress()+":"+po
 			if (key == '1') {
 				req = "{\"req_id\": 111,\"req_type\": 1}";
 				new API(req, ip, port);
-			}
+			} 
 			else if (key == '2') {
-				req = "{\"req_id\": 222,\"req_type\": 2,\"source\": \"@<-BsH!b9'F<D\\K0eb<h@<-BsH!b].DKI!D0eb@E$=Rsq@<l3rDf021+>GQ+3soD:Eaa6#F_ku6B-8o_1cl%QEcPT6?Y4+m@<<VH0Jtp!@<-BsH!b*#F^f/u+>GQ.3sl=,F`(]2Bl@l3D..-r+F=G%Bj3;t+?^i%3sl::>;BJ,4WlLA$41NQ1L2+d+>Z(d$$C&g1gM4e+>c.e$\"dC!>p)9Q2(gUF$416I2I.Fg+>ti-3spBC$>+Eu@ruF'DBO+6EbT-2+F=G<+ED%7F_l.B-o*4YI/\"}";
+				req = "{\"req_id\": 222,\"req_type\": 2,\"source\": \"@<-BsH!b9'F<D\\\\K0eb<h@<-BsH!b].DKI!D0eb@E$=Rsq@<l3rDf021+>GQ+3soD:Eaa6#F_ku6B-8o_1cl%QEcPT6?Y4+m@<<VH0Jtp!@<-BsH!b*#F^f/u+>GQ.3sl=,F`(]2Bl@l3D..-r+F=G%Bj3;t+?^i%3sl::>;BJ,4WlLA$41NQ1L2+d+>Z(d$$C&g1gM4e+>c.e$\\\"dC!>p)9Q2(gUF$416I2I.Fg+>ti-3spBC$>+Eu@ruF'DBO+6EbT-2+F=G<+ED%7F_l.B-o*4YI/\"}";
 				new API(req, ip, port);
 			}
 			else if (key == '3') {

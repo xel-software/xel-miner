@@ -41,6 +41,30 @@
 #define MAX_QUEUED_CONNECTIONS 1
 #define SOCKET_BUF_SIZE 100000	// Need To Fix This
 
+#ifdef WIN32
+	SOCKET s, core;
+#else
+	long s, core;
+#endif
+
+
+struct req_elasticpl {
+	uint32_t req_id;
+	char *source;
+	bool success;
+	char *err_msg;
+};
+
+struct req_result {
+	uint32_t req_id;
+	uint32_t input[12];
+	uint32_t state[32];
+	bool success;
+	char *err_msg;
+};
+
+
+
 extern void *supernode_thread(void *userdata)
 {
 	struct thr_info *mythr = (struct thr_info*)userdata;
@@ -53,12 +77,6 @@ extern void *supernode_thread(void *userdata)
 	json_t *val;
 	json_error_t err;
 	uint32_t req_id, req_type;
-
-#ifdef WIN32
-	SOCKET s, core;
-#else
-	long s, core;
-#endif
 
 	applog(LOG_NOTICE, "Starting SuperNode Thread...");
 
@@ -155,24 +173,33 @@ extern void *supernode_thread(void *userdata)
 				// Send Acknowledgment To Core Server (OK)
 				n = send(core, "OK", 3, 0);
 
-				//		if (opt_protocol) {
-				char *str = json_dumps(val, JSON_INDENT(3));
-				applog(LOG_DEBUG, "DEBUG: JSON SuperNode Request -\n%s", str);
-				free(str);
-				//		}
+//				if (opt_protocol) {
+					char *str = json_dumps(val, JSON_INDENT(3));
+					applog(LOG_DEBUG, "DEBUG: JSON SuperNode Request -\n%s", str);
+					free(str);
+//				}
 
 				req_id = (uint32_t)json_integer_value(json_object_get(val, "req_id"));
 				req_type = (uint32_t)json_integer_value(json_object_get(val, "req_type"));
 
-				json_decref(val);
-
 				applog(LOG_DEBUG, "DEBUG: Req_Id: %d, Req_Type: %d Received", req_id, req_type);
 			}
 
+			if (req_type == 2) { // Validate ElasticPL Syntax
 
+				struct req_elasticpl req;
+				req.req_id = req_id;
+				req.source = strdup((char *)json_string_value(json_object_get(val, "source")));
+
+				// Push Request To Validate ElasticPL Queue
+				tq_push(thr_info[1].q, &req);
+			}
+
+			json_decref(val);
 
 // TODO Create Queues For Each Req Type
 
+// TODO Add Mutex Around Send
 
 		}
 
@@ -195,6 +222,71 @@ out:
 	if (s)
 		close(s);
 #endif
+
+	tq_freeze(mythr->q);
+	return NULL;
+}
+
+extern void *sn_validate_elasticpl_thread(void *userdata)
+{
+	struct thr_info *mythr = (struct thr_info*)userdata;
+	struct req_elasticpl *req;
+	char msg[512];
+	char *elastic_src = NULL;
+	int n, rc;
+
+	elastic_src = malloc(MAX_SOURCE_SIZE);
+	if (!elastic_src) {
+		applog(LOG_ERR, "ERROR: Unable to allocate memory for ElasticPL Source");
+		return NULL;
+	}
+
+	while (1) {
+
+		// Check For New Requests On Queue
+		req = (struct req_elasticpl *) tq_pop(mythr->q, NULL);
+
+		applog(LOG_DEBUG, "Validating ElasticPL (req_id: %d)", req->req_id);
+
+		rc = ascii85dec(elastic_src, MAX_SOURCE_SIZE, req->source);
+		if (!rc) {
+
+			// TODO - Get Error Message & Send
+		}
+
+		// Validate ElasticPL For Syntax Errors
+		if (!create_epl_vm(elastic_src, NULL)) {
+			applog(LOG_DEBUG, "DEBUG: ...Req_id: %d)", req->req_id);
+
+			// TODO - Get Error Message & Send
+		}
+
+		// Calculate WCET
+		if (!calc_wcet()) {
+			applog(LOG_DEBUG, "DEBUG: ....Req_id: %d)", req->req_id);
+
+			// TODO - Get Error Message & Send
+		}
+
+		// TODO - Add Mutex Around Send
+		sprintf(msg, "{\"req_id\": %lu,\"req_type\": %lu,\"sucess\": %lu,\"error\": \"%s\"}", req->req_id, 2, 1, "");
+		n = send(core, msg, strlen(msg), 0);
+
+		// TODO - Add Error Handling
+
+	}
+
+	tq_freeze(mythr->q);
+	return NULL;
+}
+
+extern void *sn_validate_result_thread(void *userdata)
+{
+	struct thr_info *mythr = (struct thr_info*)userdata;
+
+	while (1) {
+		;
+	}
 
 	tq_freeze(mythr->q);
 	return NULL;

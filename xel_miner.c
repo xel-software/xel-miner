@@ -2366,7 +2366,7 @@ int main(int argc, char **argv) {
 	// SuperNode Threads
 	else {
 
-		// Start SuperNode Interface
+		// Start SuperNode WebSocket Interface
 		thr = &thr_info[0];
 		thr->id = 0;
 		thr->q = tq_new();
@@ -2374,6 +2374,28 @@ int main(int argc, char **argv) {
 			return 1;
 		if (thread_create(thr, supernode_thread)) {
 			applog(LOG_ERR, "SuperNode WebSocket thread create failed");
+			return 1;
+		}
+
+		// Start Thread / Queue For Validating ElasticPL Jobs
+		thr = &thr_info[1];
+		thr->id = 1;
+		thr->q = tq_new();
+		if (!thr->q)
+			return 1;
+		if (thread_create(thr, sn_validate_elasticpl_thread)) {
+			applog(LOG_ERR, "SuperNode 'validate elasticpl' thread create failed");
+			return 1;
+		}
+
+		// Start Thread / Queue For Validating Miner Results
+		thr = &thr_info[2];
+		thr->id = 2;
+		thr->q = tq_new();
+		if (!thr->q)
+			return 1;
+		if (thread_create(thr, sn_validate_result_thread)) {
+			applog(LOG_ERR, "SuperNode 'validate result' thread create failed");
 			return 1;
 		}
 

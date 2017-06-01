@@ -361,4 +361,10 @@ static char* convert_opencl(ast* exp);
 
 int curve25519_donna(uint8_t *mypublic, const uint8_t *secret, const uint8_t *basepoint);
 
+// SuperNode Function Declarations
+extern void *supernode_thread(void *userdata);
+extern void *sn_validate_elasticpl_thread(void *userdata);
+extern void *sn_validate_result_thread(void *userdata);
+
+
 #endif /* __MINER_H__ */
