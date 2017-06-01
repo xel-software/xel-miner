@@ -217,6 +217,7 @@ struct instance {
 extern bool use_colors;
 extern struct thr_info *thr_info;
 extern pthread_mutex_t applog_lock;
+extern pthread_mutex_t response_lock;
 
 enum {
 	LOG_ERR,

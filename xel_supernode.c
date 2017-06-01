@@ -47,30 +47,25 @@
 	long s, core;
 #endif
 
-
-struct req_elasticpl {
+struct request {
 	uint32_t req_id;
+	uint32_t req_type;
 	char *source;
-	bool success;
-	char *err_msg;
-};
-
-struct req_result {
-	uint32_t req_id;
+	uint64_t work_id;
 	uint32_t input[12];
 	uint32_t state[32];
 	bool success;
 	char *err_msg;
 };
 
+pthread_mutex_t response_lock = PTHREAD_MUTEX_INITIALIZER;
 
 
-extern void *supernode_thread(void *userdata)
-{
+extern void *supernode_thread(void *userdata) {
 	struct thr_info *mythr = (struct thr_info*)userdata;
 	char ip[] = "127.0.0.1";	// For Now All Connections Are On LocalHost
 	unsigned short port = 4016;
-	char buf[SOCKET_BUF_SIZE];
+	char buf[SOCKET_BUF_SIZE], msg[256], *str = NULL;
 	int i, n, len;
 	struct sockaddr_in server = { 0 };
 	struct sockaddr_in client = { 0 };
@@ -78,7 +73,7 @@ extern void *supernode_thread(void *userdata)
 	json_error_t err;
 	uint32_t req_id, req_type;
 
-	applog(LOG_NOTICE, "Starting SuperNode Thread...");
+	applog(LOG_NOTICE, "Starting SuperNode...");
 
 	// Initialize The WebSocket
 #ifdef WIN32
@@ -158,6 +153,8 @@ extern void *supernode_thread(void *userdata)
 			if (n <= 0)
 				break;
 
+			pthread_mutex_lock(&response_lock);
+
 			// Make Sure Request Is Zero Terminated
 			buf[n] = '\0';
 
@@ -168,39 +165,76 @@ extern void *supernode_thread(void *userdata)
 
 				// Send Acknowledgment To Core Server (Error)
 				n = send(core, "ERROR", 6, 0);
+				pthread_mutex_unlock(&response_lock);
+				if (n <= 0)	break;
 			}
 			else {
 				// Send Acknowledgment To Core Server (OK)
 				n = send(core, "OK", 3, 0);
+				pthread_mutex_unlock(&response_lock);
+				if (n <= 0)	break;
 
-//				if (opt_protocol) {
-					char *str = json_dumps(val, JSON_INDENT(3));
+				// Dump JSON For Debugging
+				if (opt_protocol) {
+					str = json_dumps(val, JSON_INDENT(3));
 					applog(LOG_DEBUG, "DEBUG: JSON SuperNode Request -\n%s", str);
 					free(str);
-//				}
+					str = NULL;
+				}
 
+				// Get Request ID / Type
 				req_id = (uint32_t)json_integer_value(json_object_get(val, "req_id"));
 				req_type = (uint32_t)json_integer_value(json_object_get(val, "req_type"));
 
-				applog(LOG_DEBUG, "DEBUG: Req_Id: %d, Req_Type: %d Received", req_id, req_type);
+				// Check For Valid Request Type
+				if (!req_type || (req_type > 4)) {
+					applog(LOG_DEBUG, "DEBUG: Invalid request type - Req_Id: %d, Req_Type: %d", req_id, req_type);
+					sleep(1);
+					sprintf(msg, "{\"req_id\": %lu,\"req_type\": %lu,\"success\": %d,\"error\": \"%s\"}", req_id, req_type, 0, "Invalid Request Type");
+					pthread_mutex_lock(&response_lock);
+					send(core, msg, strlen(msg), 0);
+					pthread_mutex_unlock(&response_lock);
+					continue;
+				}
 			}
 
-			if (req_type == 2) { // Validate ElasticPL Syntax
+			// Create A New Request
+			struct request req;
+			req.req_id = req_id;
+			req.req_type = req_type;
 
-				struct req_elasticpl req;
-				req.req_id = req_id;
-				req.source = strdup((char *)json_string_value(json_object_get(val, "source")));
+			// Validate ElasticPL Syntax 
+			if (req_type == 2) { 
+
+				// Get Encoded Source
+				str = (char *)json_string_value(json_object_get(val, "source"));
+				if (str)
+					req.source = strdup(str);
+				else
+					req.source = NULL;
 
 				// Push Request To Validate ElasticPL Queue
 				tq_push(thr_info[1].q, &req);
 			}
 
-			json_decref(val);
+			// Validate POW / Bounty Solutions 
+			else if ((req_type == 3) || (req_type == 4)) {
 
-// TODO Create Queues For Each Req Type
+				// Get Work ID
+				str = (char *)json_string_value(json_object_get(val, "work_id"));
+				if (str)
+					req.work_id = strtoull(str, NULL, 10);
+				else
+					req.work_id = 0;
 
-// TODO Add Mutex Around Send
+// TODO - Logic To Load Inputs / State
 
+				// Push Request To Validate Results Queue
+				tq_push(thr_info[2].q, &req);
+			}
+
+			if (val)
+				json_decref(val);
 		}
 
 #ifdef WIN32
@@ -227,13 +261,12 @@ out:
 	return NULL;
 }
 
-extern void *sn_validate_elasticpl_thread(void *userdata)
-{
+extern void *sn_validate_elasticpl_thread(void *userdata) {
 	struct thr_info *mythr = (struct thr_info*)userdata;
-	struct req_elasticpl *req;
-	char msg[512];
+	struct request *req;
+	char msg[512], err_msg[256];
 	char *elastic_src = NULL;
-	int n, rc;
+	int rc, success;
 
 	elastic_src = malloc(MAX_SOURCE_SIZE);
 	if (!elastic_src) {
@@ -243,49 +276,92 @@ extern void *sn_validate_elasticpl_thread(void *userdata)
 
 	while (1) {
 
-		// Check For New Requests On Queue
-		req = (struct req_elasticpl *) tq_pop(mythr->q, NULL);
+		success = 1;
+		err_msg[0] = '\0';
 
+		// Wait For New Requests On Queue
+		req = (struct request *) tq_pop(mythr->q, NULL);
 		applog(LOG_DEBUG, "Validating ElasticPL (req_id: %d)", req->req_id);
 
+		// Check For Missing Source
+		if (!req->source) {
+			success = 0;
+			sprintf(err_msg, "Source data is NULL");
+			goto send;
+		}
+
+		// Decode Source To ElasticPL
 		rc = ascii85dec(elastic_src, MAX_SOURCE_SIZE, req->source);
 		if (!rc) {
-
-			// TODO - Get Error Message & Send
+			success = 0;
+			sprintf(err_msg, "Unable to decode source");
+			goto send;
 		}
 
 		// Validate ElasticPL For Syntax Errors
 		if (!create_epl_vm(elastic_src, NULL)) {
-			applog(LOG_DEBUG, "DEBUG: ...Req_id: %d)", req->req_id);
-
-			// TODO - Get Error Message & Send
+			success = 0;
+			sprintf(err_msg, "Syntax Error");  // TODO - Get Error Message From Parser
+			goto send;
 		}
 
 		// Calculate WCET
 		if (!calc_wcet()) {
-			applog(LOG_DEBUG, "DEBUG: ....Req_id: %d)", req->req_id);
-
-			// TODO - Get Error Message & Send
+			success = 0;
+			sprintf(err_msg, "WCET Error");  // TODO - Get Error Message From Parser
+			goto send;
 		}
 
-		// TODO - Add Mutex Around Send
-		sprintf(msg, "{\"req_id\": %lu,\"req_type\": %lu,\"sucess\": %lu,\"error\": \"%s\"}", req->req_id, 2, 1, "");
-		n = send(core, msg, strlen(msg), 0);
+send:
+		// Create Response
+		sprintf(msg, "{\"req_id\": %lu,\"req_type\": %lu,\"success\": %d,\"error\": \"%s\"}", req->req_id, req->req_type, success, err_msg);
 
-		// TODO - Add Error Handling
-
+		// Send Response
+		pthread_mutex_lock(&response_lock);
+		send(core, msg, strlen(msg), 0);
+		pthread_mutex_unlock(&response_lock);
 	}
 
 	tq_freeze(mythr->q);
 	return NULL;
 }
 
-extern void *sn_validate_result_thread(void *userdata)
-{
+extern void *sn_validate_result_thread(void *userdata) {
 	struct thr_info *mythr = (struct thr_info*)userdata;
+	struct request *req;
+	char msg[512], err_msg[256];
+	int success;
 
 	while (1) {
-		;
+
+		success = 1;
+		err_msg[0] = '\0';
+
+		// Wait For New Requests On Queue
+		req = (struct request *) tq_pop(mythr->q, NULL);
+		applog(LOG_DEBUG, "Validating result for work_id %llu (req_id: %d)", req->work_id, req->req_id);
+
+		if (!req->work_id) {
+			success = 0;
+			sprintf(err_msg, "Invalid work_id");
+			goto send;
+		}
+		
+		// TODO - Add Logic To Call DLL Main / Verify Functions
+//		if () {
+			success = 0;
+			sprintf(err_msg, "Logic Not Implemented Yet");
+			goto send;
+//		}
+
+	send:
+		// Create Response
+		sprintf(msg, "{\"req_id\": %lu,\"req_type\": %lu,\"success\": %d,\"error\": \"%s\"}", req->req_id, req->req_type, success, err_msg);
+
+		// Send Response
+		pthread_mutex_lock(&response_lock);
+		send(core, msg, strlen(msg), 0);
+		pthread_mutex_unlock(&response_lock);
 	}
 
 	tq_freeze(mythr->q);

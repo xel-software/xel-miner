@@ -2259,10 +2259,6 @@ int main(int argc, char **argv) {
 	SetConsoleCtrlHandler((PHANDLER_ROUTINE)ConsoleHandler, TRUE);
 #endif
 
-	pthread_mutex_init(&work_lock, NULL);
-	pthread_mutex_init(&submit_lock, NULL);
-	pthread_mutex_init(&longpoll_lock, NULL);
-
 	work_restart = (struct work_restart*) calloc(opt_n_threads, sizeof(*work_restart));
 	if (!work_restart)
 		return 1;
@@ -2290,6 +2286,10 @@ int main(int argc, char **argv) {
 
 	// Miner Threads
 	if (!opt_supernode) {
+
+		pthread_mutex_init(&work_lock, NULL);
+		pthread_mutex_init(&submit_lock, NULL);
+		pthread_mutex_init(&longpoll_lock, NULL);
 
 		// Init workio Thread Info
 		work_thr_id = opt_n_threads;
@@ -2365,6 +2365,8 @@ int main(int argc, char **argv) {
 
 	// SuperNode Threads
 	else {
+
+		pthread_mutex_init(&response_lock, NULL);
 
 		// Start SuperNode WebSocket Interface
 		thr = &thr_info[0];
