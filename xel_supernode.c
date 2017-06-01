@@ -39,7 +39,8 @@
 #endif
 
 #define MAX_QUEUED_CONNECTIONS 1
-#define SOCKET_BUF_SIZE 100000	// Need To Fix This
+#define SOCKET_BUF_SIZE 4096
+#define MAX_BUF_SIZE 100000 // Need To Finalize This
 
 #ifdef WIN32
 	SOCKET s, core;
@@ -65,13 +66,13 @@ extern void *supernode_thread(void *userdata) {
 	struct thr_info *mythr = (struct thr_info*)userdata;
 	char ip[] = "127.0.0.1";	// For Now All Connections Are On LocalHost
 	unsigned short port = 4016;
-	char buf[SOCKET_BUF_SIZE], msg[256], *str = NULL;
+	char buf[MAX_BUF_SIZE], msg[256], *str = NULL;
 	int i, n, len;
 	struct sockaddr_in server = { 0 };
 	struct sockaddr_in client = { 0 };
 	json_t *val;
 	json_error_t err;
-	uint32_t req_id, req_type;
+	uint32_t idx, req_id, req_type;
 
 	applog(LOG_NOTICE, "Starting SuperNode...");
 
@@ -147,16 +148,22 @@ extern void *supernode_thread(void *userdata) {
 		while (1) {
 
 			// Read Request Into Buffer
-			n = recv(core, &buf[0], SOCKET_BUF_SIZE, 0);
+			idx = 0;
+			while (idx < MAX_BUF_SIZE) {
+				n = recv(core, &buf[idx], SOCKET_BUF_SIZE, 0);
+				if (n < SOCKET_BUF_SIZE)
+					break;
+				idx += SOCKET_BUF_SIZE;
+			}
 
 			// Reset If There Is A Connection Error
-			if (n <= 0)
+			if (n < 0)
 				break;
 
 			pthread_mutex_lock(&response_lock);
 
 			// Make Sure Request Is Zero Terminated
-			buf[n] = '\0';
+			buf[idx + n] = '\0';
 
 			// Get Request ID / Type From JSON
 			val = JSON_LOADS(buf, &err);
@@ -320,8 +327,13 @@ send:
 		pthread_mutex_lock(&response_lock);
 		send(core, msg, strlen(msg), 0);
 		pthread_mutex_unlock(&response_lock);
+
+		if (req->source)
+			free(req->source);
 	}
 
+	if (elastic_src)
+		free(elastic_src);
 	tq_freeze(mythr->q);
 	return NULL;
 }
