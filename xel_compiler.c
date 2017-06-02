@@ -59,14 +59,15 @@ bool create_c_source(char *work_str) {
 
 	// Include C Source Code For ElasticPL Jobs
 	if (!opt_supernode) {
-		fprintf(f, "#include \"job_%s.h\"\n\n", work_str);
+		fprintf(f, "#include \"job_%s.h\"\n", work_str);
 	}
 	else {
 		for (i = 0; i < g_work_package_cnt; i++) {
 			if (!g_work_package[g_work_package_idx].blacklisted)
-				fprintf(f, "#include \"job_%s.h\"\n\n", g_work_package[i].work_str);
+				fprintf(f, "#include \"job_%s.h\"\n", g_work_package[i].work_str);
 		}
 	}
+	fprintf(f, "\n");
 
 	fprintf(f, "static const uint32_t mask32 = (CHAR_BIT*sizeof(uint32_t)-1);\n");
 	fprintf(f, "static const uint64_t mask64 = (CHAR_BIT*sizeof(uint64_t)-1);\n\n");

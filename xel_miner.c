@@ -900,7 +900,7 @@ static void update_pending_cnt(uint64_t work_id, bool add) {
 	}
 }
 
-static bool add_work_package(struct work_package *work_package) {
+extern bool add_work_package(struct work_package *work_package) {
 	g_work_package = realloc(g_work_package, sizeof(struct work_package) * (g_work_package_cnt + 1));
 	if (!g_work_package) {
 		applog(LOG_ERR, "ERROR: Unable to allocate memory for work_package");
@@ -2379,18 +2379,18 @@ int main(int argc, char **argv) {
 			return 1;
 		}
 
-		// Start Thread / Queue For Validating ElasticPL Jobs
+		// Start Thread For Validating Packages
 		thr = &thr_info[1];
 		thr->id = 1;
 		thr->q = tq_new();
 		if (!thr->q)
 			return 1;
-		if (thread_create(thr, sn_validate_elasticpl_thread)) {
-			applog(LOG_ERR, "SuperNode 'validate elasticpl' thread create failed");
+		if (thread_create(thr, sn_validate_package_thread)) {
+			applog(LOG_ERR, "SuperNode 'validate package' thread create failed");
 			return 1;
 		}
 
-		// Start Thread / Queue For Validating Miner Results
+		// Start Thread For Validating Miner Results
 		thr = &thr_info[2];
 		thr->id = 2;
 		thr->q = tq_new();

@@ -331,7 +331,7 @@ static void dump_vm(int idx);
 static bool get_work(CURL *curl);
 static int work_decode(const json_t *val, struct work *work);
 static double calc_diff(uint32_t *target);
-static bool add_work_package(struct work_package *work_package);
+extern bool add_work_package(struct work_package *work_package);
 static void update_pending_cnt(uint64_t work_id, bool add);
 
 static bool submit_work(CURL *curl, struct submit_req *req);
@@ -364,8 +364,10 @@ int curve25519_donna(uint8_t *mypublic, const uint8_t *secret, const uint8_t *ba
 
 // SuperNode Function Declarations
 extern void *supernode_thread(void *userdata);
-extern void *sn_validate_elasticpl_thread(void *userdata);
+extern void *sn_validate_package_thread(void *userdata);
 extern void *sn_validate_result_thread(void *userdata);
+
+static bool sn_validate_package(const json_t *val, char *elastic_src, char *err_msg);
 
 
 #endif /* __MINER_H__ */

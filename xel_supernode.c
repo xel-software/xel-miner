@@ -51,7 +51,7 @@
 struct request {
 	uint32_t req_id;
 	uint32_t req_type;
-	char *source;
+	char *package;
 	uint64_t work_id;
 	uint32_t input[12];
 	uint32_t state[32];
@@ -70,7 +70,7 @@ extern void *supernode_thread(void *userdata) {
 	int i, n, len;
 	struct sockaddr_in server = { 0 };
 	struct sockaddr_in client = { 0 };
-	json_t *val;
+	json_t *val = NULL;
 	json_error_t err;
 	uint32_t idx, req_id, req_type;
 
@@ -157,8 +157,7 @@ extern void *supernode_thread(void *userdata) {
 			}
 
 			// Reset If There Is A Connection Error
-			if (n < 0)
-				break;
+			if (n <= 0) break;
 
 			pthread_mutex_lock(&response_lock);
 
@@ -211,14 +210,12 @@ extern void *supernode_thread(void *userdata) {
 			req.req_type = req_type;
 
 			// Validate ElasticPL Syntax 
-			if (req_type == 2) { 
+			if (req_type == 2) {
 
-				// Get Encoded Source
-				str = (char *)json_string_value(json_object_get(val, "source"));
-				if (str)
-					req.source = strdup(str);
-				else
-					req.source = NULL;
+				applog(LOG_DEBUG, "DEBUG: Req_Id: %d, Req_Type: %d", req_id, req_type);
+
+				// Copy Package To Be Validated
+				req.package = strdup(buf);
 
 				// Push Request To Validate ElasticPL Queue
 				tq_push(thr_info[1].q, &req);
@@ -268,12 +265,13 @@ out:
 	return NULL;
 }
 
-extern void *sn_validate_elasticpl_thread(void *userdata) {
+extern void *sn_validate_package_thread(void *userdata) {
 	struct thr_info *mythr = (struct thr_info*)userdata;
 	struct request *req;
-	char msg[512], err_msg[256];
-	char *elastic_src = NULL;
-	int rc, success;
+	char msg[512], err_msg[256], *elastic_src;
+	uint32_t success;
+	json_t *val = NULL, *wrk = NULL, *pkg = NULL;
+	json_error_t err;
 
 	elastic_src = malloc(MAX_SOURCE_SIZE);
 	if (!elastic_src) {
@@ -290,36 +288,36 @@ extern void *sn_validate_elasticpl_thread(void *userdata) {
 		req = (struct request *) tq_pop(mythr->q, NULL);
 		applog(LOG_DEBUG, "Validating ElasticPL (req_id: %d)", req->req_id);
 
-		// Check For Missing Source
-		if (!req->source) {
+		if (req->package)
+			val = JSON_LOADS(req->package, &err);
+
+		if (!req->package || !val) {
 			success = 0;
-			sprintf(err_msg, "Source data is NULL");
+			sprintf(err_msg, "Unable to read JSON Object");
 			goto send;
 		}
 
-		// Decode Source To ElasticPL
-		rc = ascii85dec(elastic_src, MAX_SOURCE_SIZE, req->source);
-		if (!rc) {
+		// Get Package Data From JSON Object
+		wrk = json_object_get(val, "work_packages");
+		if (wrk)
+			pkg = json_array_get(wrk, 0);
+
+		if (!wrk || !pkg) {
 			success = 0;
-			sprintf(err_msg, "Unable to decode source");
+			sprintf(err_msg, "Unable to parse Package data");
 			goto send;
 		}
 
-		// Validate ElasticPL For Syntax Errors
-		if (!create_epl_vm(elastic_src, NULL)) {
+		// Validate Contents Of Package
+		if (!sn_validate_package(pkg, elastic_src, err_msg)) {
 			success = 0;
-			sprintf(err_msg, "Syntax Error");  // TODO - Get Error Message From Parser
-			goto send;
-		}
-
-		// Calculate WCET
-		if (!calc_wcet()) {
-			success = 0;
-			sprintf(err_msg, "WCET Error");  // TODO - Get Error Message From Parser
 			goto send;
 		}
 
 send:
+		if (!success)
+			applog(LOG_DEBUG, "DEBUG: %s", err_msg);
+
 		// Create Response
 		sprintf(msg, "{\"req_id\": %lu,\"req_type\": %lu,\"success\": %d,\"error\": \"%s\"}", req->req_id, req->req_type, success, err_msg);
 
@@ -328,12 +326,16 @@ send:
 		send(core, msg, strlen(msg), 0);
 		pthread_mutex_unlock(&response_lock);
 
-		if (req->source)
-			free(req->source);
+		if (val)
+			json_decref(val);
+
+		//if (req->package)
+		//	free(req->package);
 	}
 
 	if (elastic_src)
 		free(elastic_src);
+
 	tq_freeze(mythr->q);
 	return NULL;
 }
@@ -378,4 +380,83 @@ extern void *sn_validate_result_thread(void *userdata) {
 
 	tq_freeze(mythr->q);
 	return NULL;
+}
+
+static bool sn_validate_package(const json_t *pkg, char *elastic_src, char *err_msg) {
+	int i, rc, work_pkg_id;
+	uint64_t work_id;
+	char *str = NULL;
+	struct work_package work_package;
+
+	memset(&work_package, 0, sizeof(struct work_package));
+
+	// Get Work ID
+	str = (char *)json_string_value(json_object_get(pkg, "work_id"));
+	if (!str) {
+		sprintf(err_msg, "Invalid 'work_id'");
+		return false;
+	}
+	work_id = strtoull(str, NULL, 10);
+	applog(LOG_DEBUG, "DEBUG: Validating Package for work_id: %s", str);
+
+	// Check If Work Package Exists
+	work_pkg_id = -1;
+	for (i = 0; i < g_work_package_cnt; i++) {
+		if (work_id == g_work_package[i].work_id) {
+			work_pkg_id = i;
+			break;
+		}
+	}
+
+	if (work_pkg_id >= 0) {
+		sprintf(err_msg, "Package already exists for work_id: %llu", work_id);
+		return false;
+	}
+
+	work_package.work_id = work_id;
+	strncpy(work_package.work_str, str, 21);
+
+	// Extract The ElasticPL Source Code
+	str = (char *)json_string_value(json_object_get(pkg, "source"));
+	if (!str || strlen(str) > MAX_SOURCE_SIZE || strlen(str) == 0) {
+		sprintf(err_msg, "Invalid 'source' for work_id: %s", work_package.work_str);
+		return false;
+	}
+
+	// Decode Source Into ElasticPL
+	rc = ascii85dec(elastic_src, MAX_SOURCE_SIZE, str);
+	if (!rc) {
+		sprintf(err_msg, "Unable to decode 'source' for work_id: %s", work_package.work_str);
+		return false;
+	}
+
+	// Convert ElasticPL Into AST
+	if (!create_epl_vm(elastic_src, &work_package)) {
+		sprintf(err_msg, "Unable to convert 'source' to AST for work_id: %s", work_package.work_str);
+		return false;
+	}
+
+	// Calculate WCET
+	if (!calc_wcet()) {
+		sprintf(err_msg, "Unable to calculate WCET for work_id: %s", work_package.work_str);
+		return false;
+	}
+
+	// Convert The ElasticPL Source Into A C Program
+	if (!convert_ast_to_c(work_package.work_str)) {
+		sprintf(err_msg, "Unable to convert 'source' to C for work_id: %s", work_package.work_str);
+		return false;
+	}
+
+	// Add Package To Global List
+	add_work_package(&work_package);
+	work_pkg_id = g_work_package_cnt - 1;
+
+	// Create A C Program Library With All Active Packages
+	if (!compile_and_link(g_work_package[work_pkg_id].work_str)) {
+		sprintf(err_msg, "Unable to create SuperNode C Library");
+		return false;
+	}
+
+	return true;
 }
