@@ -210,6 +210,7 @@ ELSE (OPENCL_FOUND)
 ENDIF(OPENCL_FOUND)
 
 set(SRC_LIST	xel_miner.c
+				xel_supernode.c
 				xel_compiler.c
 				util.c
 				ocl.c
