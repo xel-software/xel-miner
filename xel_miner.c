@@ -59,7 +59,6 @@ bool opt_debug_vm = false;
 bool opt_quiet = false;
 bool opt_norenice = false;
 bool opt_protocol = false;
-bool opt_compile = true;
 bool use_colors = true;
 static int opt_retries = -1;
 static int opt_fail_pause = 10;
@@ -90,15 +89,8 @@ __thread _ALIGN(64) int64_t *vm_l = NULL;
 __thread _ALIGN(64) uint64_t *vm_ul = NULL;
 __thread _ALIGN(64) float *vm_f = NULL;
 __thread _ALIGN(64) double *vm_d = NULL;
-__thread uint32_t *vm_state = NULL;
-__thread double vm_param_val[6];
-__thread uint32_t vm_param_idx[6];
-__thread uint32_t vm_param_num;
-__thread bool vm_break;
-__thread bool vm_continue;
-__thread bool vm_bounty;
+__thread _ALIGN(64) uint32_t *vm_state = NULL;
 
-bool use_elasticpl_init;
 bool use_elasticpl_math;
 
 pthread_mutex_t applog_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -159,7 +151,6 @@ Options:\n\
                                 wcet         Fewest cycles required by work item \n\
                                 workid		 Specify work ID\n\
       --no-color              Don't display colored output\n\
-      --no-compile            Use internal VM Interpreter instead of compiled C code\n\
       --opencl	              Run VM using compiled OpenCL code\n\
       --opencl-gthreads <n>   Max Num of Global Threads (256 - 10240, default: 1024)\n\
       --opencl-vwidth <n>	  Vector width of local work size (1 - 256, default: calculated)\n\
@@ -195,7 +186,6 @@ static struct option const options[] = {
 	{ "help",			0, NULL, 'h' },
 	{ "mining",			1, NULL, 'm' },
 	{ "no-color",		0, NULL, 1001 },
-	{ "no-compile",		0, NULL, 1002 },
 	{ "no-renice",		0, NULL, 'X' },
 	{ "opencl",			0, NULL, 1006 },
 	{ "opencl-gthreads", 1, NULL, 1008 },
@@ -382,9 +372,6 @@ void parse_arg(int key, char *arg)
 	case 1001:
 		use_colors = false;
 		break;
-	case 1002:
-		opt_compile = false;
-		break;
 	case 1003:
 		opt_protocol = true;
 		break;
@@ -407,7 +394,6 @@ void parse_arg(int key, char *arg)
 		break;
 	case 1006:
 		opt_opencl = true;
-		opt_compile = false;
 		break;
 	case 1007:
 		opt_debug = true;
@@ -572,15 +558,11 @@ static void *test_vm_thread(void *userdata) {
 			exit(EXIT_FAILURE);
 		}
 
-		if (opt_compile) {
-			use_elasticpl_math = false;
-
-			// Convert The ElasticPL Source Into A C Program
-			if (!convert_ast_to_c(g_work_package[i].work_str)) {
-				applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
-				exit(EXIT_FAILURE);
-			}
-
+		// Convert The ElasticPL Source Into A C Program
+		use_elasticpl_math = false;
+		if (!convert_ast_to_c(g_work_package[i].work_str)) {
+			applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
+			exit(EXIT_FAILURE);
 		}
 
 		if (!opt_supernode)
@@ -606,18 +588,20 @@ static void *test_vm_thread(void *userdata) {
 		exit(EXIT_FAILURE);
 	}
 
-	if (opt_compile) {
+	if (opt_opencl) {
 
-		//use_elasticpl_math = false;
+// TODO - Redo OpenCL Logic
 
-		//// Convert The ElasticPL Source Into A C Program
-		//if (!convert_ast_to_c(g_work_package[package_idx].work_str)) {
-		//	applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
-		//	exit(EXIT_FAILURE);
-		//}
+		// Convert The ElasticPL Source Into OpenCL
+		if (!create_opencl_source("test")) {
+			applog(LOG_ERR, "ERROR: Unable to convert 'source' to OpenC.  Exiting 'test_vm'\n");
+			exit(EXIT_FAILURE);
+		}
+	}
+	else {
 
-		// Create A C Program Library
-		if (!compile_and_link(g_work_package[package_idx].work_str)) {
+		// Compile The C Program Library
+		if (!compile_library(g_work_package[package_idx].work_str)) {
 			applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
 			exit(EXIT_FAILURE);
 		}
@@ -630,29 +614,16 @@ static void *test_vm_thread(void *userdata) {
 		inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d);
 
 		// Execute The VM Logic
-//		rc = inst->execute(g_work_package[package_idx].work_id);
+		rc = inst->execute(g_work_package[package_idx].work_id);
 
-		for (i = 0; i < 0xFFFFFFFF; i++) {
-			vm_m[1] = i;
-			rc = inst->execute(g_work_package[package_idx].work_id);
-			if (rc == 1)
-				break;
-		}
-
+		//for (i = 0; i < 0xFFFFFFFF; i++) {
+		//	vm_m[1] = i;
+		//	rc = inst->execute(g_work_package[package_idx].work_id);
+		//	if (rc == 1)
+		//		break;
+		//}
 
 		free_library(inst);
-	}
-	else if (opt_opencl) {
-
-		// Convert The ElasticPL Source Into OpenCL
-		if (!create_opencl_source("test")) {
-			applog(LOG_ERR, "ERROR: Unable to convert 'source' to OpenC.  Exiting 'test_vm'\n");
-			exit(EXIT_FAILURE);
-		}
-	}
-	else {
-		// Execute The VM Logic
-		rc = interpret_ast(true);
 	}
 
 	if (rc < 0) {
@@ -688,6 +659,7 @@ static bool get_vm_input(struct work *work) {
 	char hash[16];
 	uint32_t *msg32 = (uint32_t *)msg;
 	uint32_t *hash32 = (uint32_t *)hash;
+	uint32_t *mult32 = (uint32_t *)&work->multiplicator;
 	uint32_t *workid32 = (uint32_t *)&work->work_id;
 	uint32_t *blockid32 = (uint32_t *)&work->block_id;
 
@@ -705,10 +677,14 @@ static bool get_vm_input(struct work *work) {
 	// Hash The Inputs
 	MD5(msg, 80, hash);
 
-	// Randomize The Inputs
-	for (i = 0; i < 12; i++) {
+	// Set Inputs m[0]-m[3]
+	for (i = 0; i < 4; i++)
+		work->vm_input[i] = mult32[i];
+
+	// Randomize Inputs m[4]-m[11]
+	for (i = 4; i < 12; i++) {
 		work->vm_input[i] = swap32(hash32[i % 4]);
-		if (i > 4)
+		if (i > 8)
 			work->vm_input[i] = work->vm_input[i] ^ work->vm_input[i - 3];
 	}
 
@@ -745,7 +721,7 @@ static bool get_opencl_base_data(struct work *work, uint32_t *vm_input) {
 	return true;
 }
 
-static int execute_vm(int thr_id, struct work *work, struct instance *inst, long *hashes_done, char* hash, bool new_work) {
+static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work *work, struct instance *inst, long *hashes_done, char* hash, bool new_work) {
 	int i, rc;
 	time_t t_start = time(NULL);
 	char msg[64];
@@ -754,40 +730,40 @@ static int execute_vm(int thr_id, struct work *work, struct instance *inst, long
 	uint32_t *mult32 = (uint32_t *)work->multiplicator;
 	uint32_t *hash32 = (uint32_t *)hash;
 
-	mult32[0] = thr_id;				// Ensures Each Thread Is Unique
-	mult32[1] = 0;					// Value Will Be Incremented On Each Pass
-	mult32[6] = genrand_int32();	// Random Number
-	mult32[7] = genrand_int32();	// Random Number
+	mult32[0] = thr_id;												// Ensures Each Thread Is Unique
+	mult32[1] = *rnd;												// Round - Value Will Be Incremented On Each Pass
+	mult32[2] = iteration;											// Iteration - Not Implemented Yet
+	mult32[3] = (*rnd == 0) ? (uint32_t)time(NULL) : mult32[3];		// Timestamp of Round 0
+	mult32[7] = genrand_int32();									// Random Number
 
 	while (1) {
 		// Check If New Work Is Available
 		if (work_restart[thr_id].restart)
 			return 0;
 
-		// Increment Multiplicator
-		mult32[2] += 1;
-
 		// Get Values For VM Inputs
 		get_vm_input(work);
 
 		// Reset VM Memory / State
-		memcpy(vm_m, work->vm_input, VM_INPUTS * sizeof(int));
-//		memset(vm_state, 0, 4 * sizeof(int));
+		memcpy(vm_m, work->vm_input, VM_INPUTS * sizeof(uint32_t));
+		memset(vm_state, 0, 4 * sizeof(int));
 
 		// Execute The VM Logic
-		if (opt_compile)
-			rc = inst->execute(work->work_id);
-		else
-			rc = interpret_ast(new_work);
+		rc = inst->execute(work->work_id);
 
-		if (opt_test_miner) {
-			dump_vm(work->package_id);
-			exit(EXIT_FAILURE);
-		}
+		//if (opt_test_miner) {
+		//	dump_vm(work->package_id);
+		//	exit(EXIT_SUCCESS);
+		//}
 
-		// Hee, we have found a bounty, exit immediately
-		if (rc == 1)
+		// Bounty Found, Exit Immediately
+		if (rc == 1) {
+			if (opt_test_miner) {
+				dump_vm(work->package_id);
+				exit(EXIT_SUCCESS);
+			}
 			return rc;
+		}
 
 		// Check For POW Result
 		memcpy(&msg[0], &vm_state[0], 16);
@@ -820,25 +796,27 @@ static int execute_vm(int thr_id, struct work *work, struct instance *inst, long
 		// Only Run For 1s Before Returning To Miner Thread
 		if ((time(NULL) - t_start) >= 1)
 			break;
+
+		// Increment round
+		mult32[1] += 1;
 	}
 	return 0;
 }
 
 static void dump_vm(int idx) {
-	int i;
+	uint32_t i;
 
-	// Dump Non-Zero VM Values
+	// Dump VM Values
 	printf("\n\t   VM Initialized Unsigned Integers:\n");
-	for (i = 0; i < 12; i++) {
-		if (vm_m[i])
-			printf("\t\t  vm_m[%d] = %u\t%08X\n", i, vm_m[i], vm_m[i]);
+	for (i = 0; i < VM_INPUTS; i++) {
+		printf("\t\t  vm_m[%*d] = %*u\t%08X\n", 4, i, 10, vm_m[i], vm_m[i]);
 	}
 
 	if (g_work_package[idx].vm_ints) {
 		printf("\n\t   Integers:\n");
 		for (i = 0; i < g_work_package[idx].vm_ints; i++) {
 			if (vm_i[i])
-				printf("\t\t  vm_i[%d] = %d\t%08X\n", i, vm_i[i], vm_i[i]);
+				printf("\t\t  vm_i[%*d] = %*d\t%08X\n", 4, i, 10, vm_i[i], vm_i[i]);
 		}
 	}
 
@@ -854,7 +832,7 @@ static void dump_vm(int idx) {
 		printf("\n\t   Longs:\n");
 		for (i = 0; i < g_work_package[idx].vm_longs; i++) {
 			if (vm_l[i])
-				printf("\t\t  vm_l[%d] = %lld\n", i, vm_l[i]);
+				printf("\t\t  vm_l[%*d] = %*lld\t%08X\n", 4, i, 10, vm_l[i], vm_l[i]);
 		}
 	}
 
@@ -862,7 +840,7 @@ static void dump_vm(int idx) {
 		printf("\n\t   Unsigned Longs:\n");
 		for (i = 0; i < g_work_package[idx].vm_ulongs; i++) {
 			if (vm_ul[i])
-				printf("\t\t  vm_ul[%d] = %llu\n", i, vm_ul[i]);
+				printf("\t\t  vm_ul[%*d]= %*llu\t%08X\n", 4, i, 10, vm_ul[i], vm_ul[i]);
 		}
 	}
 
@@ -870,7 +848,7 @@ static void dump_vm(int idx) {
 		printf("\n\t   Floats:\n");
 		for (i = 0; i < g_work_package[idx].vm_floats; i++) {
 			if (vm_f[i])
-				printf("\t\t  vm_f[%d] = %f\n", i, vm_f[i]);
+				printf("\t\t  vm_f[%*d] = %f\n", 4, i, vm_f[i]);
 		}
 	}
 
@@ -878,7 +856,7 @@ static void dump_vm(int idx) {
 		printf("\n\t   Doubles:\n");
 		for (i = 0; i < g_work_package[idx].vm_doubles; i++) {
 			if (vm_d[i])
-				printf("\t\t  vm_d[%d] = %f\n", i, vm_d[i]);
+				printf("\t\t  vm_d[%*d] = %f\n", 4, i, vm_d[i]);
 		}
 	}
 	printf("\n");
@@ -1141,22 +1119,20 @@ static int work_decode(const json_t *val, struct work *work) {
 			}
 
 			// Convert The ElasticPL Source Into A C Program Library
-			if (opt_compile) {
-				if (!compile_and_link(work_package.work_str)) {
+			if (opt_opencl) {
+
+// TODO - Redo OpenCL Code
+
+				if (!create_opencl_source(NULL)) {
 					work_package.blacklisted = true;
-					applog(LOG_ERR, "ERROR: Unable to create C Library for work_id: %s\n\n%s\n", work_package.work_str, str);
+					applog(LOG_ERR, "ERROR: Unable to convert 'source' to OpenCL for work_id: %s\n\n%s\n", work_package.work_str, str);
 					return 0;
 				}
 			}
-			else if (opt_opencl) {
-
-// FIX
-// FIX
-				if (!create_opencl_source(NULL)) {
-// FIX
-// FIX
+			else {
+				if (!compile_library(work_package.work_str)) {
 					work_package.blacklisted = true;
-					applog(LOG_ERR, "ERROR: Unable to convert 'source' to OpenCL for work_id: %s\n\n%s\n", work_package.work_str, str);
+					applog(LOG_ERR, "ERROR: Unable to create C Library for work_id: %s\n\n%s\n", work_package.work_str, str);
 					return 0;
 				}
 			}
@@ -1221,38 +1197,6 @@ static int work_decode(const json_t *val, struct work *work) {
 		opt_pref = PREF_PROFIT;
 		applog(LOG_INFO, "No work available that matches preference...retrying in %ds", opt_scantime);
 		return -1;
-	}
-
-	// If Running VM Interpreter Instead Of Compiled VM
-	if (!opt_compile && !opt_opencl && (g_work_package[best_pkg].work_id != g_cur_work_id)) {
-		elastic_src = malloc(MAX_SOURCE_SIZE);
-		if (!elastic_src) {
-			applog(LOG_ERR, "ERROR: Unable to allocate memory for ElasticPL Source");
-			return 0;
-		}
-
-		rc = ascii85dec(elastic_src, MAX_SOURCE_SIZE, best_src);
-		if (!rc) {
-			g_work_package[best_pkg].blacklisted = true;
-			applog(LOG_ERR, "ERROR: Unable to decode 'source' for work_id: %s\n\n%s\n", g_work_package[best_pkg].work_str, str);
-			free(elastic_src);
-			return 0;
-		}
-
-		applog(LOG_DEBUG, "DEBUG: Running ElasticPL Parser");
-
-		if (opt_debug_epl)
-			applog(LOG_DEBUG, "DEBUG: ElasticPL Source Code -\n%s", elastic_src);
-
-		// Convert ElasticPL Into AST
-		if (!create_epl_vm(elastic_src, &g_work_package[best_pkg])) {
-			g_work_package[best_pkg].blacklisted = true;
-			applog(LOG_ERR, "ERROR: Unable to convert 'source' to AST for work_id: %s\n\n%s\n", g_work_package[best_pkg].work_str, str);
-			free(elastic_src);
-			return 0;
-		}
-
-		free(elastic_src);
 	}
 
 	// Copy Work Package Details To Work
@@ -1430,18 +1374,27 @@ static void *cpu_miner_thread(void *userdata) {
 	char hash[32];
 	uint32_t *hash32 = (uint32_t *)hash;
 	bool new_work = true;
+	uint32_t rnd = 0, iteration = 0;
+
+	uint32_t vm_ints = 0;
+	uint32_t vm_uints = 0;
+	uint32_t vm_longs = 0;
+	uint32_t vm_ulongs = 0;
+	uint32_t vm_floats = 0;
+	uint32_t vm_doubles = 0;
 
 	// Set lower priority
 	if (!opt_norenice)
 		thread_low_priority();
 
 	// Initialize Global Variables
-	vm_m = calloc(12, sizeof(int32_t));
+	vm_m = calloc(VM_INPUTS, sizeof(uint32_t));
+	vm_state = calloc(4, sizeof(uint32_t));
 
-	//if (!vm_m || !vm_f || !vm_state) {
-	//	applog(LOG_ERR, "CPU%d: Unable to allocate VM memory", thr_id);
-	//	goto out;
-	//}
+	if (!vm_m || !vm_state) {
+		applog(LOG_ERR, "CPU%d: Unable to allocate VM memory", thr_id);
+		goto out;
+	}
 
 	hashes_done = 0;
 	memset(&work, 0, sizeof(work));
@@ -1460,47 +1413,63 @@ static void *cpu_miner_thread(void *userdata) {
 		// Check If We Are Mining The Most Current Work
 		if (work.work_id != g_work.work_id) {
 
+			rnd = 0;
+			iteration = 0;
+
 			// Copy Global Work Into Local Thread Work
 			memcpy((void *)&work, (void *)&g_work, sizeof(struct work));
 			work.thr_id = thr_id;
 			new_work = true;
 
-// FIX
-// Need to reallocate when switching jobs
-// FIX
-			// Initialize Global Variables
-			if (!vm_i && g_work_package[work.package_id].vm_ints)
-				vm_i = calloc(g_work_package[work.package_id].vm_ints, sizeof(int32_t));
-			if (!vm_u && g_work_package[work.package_id].vm_uints)
-				vm_u = calloc(g_work_package[work.package_id].vm_uints, sizeof(uint32_t));
-			if (!vm_l && g_work_package[work.package_id].vm_longs)
-				vm_l = calloc(g_work_package[work.package_id].vm_longs, sizeof(int64_t));
-			if (!vm_ul && g_work_package[work.package_id].vm_ulongs)
-				vm_ul = calloc(g_work_package[work.package_id].vm_ulongs, sizeof(uint64_t));
-			if (!vm_f && g_work_package[work.package_id].vm_floats)
-				vm_f = calloc(g_work_package[work.package_id].vm_floats, sizeof(float));
-			if (!vm_d && g_work_package[work.package_id].vm_doubles)
-				vm_d = calloc(g_work_package[work.package_id].vm_doubles, sizeof(double));
+			// Allocate Memory For Global Variables
+			if (g_work_package[work.package_id].vm_ints > vm_ints) {
+				vm_ints = g_work_package[work.package_id].vm_ints;
+				vm_i = realloc(vm_i, vm_ints * sizeof(int32_t));
+				memset(vm_i, 0, vm_ints * sizeof(int32_t));
+			}
+			if (g_work_package[work.package_id].vm_uints > vm_uints) {
+				vm_uints = g_work_package[work.package_id].vm_uints;
+				vm_u = realloc(vm_u, vm_uints * sizeof(uint32_t));
+				memset(vm_u, 0, vm_uints * sizeof(uint32_t));
+			}
+			if (g_work_package[work.package_id].vm_longs > vm_longs) {
+				vm_longs = g_work_package[work.package_id].vm_longs;
+				vm_l = realloc(vm_l, vm_longs * sizeof(int64_t));
+				memset(vm_l, 0, vm_longs * sizeof(int64_t));
+			}
+			if (g_work_package[work.package_id].vm_ulongs > vm_ulongs) {
+				vm_ulongs = g_work_package[work.package_id].vm_ulongs;
+				vm_ul = realloc(vm_ul, vm_ulongs * sizeof(uint64_t));
+				memset(vm_ul, 0, vm_ulongs * sizeof(uint64_t));
+			}
+			if (g_work_package[work.package_id].vm_floats > vm_floats) {
+				vm_floats = g_work_package[work.package_id].vm_floats;
+				vm_f = realloc(vm_f, vm_floats * sizeof(float));
+				memset(vm_f, 0, vm_floats * sizeof(float));
+			}
+			if (g_work_package[work.package_id].vm_doubles > vm_doubles) {
+				vm_doubles = g_work_package[work.package_id].vm_doubles;
+				vm_d = realloc(vm_d, vm_doubles * sizeof(double));
+				memset(vm_d, 0, vm_doubles * sizeof(double));
+			}
 
-			if ((g_work_package[work.package_id].vm_ints && !vm_i) ||
-				(g_work_package[work.package_id].vm_uints && !vm_u) ||
-				(g_work_package[work.package_id].vm_longs && !vm_l) ||
-				(g_work_package[work.package_id].vm_ulongs && !vm_ul) ||
-				(g_work_package[work.package_id].vm_floats && !vm_f) ||
-				(g_work_package[work.package_id].vm_doubles && !vm_d)) {
+			if ((vm_ints && !vm_i) ||
+				(vm_uints && !vm_u) ||
+				(vm_longs && !vm_l) ||
+				(vm_ulongs && !vm_ul) ||
+				(vm_floats && !vm_f) ||
+				(vm_doubles && !vm_d)) {
 
 				applog(LOG_ERR, "CPU%d: Unable to allocate VM memory", thr_id);
 				goto out;
 			}
 
 			// Create A Compiled VM Instance For The Thread
-			if (opt_compile) {
-				if (inst)
-					free_library(inst);
-				inst = calloc(1, sizeof(struct instance));
-				create_instance(inst, work.work_str);
-				inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d);
-			}
+			if (inst)
+				free_library(inst);
+			inst = calloc(1, sizeof(struct instance));
+			create_instance(inst, work.work_str);
+			inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d);
 		}
 		// Otherwise, Just Update POW Target
 		else {
@@ -1510,7 +1479,7 @@ static void *cpu_miner_thread(void *userdata) {
 		work_restart[thr_id].restart = 0;
 
 		// Run VM To Check For POW Hash & Bounties
-		rc = execute_vm(thr_id, &work, inst, &hashes_done, hash, new_work);
+		rc = execute_vm(thr_id, &rnd, iteration, &work, inst, &hashes_done, hash, new_work);
 		new_work = false;
 
 		// Record Elapsed Time
@@ -1587,7 +1556,12 @@ static void *cpu_miner_thread(void *userdata) {
 out:
 	if (inst) free(inst);
 	if (vm_m) free(vm_m);
+	if (vm_i) free(vm_i);
+	if (vm_u) free(vm_u);
+	if (vm_l) free(vm_l);
+	if (vm_ul) free(vm_ul);
 	if (vm_f) free(vm_f);
+	if (vm_d) free(vm_d);
 	if (vm_state) free(vm_state);
 
 	tq_freeze(mythr->q);
@@ -2207,6 +2181,17 @@ int main(int argc, char **argv) {
 
 	// Process Command Line Before Starting Any Threads
 	parse_cmdline(argc, argv);
+
+
+
+
+	if (opt_opencl) {
+		applog(LOG_ERR, "ERROR: OpenCL logic needs to be updated...will be fixed soon");
+		return 1;
+	}
+
+
+
 
 #ifdef USE_OPENCL
 	// Initialize GPU Devices

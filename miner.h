@@ -56,15 +56,8 @@ extern __thread _ALIGN(64) int64_t *vm_l;
 extern __thread _ALIGN(64) uint64_t *vm_ul;
 extern __thread _ALIGN(64) float *vm_f;
 extern __thread _ALIGN(64) double *vm_d;
-extern __thread uint32_t *vm_state;
-extern __thread double vm_param_val[6];
-extern __thread uint32_t vm_param_idx[6];
-extern __thread uint32_t vm_param_num;
-extern __thread bool vm_break;
-extern __thread bool vm_continue;
-extern __thread bool vm_bounty;
+extern __thread _ALIGN(64) uint32_t *vm_state;
 
-extern bool use_elasticpl_init;
 extern bool use_elasticpl_math;
 
 extern bool opt_debug;
@@ -130,7 +123,7 @@ struct work {
 	unsigned char work_str[22];
 	unsigned char work_nm[50];
 	uint32_t pow_target[4];
-	int32_t vm_input[12];
+	uint32_t vm_input[12];
 	unsigned char multiplicator[32];
 	unsigned char announcement_hash[32];
 };
@@ -323,9 +316,9 @@ static void strhide(char *s);
 static void parse_arg(int key, char *arg);
 static void show_usage_and_exit(int status);
 static void show_version_and_exit(void);
-static bool load_test_file(char *test_source);
+static bool load_test_file(char *file_name, char *buf);
 static bool get_vm_input(struct work *work);
-static int execute_vm(int thr_id, struct work *work, struct instance *inst, long *hashes_done, char* hash, bool new_work);
+static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work *work, struct instance *inst, long *hashes_done, char* hash, bool new_work);
 static void dump_vm(int idx);
 
 static bool get_work(CURL *curl);
@@ -354,11 +347,11 @@ extern unsigned long genrand_int32(void);
 extern void init_genrand(unsigned long s);
 
 static bool create_c_source(char *work_str);
-extern bool compile_and_link(char *work_str);
+extern bool compile_library(char *work_str);
 extern void create_instance(struct instance* inst, char *work_str);
 extern void free_library(struct instance* inst);
 extern bool create_opencl_source(char *work_str);
-static char* convert_opencl(ast* exp);
+//static char* convert_opencl(ast* exp);
 
 int curve25519_donna(uint8_t *mypublic, const uint8_t *secret, const uint8_t *basepoint);
 

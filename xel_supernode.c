@@ -53,16 +53,13 @@ struct request {
 	uint32_t req_type;
 	char *package;
 	uint64_t work_id;
-	uint32_t input[12];
+	uint32_t input[VM_INPUTS];
 	uint32_t state[32];
 	bool success;
 	char *err_msg;
 };
 
 pthread_mutex_t response_lock = PTHREAD_MUTEX_INITIALIZER;
-
-bool g_new_sn_library = false;
-bool g_sn_library_loaded = false;
 
 uint32_t g_sn_ints = 0;
 uint32_t g_sn_uints = 0;
@@ -78,6 +75,8 @@ bool g_upd_sn_ulongs = false;
 bool g_upd_sn_floats = false;
 bool g_upd_sn_doubles = false;
 
+bool g_new_sn_library = false;
+bool g_sn_library_loaded = false;
 
 extern void *supernode_thread(void *userdata) {
 	struct thr_info *mythr = (struct thr_info*)userdata;
@@ -249,11 +248,11 @@ extern void *supernode_thread(void *userdata) {
 					req.work_id = 0;
 
 				// Get Inputs
-				memset(&req.input[0], 0, 12 * sizeof(uint32_t));
+				memset(&req.input[0], 0, VM_INPUTS * sizeof(uint32_t));
 				input = json_object_get(val, "input");
 				n = json_array_size(input);
 
-				if (n < 12) {
+				if (n < VM_INPUTS) {
 					applog(LOG_DEBUG, "DEBUG: Invalid Inputs - Req_Id: %d, Req_Type: %d", req_id, req_type);
 					sleep(1);
 					sprintf(msg, "{\"req_id\": %lu,\"req_type\": %lu,\"success\": %d,\"error\": \"%s\"}", req_id, req_type, 0, "Invalid Inputs");
@@ -391,7 +390,7 @@ extern void *sn_validate_result_thread(void *userdata) {
 	struct instance *inst = NULL;
 
 	if (!vm_m)
-		vm_m = calloc(12, sizeof(uint32_t));
+		vm_m = calloc(VM_INPUTS, sizeof(uint32_t));
 
 	while (1) {
 
@@ -421,15 +420,15 @@ extern void *sn_validate_result_thread(void *userdata) {
 			if (g_upd_sn_ints)
 				vm_i = realloc(vm_i, g_sn_ints * sizeof(int32_t));
 			if (g_upd_sn_uints)
-				vm_u = realloc(vm_i, g_sn_uints * sizeof(uint32_t));
+				vm_u = realloc(vm_u, g_sn_uints * sizeof(uint32_t));
 			if (g_upd_sn_longs)
-				vm_l = realloc(vm_i, g_sn_longs * sizeof(int64_t));
+				vm_l = realloc(vm_l, g_sn_longs * sizeof(int64_t));
 			if (g_upd_sn_ulongs)
-				vm_ul = realloc(vm_i, g_sn_ulongs * sizeof(uint64_t));
+				vm_ul = realloc(vm_ul, g_sn_ulongs * sizeof(uint64_t));
 			if (g_upd_sn_floats)
-				vm_f = realloc(vm_i, g_sn_floats * sizeof(float));
+				vm_f = realloc(vm_f, g_sn_floats * sizeof(float));
 			if (g_upd_sn_doubles)
-				vm_d = realloc(vm_i, g_sn_doubles * sizeof(double));
+				vm_d = realloc(vm_d, g_sn_doubles * sizeof(double));
 
 			if ((g_sn_ints && !vm_i) ||
 				(g_sn_uints && !vm_u) ||
@@ -466,10 +465,17 @@ extern void *sn_validate_result_thread(void *userdata) {
 			g_new_sn_library = false;
 		}
 
-		// Load Input Data
-		for (i = 0; i < 12; i++) {
-			vm_m[i] = req->input[i];
+		// Reset VM Memory
+		if (g_sn_ints) memset(vm_i, 0, g_sn_ints * sizeof(int32_t));
+		if (g_sn_uints) memset(vm_u, 0, g_sn_uints * sizeof(uint32_t));
+		if (g_sn_longs) memset(vm_l, 0, g_sn_longs * sizeof(int64_t));
+		if (g_sn_ulongs) memset(vm_ul, 0, g_sn_ulongs * sizeof(uint64_t));
+		if (g_sn_floats) memset(vm_f, 0, g_sn_floats * sizeof(float));
+		if (g_sn_doubles) memset(vm_d, 0, g_sn_doubles * sizeof(double));
 
+		// Load Input Data
+		for (i = 0; i < VM_INPUTS; i++) {
+			vm_m[i] = req->input[i];
 		}
 
 		// Validate Bounty
@@ -508,7 +514,17 @@ extern void *sn_validate_result_thread(void *userdata) {
 		pthread_mutex_unlock(&response_lock);
 	}
 
+	if (inst) free(inst);
+	if (vm_m) free(vm_m);
+	if (vm_i) free(vm_i);
+	if (vm_u) free(vm_u);
+	if (vm_l) free(vm_l);
+	if (vm_ul) free(vm_ul);
+	if (vm_f) free(vm_f);
+	if (vm_d) free(vm_d);
+
 	tq_freeze(mythr->q);
+
 	return NULL;
 }
 
@@ -572,6 +588,8 @@ static bool sn_validate_package(const json_t *pkg, char *elastic_src, char *err_
 		return false;
 	}
 
+	applog(LOG_DEBUG, "Convert The ElasticPL Source Into A C Program");
+
 	// Convert The ElasticPL Source Into A C Program
 	if (!convert_ast_to_c(work_package.work_str)) {
 		sprintf(err_msg, "Unable to convert 'source' to C for work_id: %s", work_package.work_str);
@@ -583,7 +601,7 @@ static bool sn_validate_package(const json_t *pkg, char *elastic_src, char *err_
 	work_pkg_id = g_work_package_cnt - 1;
 
 	// Create A C Program Library With All Active Packages
-	if (!compile_and_link(g_work_package[work_pkg_id].work_str)) {
+	if (!compile_library(g_work_package[work_pkg_id].work_str)) {
 		sprintf(err_msg, "Unable to create SuperNode C Library");
 		return false;
 	}

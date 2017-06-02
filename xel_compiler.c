@@ -43,7 +43,6 @@ bool create_c_source(char *work_str) {
 	fprintf(f, "__declspec(thread) double *d = NULL;\n\n");
 #else
 	fprintf(f, "__thread uint32_t *m = NULL;\n");
-	fprintf(f, "__thread uint32_t *m = NULL;\n");
 	fprintf(f, "__thread int32_t *i = NULL;\n");
 	fprintf(f, "__thread uint32_t *u = NULL;\n");
 	fprintf(f, "__thread int64_t *l = NULL;\n");
@@ -161,7 +160,7 @@ bool create_c_source(char *work_str) {
 	return true;
 }
 
-bool compile_and_link(char *work_str) {
+bool compile_library(char *work_str) {
 	char lib_name[50], str[100];
 	int ret = 0;
 
