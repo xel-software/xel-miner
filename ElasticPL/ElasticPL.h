@@ -15,6 +15,8 @@
 #include <stdint.h>
 #include <string.h>
 
+#include "../miner.h"
+
 #define MAX_LITERAL_SIZE 100
 #define TOKEN_LIST_SIZE 4096
 #define PARSE_STACK_SIZE 24000
@@ -332,16 +334,5 @@ static bool get_node_inputs(ast* node, char **lstr, char **rstr);
 extern uint32_t calc_wcet();
 static uint32_t calc_function_weight(ast* root, uint32_t *depth);
 static uint32_t get_node_weight(ast* node);
-
-extern int interpret_ast(bool first_run);
-static double interpret(ast* exp);
-static void mangle_state(int x);
-#ifdef _MSC_VER
-static uint32_t rotl32(uint32_t x, int n);
-static uint32_t rotr32(uint32_t x, int n);
-#else
-static uint32_t rotl32(uint32_t x, unsigned int n);
-static uint32_t rotr32(uint32_t x, unsigned int n);
-#endif
 
 #endif // ELASTICPL_H_
