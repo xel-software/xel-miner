@@ -15,6 +15,10 @@
 #include <stdint.h>
 #include <string.h>
 
+#ifndef WIN32
+# include <errno.h>
+#endif
+
 #include "../miner.h"
 
 #define MAX_LITERAL_SIZE 100
