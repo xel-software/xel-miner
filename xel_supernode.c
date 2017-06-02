@@ -61,6 +61,23 @@ struct request {
 
 pthread_mutex_t response_lock = PTHREAD_MUTEX_INITIALIZER;
 
+bool g_new_sn_library = false;
+bool g_sn_library_loaded = false;
+
+uint32_t g_sn_ints = 0;
+uint32_t g_sn_uints = 0;
+uint32_t g_sn_longs = 0;
+uint32_t g_sn_ulongs = 0;
+uint32_t g_sn_floats = 0;
+uint32_t g_sn_doubles = 0;
+
+bool g_upd_sn_ints = false;
+bool g_upd_sn_uints = false;
+bool g_upd_sn_longs = false;
+bool g_upd_sn_ulongs = false;
+bool g_upd_sn_floats = false;
+bool g_upd_sn_doubles = false;
+
 
 extern void *supernode_thread(void *userdata) {
 	struct thr_info *mythr = (struct thr_info*)userdata;
@@ -70,7 +87,7 @@ extern void *supernode_thread(void *userdata) {
 	int i, n, len;
 	struct sockaddr_in server = { 0 };
 	struct sockaddr_in client = { 0 };
-	json_t *val = NULL;
+	json_t *val = NULL, *input = NULL, *state = NULL;
 	json_error_t err;
 	uint32_t idx, req_id, req_type;
 
@@ -231,7 +248,33 @@ extern void *supernode_thread(void *userdata) {
 				else
 					req.work_id = 0;
 
-// TODO - Logic To Load Inputs / State
+				// Get Inputs
+				memset(&req.input[0], 0, 12 * sizeof(uint32_t));
+				input = json_object_get(val, "input");
+				n = json_array_size(input);
+
+				if (n < 12) {
+					applog(LOG_DEBUG, "DEBUG: Invalid Inputs - Req_Id: %d, Req_Type: %d", req_id, req_type);
+					sleep(1);
+					sprintf(msg, "{\"req_id\": %lu,\"req_type\": %lu,\"success\": %d,\"error\": \"%s\"}", req_id, req_type, 0, "Invalid Inputs");
+					pthread_mutex_lock(&response_lock);
+					send(core, msg, strlen(msg), 0);
+					pthread_mutex_unlock(&response_lock);
+					continue;
+				}
+
+				for (i = 0; i < n; i++) {
+					req.input[i] = (uint32_t)json_integer_value(json_array_get(input, i));
+				}
+				
+				// Get State
+				memset(&req.state[0], 0, 32 * sizeof(uint32_t));
+				state = json_object_get(val, "state");
+				n = json_array_size(state);
+
+				for (i = 0; i < n; i++) {
+					req.state[i] = (uint32_t)json_integer_value(json_array_get(state, i));
+				}
 
 				// Push Request To Validate Results Queue
 				tq_push(thr_info[2].q, &req);
@@ -344,7 +387,11 @@ extern void *sn_validate_result_thread(void *userdata) {
 	struct thr_info *mythr = (struct thr_info*)userdata;
 	struct request *req;
 	char msg[512], err_msg[256];
-	int success;
+	int i, rc, success;
+	struct instance *inst = NULL;
+
+	if (!vm_m)
+		vm_m = calloc(12, sizeof(uint32_t));
 
 	while (1) {
 
@@ -355,18 +402,101 @@ extern void *sn_validate_result_thread(void *userdata) {
 		req = (struct request *) tq_pop(mythr->q, NULL);
 		applog(LOG_DEBUG, "Validating result for work_id %llu (req_id: %d)", req->work_id, req->req_id);
 
+		
+		if (!g_sn_library_loaded) {
+			success = 0;
+			sprintf(err_msg, "SN Library Not Loaded");
+			goto send;
+		}
+
 		if (!req->work_id) {
 			success = 0;
 			sprintf(err_msg, "Invalid work_id");
 			goto send;
 		}
 		
-		// TODO - Add Logic To Call DLL Main / Verify Functions
-//		if () {
+		if (g_new_sn_library) {
+
+			// Allocate Memory For Global Variables
+			if (g_upd_sn_ints)
+				vm_i = realloc(vm_i, g_sn_ints * sizeof(int32_t));
+			if (g_upd_sn_uints)
+				vm_u = realloc(vm_i, g_sn_uints * sizeof(uint32_t));
+			if (g_upd_sn_longs)
+				vm_l = realloc(vm_i, g_sn_longs * sizeof(int64_t));
+			if (g_upd_sn_ulongs)
+				vm_ul = realloc(vm_i, g_sn_ulongs * sizeof(uint64_t));
+			if (g_upd_sn_floats)
+				vm_f = realloc(vm_i, g_sn_floats * sizeof(float));
+			if (g_upd_sn_doubles)
+				vm_d = realloc(vm_i, g_sn_doubles * sizeof(double));
+
+			if ((g_sn_ints && !vm_i) ||
+				(g_sn_uints && !vm_u) ||
+				(g_sn_longs && !vm_l) ||
+				(g_sn_ulongs && !vm_ul) ||
+				(g_sn_floats && !vm_f) ||
+				(g_sn_doubles && !vm_d)) {
+
+				applog(LOG_ERR, "ERROR: Unable to allocate VM memory");
+
+				tq_freeze(mythr->q);
+				return NULL;
+			}
+
+			g_upd_sn_ints = false;
+			g_upd_sn_uints = false;
+			g_upd_sn_longs = false;
+			g_upd_sn_ulongs = false;
+			g_upd_sn_floats = false;
+			g_upd_sn_doubles = false;
+
+			// Free Old Instance Of SuperNode Libaray
+			if (inst) free_library(inst);
+
+			// Copy The Updated SuperNode Libary
+			remove("./work/job_supernode.dll");
+			rename("./work/~supernode.dll", "./work/job_supernode.dll");
+
+			// Link Updated SuperNode Library
+			inst = calloc(1, sizeof(struct instance));
+			create_instance(inst, NULL);
+			inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d);
+
+			g_new_sn_library = false;
+		}
+
+		// Load Input Data
+		for (i = 0; i < 12; i++) {
+			vm_m[i] = req->input[i];
+
+		}
+
+		// Validate Bounty
+		if (req->req_type == 4) {
+			rc = inst->execute(req->work_id);
+			if (rc == 1) {
+				success = 1;
+				sprintf(err_msg, "");
+			}
+			else if (rc == 0) {
+				success = 0;
+				sprintf(err_msg, "");
+			}
+			else {
+				success = 0;
+				sprintf(err_msg, "Job Not Found");
+			}
+		}
+
+		// Validate POW
+		else {
+
+// TODO - Add Validate POW Logic
+
 			success = 0;
 			sprintf(err_msg, "Logic Not Implemented Yet");
-			goto send;
-//		}
+		}
 
 	send:
 		// Create Response
@@ -457,6 +587,17 @@ static bool sn_validate_package(const json_t *pkg, char *elastic_src, char *err_
 		sprintf(err_msg, "Unable to create SuperNode C Library");
 		return false;
 	}
+
+	// Check VM Memory Requirements
+	if (work_package.vm_ints > g_sn_ints) { g_sn_ints = work_package.vm_ints; g_upd_sn_ints = true; }
+	if (work_package.vm_uints > g_sn_uints) { g_sn_uints = work_package.vm_uints; g_upd_sn_uints = true; }
+	if (work_package.vm_longs > g_sn_longs) { g_sn_longs = work_package.vm_longs; g_upd_sn_longs = true; }
+	if (work_package.vm_ulongs > g_sn_ulongs) { g_sn_ulongs = work_package.vm_ulongs; g_upd_sn_ulongs = true; }
+	if (work_package.vm_ints > g_sn_floats) { g_sn_floats = work_package.vm_floats; g_upd_sn_floats = true; }
+	if (work_package.vm_ints > g_sn_doubles) { g_sn_doubles = work_package.vm_doubles; g_upd_sn_doubles = true; }
+
+	g_new_sn_library = true;
+	g_sn_library_loaded = true;
 
 	return true;
 }

@@ -356,7 +356,7 @@ extern void init_genrand(unsigned long s);
 static bool create_c_source(char *work_str);
 extern bool compile_and_link(char *work_str);
 extern void create_instance(struct instance* inst, char *work_str);
-extern void free_compiler(struct instance* inst);
+extern void free_library(struct instance* inst);
 extern bool create_opencl_source(char *work_str);
 static char* convert_opencl(ast* exp);
 

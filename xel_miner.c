@@ -624,7 +624,7 @@ static void *test_vm_thread(void *userdata) {
 
 		// Link To The C Program Library
 		if (inst)
-			free_compiler(inst);
+			free_library(inst);
 		inst = calloc(1, sizeof(struct instance));
 		create_instance(inst, g_work_package[package_idx].work_str);
 		inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d);
@@ -640,7 +640,7 @@ static void *test_vm_thread(void *userdata) {
 		}
 
 
-		free_compiler(inst);
+		free_library(inst);
 	}
 	else if (opt_opencl) {
 
@@ -1496,7 +1496,7 @@ static void *cpu_miner_thread(void *userdata) {
 			// Create A Compiled VM Instance For The Thread
 			if (opt_compile) {
 				if (inst)
-					free_compiler(inst);
+					free_library(inst);
 				inst = calloc(1, sizeof(struct instance));
 				create_instance(inst, work.work_str);
 				inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d);

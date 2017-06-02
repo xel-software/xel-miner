@@ -173,7 +173,7 @@ bool compile_and_link(char *work_str) {
 	}
 
 	if (opt_supernode)
-		sprintf(lib_name, "job_supernode");
+		sprintf(lib_name, "~supernode");
 	else
 		sprintf(lib_name, "job_%s", work_str);
 
@@ -245,7 +245,7 @@ void create_instance(struct instance* inst, char *work_str) {
 #endif
 }
 
-void free_compiler(struct instance* inst) {
+void free_library(struct instance* inst) {
 	if (inst->hndl != 0) {
 #ifdef WIN32
 		FreeLibrary((HMODULE)inst->hndl);
