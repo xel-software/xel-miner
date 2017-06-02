@@ -2206,7 +2206,6 @@ int main(int argc, char **argv) {
 	if (opt_opencl) {
 		applog(LOG_ERR, "ERROR: OpenCL not found on this system.  Running miner with compiled C code instead");
 		opt_opencl = false;
-		opt_compile = true;
 	}
 #endif
 
