@@ -153,7 +153,11 @@ extern void *supernode_thread(void *userdata) {
 			goto out;
 		}
 
+#ifdef WIN32
 		if (client.sin_addr.S_un.S_addr == server.sin_addr.S_un.S_addr)
+#else
+		if (client.sin_addr.s_addr == server.sin_addr.s_addr)
+#endif
 			applog(LOG_NOTICE, "SuperNode connected to Elastic Core Server");
 		else {
 			applog(LOG_ERR, "ERROR: SuperNode blocked connection from IP: %s", inet_ntoa(client.sin_addr));
