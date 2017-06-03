@@ -109,7 +109,7 @@ bool create_c_source(char *work_str) {
 #ifdef WIN32
 	fprintf(f, "__declspec(dllexport) int32_t execute( uint64_t work_id ) {\n\n");
 #else
-	fprintf(f, "int execute( uint64_t work_id ) {\n\n");
+	fprintf(f, "int32_t execute( uint64_t work_id ) {\n\n");
 #endif
 
 	// Call The Main Function For The Current Job
@@ -134,11 +134,11 @@ bool create_c_source(char *work_str) {
 #ifdef WIN32
 	fprintf(f, "__declspec(dllexport) int32_t verify( uint64_t work_id ) {\n\n");
 #else
-	fprintf(f, "int verify( uint64_t work_id ) {\n\n");
+	fprintf(f, "int32_t verify( uint64_t work_id ) {\n\n");
 #endif
 
 	// Call The Verify Function For The Current Job
-	if (!opt_supernode || (g_work_package_cnt == 1)) {
+	if (!opt_supernode) {
 		fprintf(f, "\treturn verify_%s();\n\n", work_str);
 	}
 	else {
@@ -161,7 +161,7 @@ bool create_c_source(char *work_str) {
 }
 
 bool compile_library(char *work_str) {
-	char lib_name[50], str[100];
+	char lib_name[50], str[256];
 	int ret = 0;
 
 	applog(LOG_DEBUG, "DEBUG: Converting ElasticPL to C");
@@ -172,7 +172,7 @@ bool compile_library(char *work_str) {
 	}
 
 	if (opt_supernode)
-		sprintf(lib_name, "~supernode");
+		sprintf(lib_name, "_supernode");
 	else
 		sprintf(lib_name, "job_%s", work_str);
 
@@ -225,7 +225,6 @@ void create_instance(struct instance* inst, char *work_str) {
 		FreeLibrary((HMODULE)inst->hndl);
 		exit(EXIT_FAILURE);
 	}
-	applog(LOG_DEBUG, "DEBUG: Library '%s' Loaded", lib_name);
 #else
 	sprintf(file_name, "./work/%s.so", lib_name);
 	inst->hndl = dlopen(file_name, RTLD_GLOBAL | RTLD_NOW);
@@ -235,13 +234,14 @@ void create_instance(struct instance* inst, char *work_str) {
 	}
 	inst->initialize = dlsym(inst->hndl, "initialize");
 	inst->execute = dlsym(inst->hndl, "execute");
-	inst->execute = dlsym(inst->hndl, "verify");
+	inst->verify = dlsym(inst->hndl, "verify");
 	if (!inst->initialize || !inst->execute || !inst->verify) {
 		fprintf(stderr, "Unable to find library functions");
 		dlclose(inst->hndl);
 		exit(EXIT_FAILURE);
 	}
 #endif
+	applog(LOG_DEBUG, "DEBUG: Library '%s' Loaded", lib_name);
 }
 
 void free_library(struct instance* inst) {

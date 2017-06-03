@@ -121,6 +121,16 @@ extern void *supernode_thread(void *userdata) {
 		goto out;
 	}
 
+#ifndef WIN32
+	// On linux with SO_REUSEADDR, bind will get the port if the previous
+	// socket is closed (even if it is still in TIME_WAIT) but fail if
+	// another program has it open - which is what we want
+	int optval = 1;
+	// If it doesn't work, we don't really care - just show a debug message
+	if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (void *)(&optval), sizeof(optval)) <0)
+		applog(LOG_DEBUG, "API setsockopt SO_REUSEADDR failed (ignored): %s", strerror(errno));
+#endif
+
 	// Bind Socket To SuperNode Port (6 Tries Max)
 	applog(LOG_DEBUG, "DEBUG: Binding Socket to port %d", port);
 	for (i = 0; i < 10; i++) {
@@ -458,8 +468,13 @@ extern void *sn_validate_result_thread(void *userdata) {
 			if (inst) free_library(inst);
 
 			// Copy The Updated SuperNode Libary
+#ifdef WIN32
 			remove("./work/job_supernode.dll");
-			rename("./work/~supernode.dll", "./work/job_supernode.dll");
+			rename("./work/_supernode.dll", "./work/job_supernode.dll");
+#else
+			remove("./work/job_supernode.so");
+			rename("./work/_supernode.so", "./work/job_supernode.so");
+#endif
 
 			// Link Updated SuperNode Library
 			inst = calloc(1, sizeof(struct instance));
