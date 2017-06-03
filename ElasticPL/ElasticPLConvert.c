@@ -223,25 +223,25 @@ static bool convert_node(ast* node) {
 		str = malloc(30);
 		switch (node->data_type) {
 		case DT_INT:
-			sprintf(str, "i[%llu]", ((node->uvalue >= max_vm_ints) ? 0 : node->uvalue));
+			sprintf(str, "i[%llu]", ((node->uvalue >= ast_vm_ints) ? 0 : node->uvalue));
 			break;
 		case DT_UINT:
 			if (node->is_vm_mem)
-				sprintf(str, "m[%llu]", ((node->uvalue >= max_vm_uints) ? 0 : node->uvalue));
+				sprintf(str, "m[%llu]", ((node->uvalue >= ast_vm_uints) ? 0 : node->uvalue));
 			else
-				sprintf(str, "u[%llu]", ((node->uvalue >= max_vm_uints) ? 0 : node->uvalue));
+				sprintf(str, "u[%llu]", ((node->uvalue >= ast_vm_uints) ? 0 : node->uvalue));
 			break;
 		case DT_LONG:
-			sprintf(str, "l[%llu]", ((node->uvalue >= max_vm_longs) ? 0 : node->uvalue));
+			sprintf(str, "l[%llu]", ((node->uvalue >= ast_vm_longs) ? 0 : node->uvalue));
 			break;
 		case DT_ULONG:
-			sprintf(str, "ul[%llu]", ((node->uvalue >= max_vm_ulongs) ? 0 : node->uvalue));
+			sprintf(str, "ul[%llu]", ((node->uvalue >= ast_vm_ulongs) ? 0 : node->uvalue));
 			break;
 		case DT_FLOAT:
-			sprintf(str, "f[%llu]", ((node->uvalue >= max_vm_floats) ? 0 : node->uvalue));
+			sprintf(str, "f[%llu]", ((node->uvalue >= ast_vm_floats) ? 0 : node->uvalue));
 			break;
 		case DT_DOUBLE:
-			sprintf(str, "d[%llu]", ((node->uvalue >= max_vm_doubles) ? 0 : node->uvalue));
+			sprintf(str, "d[%llu]", ((node->uvalue >= ast_vm_doubles) ? 0 : node->uvalue));
 			break;
 		default:
 			applog(LOG_ERR, "Compiler Error: Invalid variable at Line: %d", node->line_num);

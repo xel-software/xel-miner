@@ -12,8 +12,10 @@
 
 #include <stdint.h>
 
-#define MAX( a, b ) ( (a)>(b) ? (a) : (b) )
-#define MIN( a, b ) ( (a)<(b) ? (a) : (b) )
+#ifndef MAX
+	#define MAX(a,b) ((a) > (b) ? a : b)
+	#define MIN(a,b) ((a) < (b) ? a : b)
+#endif
 
 extern int32_t gcd(int32_t	a, int32_t b);
 

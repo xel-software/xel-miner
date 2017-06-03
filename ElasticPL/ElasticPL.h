@@ -19,29 +19,28 @@
 # include <errno.h>
 #endif
 
-#include "../miner.h"
+#define MAX_LITERAL_SIZE 100			// Maximum Length Of Literal In ElasticPL
+#define TOKEN_LIST_SIZE 4096			// Maximum Number Of Tokens In ElasticPL Job - TODO: Finalize Size
+#define PARSE_STACK_SIZE 24000			// Maximum Number Of Items In AST - TODO: Finalize Size
+#define CALL_STACK_SIZE 257				// Maximum Number Of Nested Function Calls
+#define REPEAT_STACK_SIZE 33			// Maximum Number Of Nested Repeat Statements
+#define CODE_STACK_SIZE 10000			// Maximum Number Of Lines Of C / OpenCL Code - TODO: Finalize Size
 
-#define MAX_LITERAL_SIZE 100
-#define TOKEN_LIST_SIZE 4096
-#define PARSE_STACK_SIZE 24000
-#define CALL_STACK_SIZE 257
-#define REPEAT_STACK_SIZE 33
-#define CODE_STACK_SIZE 10000
+#define MAX_AST_DEPTH 20000				// Maximum Depth Allowed In The AST Tree - TODO: Finalize Size
 
-#define MAX_AST_DEPTH 20000
+#define ast_vm_MEMORY_SIZE	100000		// Maximum Number Of Bytes That Can Be Used By VM Memory Model - TODO: Finalize Size
+#define VM_M_ARRAY_SIZE	12				// Number Of Unsigned Ints Initialized By VM
 
-#define MAX_VM_MEMORY_SIZE	100000		// Maximum Number Of Bytes That Can Be Used By VM Memory Model
-#define VM_MEMORY_SIZE	64000			// Number Of Integers Supported By ElasticPL
-#define VM_FLOAT_SIZE	1000			// Number Of Doubles Supported By ElasticPL
-#define MAX_VM_M_ARRAY	12				// Number Of Unsigned Ints Initialized By VM
+#define MAX_SOURCE_SIZE 1024 * 512		// 512KB - Maximum Size Of Decoded ElasticPL Source Code
+
 
 // Max Array Variable Index For Each Data Type
-uint32_t max_vm_ints;
-uint32_t max_vm_uints;
-uint32_t max_vm_longs;
-uint32_t max_vm_ulongs;
-uint32_t max_vm_floats;
-uint32_t max_vm_doubles;
+uint32_t ast_vm_ints;
+uint32_t ast_vm_uints;
+uint32_t ast_vm_longs;
+uint32_t ast_vm_ulongs;
+uint32_t ast_vm_floats;
+uint32_t ast_vm_doubles;
 
 // Index Value Of Main & Verify Functions In AST Array
 int ast_func_idx;
@@ -303,7 +302,7 @@ int *stack_op;		// List Of Operators For Parsing
 ast **stack_exp;	// List Of Expresions For Parsing / Final Expression List
 
 // Function Declarations
-extern bool create_epl_vm(char *source, struct work_package *work_package);
+extern bool create_epl_vm(char *source);
 
 extern bool init_token_list(SOURCE_TOKEN_LIST *token_list, size_t size);
 static DATA_TYPE validate_literal(char *str);

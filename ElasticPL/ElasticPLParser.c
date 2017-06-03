@@ -260,52 +260,52 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 			// Check That There Is Only One Instance Of Each Data Type Array
 			switch (node_type) {
 			case NODE_ARRAY_INT:
-				if (max_vm_ints != 0) {
+				if (ast_vm_ints != 0) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Int array already declared", token->line_num);
 					return false;
 				}
-				max_vm_ints = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
+				ast_vm_ints = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
 				break;
 			case NODE_ARRAY_UINT:
-				if (max_vm_uints != 0) {
+				if (ast_vm_uints != 0) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Unsigned Int array already declared", token->line_num);
 					return false;
 				}
-				max_vm_uints = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
+				ast_vm_uints = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
 				break;
 			case NODE_ARRAY_LONG:
-				if (max_vm_longs != 0) {
+				if (ast_vm_longs != 0) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Long array already declared", token->line_num);
 					return false;
 				}
-				max_vm_longs = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
+				ast_vm_longs = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
 				break;
 			case NODE_ARRAY_ULONG:
-				if (max_vm_ulongs != 0) {
+				if (ast_vm_ulongs != 0) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Unsigned Long array already declared", token->line_num);
 					return false;
 				}
-				max_vm_ulongs = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
+				ast_vm_ulongs = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
 				break;
 			case NODE_ARRAY_FLOAT:
-				if (max_vm_floats != 0) {
+				if (ast_vm_floats != 0) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Float array already declared", token->line_num);
 					return false;
 				}
-				max_vm_floats = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
+				ast_vm_floats = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
 				break;
 			case NODE_ARRAY_DOUBLE:
-				if (max_vm_doubles != 0) {
+				if (ast_vm_doubles != 0) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Double array already declared", token->line_num);
 					return false;
 				}
-				max_vm_doubles = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
+				ast_vm_doubles = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
 				break;
 			}
 
 			// Check If Total Allocated VM Memory Is Less Than Max Allowed
-			if ((((max_vm_ints + max_vm_uints + max_vm_floats) * 4) + ((max_vm_longs + max_vm_ulongs + max_vm_doubles) * 8)) > MAX_VM_MEMORY_SIZE) {
-				applog(LOG_ERR, "Syntax Error - Requested VM Memory (%d bytes) exceeds allowable (%d bytes)", (((max_vm_ints + max_vm_uints + max_vm_floats) * 4) + ((max_vm_longs + max_vm_ulongs + max_vm_doubles) * 8)), MAX_VM_MEMORY_SIZE);
+			if ((((ast_vm_ints + ast_vm_uints + ast_vm_floats) * 4) + ((ast_vm_longs + ast_vm_ulongs + ast_vm_doubles) * 8)) > ast_vm_MEMORY_SIZE) {
+				applog(LOG_ERR, "Syntax Error - Requested VM Memory (%d bytes) exceeds allowable (%d bytes)", (((ast_vm_ints + ast_vm_uints + ast_vm_floats) * 4) + ((ast_vm_longs + ast_vm_ulongs + ast_vm_doubles) * 8)), ast_vm_MEMORY_SIZE);
 				return false;
 			}
 			return true;
@@ -326,67 +326,67 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 
 			switch (token->data_type) {
 			case DT_INT:
-				if (max_vm_ints == 0) {
+				if (ast_vm_ints == 0) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Int array not declared", token->line_num);
 					return false;
 				}
-				else if (stack_exp[stack_exp_idx]->uvalue >= max_vm_ints) {
+				else if (stack_exp[stack_exp_idx]->uvalue >= ast_vm_ints) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Array index out of bounds", token->line_num);
 					return false;
 				}
 				break;
 			case DT_UINT:
-				if (max_vm_uints == 0) {
+				if (ast_vm_uints == 0) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Unsigned Int array not declared", token->line_num);
 					return false;
 				}
-				else if (stack_exp[stack_exp_idx]->uvalue >= max_vm_uints) {
+				else if (stack_exp[stack_exp_idx]->uvalue >= ast_vm_uints) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Array index out of bounds", token->line_num);
 					return false;
 				}
 				break;
 			case DT_LONG:
-				if (max_vm_longs == 0) {
+				if (ast_vm_longs == 0) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Long array not declared", token->line_num);
 					return false;
 				}
-				else if (stack_exp[stack_exp_idx]->uvalue >= max_vm_longs) {
+				else if (stack_exp[stack_exp_idx]->uvalue >= ast_vm_longs) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Array index out of bounds", token->line_num);
 					return false;
 				}
 				break;
 			case DT_ULONG:
-				if (max_vm_ulongs == 0) {
+				if (ast_vm_ulongs == 0) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Unsigned Long array not declared", token->line_num);
 					return false;
 				}
-				else if (stack_exp[stack_exp_idx]->uvalue >= max_vm_ulongs) {
+				else if (stack_exp[stack_exp_idx]->uvalue >= ast_vm_ulongs) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Array index out of bounds", token->line_num);
 					return false;
 				}
 				break;
 			case DT_FLOAT:
-				if (max_vm_floats == 0) {
+				if (ast_vm_floats == 0) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Float array not declared", token->line_num);
 					return false;
 				}
-				else if (stack_exp[stack_exp_idx]->uvalue >= max_vm_floats) {
+				else if (stack_exp[stack_exp_idx]->uvalue >= ast_vm_floats) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Array index out of bounds", token->line_num);
 					return false;
 				}
 				break;
 			case DT_DOUBLE:
-				if (max_vm_doubles == 0) {
+				if (ast_vm_doubles == 0) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Double array not declared", token->line_num);
 					return false;
 				}
-				else if (stack_exp[stack_exp_idx]->uvalue >= max_vm_doubles) {
+				else if (stack_exp[stack_exp_idx]->uvalue >= ast_vm_doubles) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Array index out of bounds", token->line_num);
 					return false;
 				}
 				break;
 			case DT_NONE: // m[]
-				if (stack_exp[stack_exp_idx]->uvalue >= MAX_VM_M_ARRAY) {
+				if (stack_exp[stack_exp_idx]->uvalue >= VM_M_ARRAY_SIZE) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Array index out of bounds", token->line_num);
 					return false;
 				}

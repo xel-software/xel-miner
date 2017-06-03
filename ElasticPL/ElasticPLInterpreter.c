@@ -22,7 +22,7 @@ extern uint32_t calc_wcet() {
 	// Get Max Function Call Depth
 	for (i = ast_func_idx; i <= stack_exp_idx; i++) {
 		if (stack_exp[i]->uvalue > call_depth)
-			call_depth = stack_exp[i]->uvalue;
+			call_depth = (int)stack_exp[i]->uvalue;
 	}
 
 	// Calculate WCET For Each Function Beginning With The Lowest One In Call Stack

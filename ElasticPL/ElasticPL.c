@@ -12,14 +12,14 @@
 #include "ElasticPL.h"
 #include "../miner.h"
 
-uint32_t max_vm_ints = 0;
-uint32_t max_vm_uints = 0;
-uint32_t max_vm_longs = 0;
-uint32_t max_vm_ulongs = 0;
-uint32_t max_vm_floats = 0;
-uint32_t max_vm_doubles = 0;
+uint32_t ast_vm_ints = 0;
+uint32_t ast_vm_uints = 0;
+uint32_t ast_vm_longs = 0;
+uint32_t ast_vm_ulongs = 0;
+uint32_t ast_vm_floats = 0;
+uint32_t ast_vm_doubles = 0;
 
-extern bool create_epl_vm(char *source, struct work_package *work_package) {
+extern bool create_epl_vm(char *source) {
 	int i;
 	SOURCE_TOKEN_LIST token_list;
 
@@ -57,12 +57,12 @@ extern bool create_epl_vm(char *source, struct work_package *work_package) {
 	top_op = -1;
 
 	// Reset Global Variable Array Size
-	max_vm_ints = 0;
-	max_vm_uints = 0;
-	max_vm_longs = 0;
-	max_vm_ulongs = 0;
-	max_vm_floats = 0;
-	max_vm_doubles = 0;
+	ast_vm_ints = 0;
+	ast_vm_uints = 0;
+	ast_vm_longs = 0;
+	ast_vm_ulongs = 0;
+	ast_vm_floats = 0;
+	ast_vm_doubles = 0;
 
 	if (!init_token_list(&token_list, TOKEN_LIST_SIZE)) {
 		applog(LOG_ERR, "ERROR: Unable To Allocate Token List For Parser!");
@@ -78,16 +78,6 @@ extern bool create_epl_vm(char *source, struct work_package *work_package) {
 	if (!parse_token_list(&token_list)) {
 		applog(LOG_ERR, "ERROR: Unable To Parse ElasticPL Tokens!");
 		return false;
-	}
-
-	// Copy Global Array Sizes Into Work Package
-	if (work_package) {
-		work_package->vm_ints = max_vm_ints;
-		work_package->vm_uints = max_vm_uints;
-		work_package->vm_longs = max_vm_longs;
-		work_package->vm_ulongs = max_vm_ulongs;
-		work_package->vm_floats = max_vm_floats;
-		work_package->vm_doubles = max_vm_doubles;
 	}
 
 	if (opt_debug_epl) {
