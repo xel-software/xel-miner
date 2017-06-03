@@ -760,17 +760,13 @@ static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work
 		// Execute The VM Logic
 		rc = inst->execute(work->work_id);
 
-		//if (opt_test_miner) {
-		//	dump_vm(work->package_id);
-		//	exit(EXIT_SUCCESS);
-		//}
+		if (opt_test_miner) {
+			dump_vm(work->package_id);
+			exit(EXIT_SUCCESS);
+		}
 
 		// Bounty Found, Exit Immediately
 		if (rc == 1) {
-			if (opt_test_miner) {
-				dump_vm(work->package_id);
-				exit(EXIT_SUCCESS);
-			}
 			return rc;
 		}
 
@@ -791,13 +787,10 @@ static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work
 
 			hash32[i] = swap32(hash32[i]);
 
-			if (hash32[i] <= work->pow_target[i]) {
+			if (hash32[i] > work->pow_target[i])
+				break;
+			else if (hash32[i] < work->pow_target[i])
 				return 2;	// POW Solution Found
-			}
-			else {
-				if (hash32[i] > work->pow_target[i])
-					break;
-			}
 		}
 
 		(*hashes_done)++;

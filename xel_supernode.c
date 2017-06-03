@@ -14,6 +14,7 @@
 #endif
 
 #include "miner.h"
+#include <openssl/md5.h>
 
 #ifndef WIN32
 # include <errno.h>
@@ -55,6 +56,7 @@ struct request {
 	uint64_t work_id;
 	uint32_t input[VM_M_ARRAY_SIZE];
 	uint32_t state[32];
+	uint32_t target[8];
 	bool success;
 	char *err_msg;
 };
@@ -86,7 +88,7 @@ extern void *supernode_thread(void *userdata) {
 	int i, n, len;
 	struct sockaddr_in server = { 0 };
 	struct sockaddr_in client = { 0 };
-	json_t *val = NULL, *input = NULL, *state = NULL;
+	json_t *val = NULL, *input = NULL, *state = NULL, *target = NULL;
 	json_error_t err;
 	uint32_t idx, req_id, req_type;
 
@@ -266,7 +268,7 @@ extern void *supernode_thread(void *userdata) {
 				input = json_object_get(val, "input");
 				n = json_array_size(input);
 
-				if (n < VM_M_ARRAY_SIZE) {
+				if (n != VM_M_ARRAY_SIZE) {
 					applog(LOG_DEBUG, "DEBUG: Invalid Inputs - Req_Id: %d, Req_Type: %d", req_id, req_type);
 					sleep(1);
 					sprintf(msg, "{\"req_id\": %lu,\"req_type\": %lu,\"success\": %d,\"error\": \"%s\"}", req_id, req_type, 0, "Invalid Inputs");
@@ -287,6 +289,26 @@ extern void *supernode_thread(void *userdata) {
 
 				for (i = 0; i < n; i++) {
 					req.state[i] = (uint32_t)json_integer_value(json_array_get(state, i));
+				}
+
+				// Get Target
+				if (req_type == 3) {
+					target = json_object_get(val, "target");
+					n = json_array_size(target);
+
+					if (n != 8) {
+						applog(LOG_DEBUG, "DEBUG: Invalid Target - Req_Id: %d, Req_Type: %d", req_id, req_type);
+						sleep(1);
+						sprintf(msg, "{\"req_id\": %lu,\"req_type\": %lu,\"success\": %d,\"error\": \"%s\"}", req_id, req_type, 0, "Invalid Inputs");
+						pthread_mutex_lock(&response_lock);
+						send(core, msg, strlen(msg), 0);
+						pthread_mutex_unlock(&response_lock);
+						continue;
+					}
+
+					for (i = 0; i < n; i++) {
+						req.target[i] = (uint32_t)json_integer_value(json_array_get(target, i));
+					}
 				}
 
 				// Push Request To Validate Results Queue
@@ -399,12 +421,17 @@ send:
 extern void *sn_validate_result_thread(void *userdata) {
 	struct thr_info *mythr = (struct thr_info*)userdata;
 	struct request *req;
-	char msg[512], err_msg[256];
+	char msg[512], err_msg[256], pow_msg[64], hash[32];
 	int i, rc, success;
 	struct instance *inst = NULL;
+	uint32_t *msg32 = (uint32_t *)pow_msg;
+	uint32_t *hash32 = (uint32_t *)hash;
 
 	if (!vm_m)
 		vm_m = calloc(VM_M_ARRAY_SIZE, sizeof(uint32_t));
+
+	if (!vm_state)
+		vm_state = calloc(4, sizeof(uint32_t));
 
 	while (1) {
 
@@ -506,7 +533,7 @@ extern void *sn_validate_result_thread(void *userdata) {
 			}
 			else if (rc == 0) {
 				success = 0;
-				sprintf(err_msg, "");
+				sprintf(err_msg, "Invalid solution");
 			}
 			else {
 				success = 0;
@@ -517,10 +544,32 @@ extern void *sn_validate_result_thread(void *userdata) {
 		// Validate POW
 		else {
 
-// TODO - Add Validate POW Logic
+			// Check For POW Result
+			memcpy(&pow_msg[0], &vm_state[0], 16);
+			msg32[0] = swap32(msg32[0]);
+			msg32[1] = swap32(msg32[1]);
+			msg32[2] = swap32(msg32[2]);
+			msg32[3] = swap32(msg32[3]);
 
-			success = 0;
-			sprintf(err_msg, "Logic Not Implemented Yet");
+			for (i = 0; i < VM_M_ARRAY_SIZE; i++)
+				msg32[i + 4] = swap32(req->input[i]);
+
+			MD5(pow_msg, 64, hash);
+
+			// Check For POW Solution
+			for (i = 0; i < 4; i++) {
+
+				hash32[i] = swap32(hash32[i]);
+
+				if (hash32[i] > req->target[i]) {
+					success = 0;
+					sprintf(err_msg, "Hash above target");
+					goto send;
+				}
+				else if (hash32[i] < req->target[i]) {
+					break;
+				}
+			}
 		}
 
 	send:
