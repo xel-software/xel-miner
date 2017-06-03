@@ -543,6 +543,9 @@ extern void *sn_validate_result_thread(void *userdata) {
 
 		// Validate POW
 		else {
+			rc = inst->execute(req->work_id);
+
+// TODO - Need New Logic For vm_state
 
 			// Check For POW Result
 			memcpy(&pow_msg[0], &vm_state[0], 16);
