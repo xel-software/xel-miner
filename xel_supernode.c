@@ -53,7 +53,7 @@ struct request {
 	uint32_t req_type;
 	char *package;
 	uint64_t work_id;
-	uint32_t input[VM_INPUTS];
+	uint32_t input[VM_M_ARRAY_SIZE];
 	uint32_t state[32];
 	bool success;
 	char *err_msg;
@@ -262,11 +262,11 @@ extern void *supernode_thread(void *userdata) {
 					req.work_id = 0;
 
 				// Get Inputs
-				memset(&req.input[0], 0, VM_INPUTS * sizeof(uint32_t));
+				memset(&req.input[0], 0, VM_M_ARRAY_SIZE * sizeof(uint32_t));
 				input = json_object_get(val, "input");
 				n = json_array_size(input);
 
-				if (n < VM_INPUTS) {
+				if (n < VM_M_ARRAY_SIZE) {
 					applog(LOG_DEBUG, "DEBUG: Invalid Inputs - Req_Id: %d, Req_Type: %d", req_id, req_type);
 					sleep(1);
 					sprintf(msg, "{\"req_id\": %lu,\"req_type\": %lu,\"success\": %d,\"error\": \"%s\"}", req_id, req_type, 0, "Invalid Inputs");
@@ -404,7 +404,7 @@ extern void *sn_validate_result_thread(void *userdata) {
 	struct instance *inst = NULL;
 
 	if (!vm_m)
-		vm_m = calloc(VM_INPUTS, sizeof(uint32_t));
+		vm_m = calloc(VM_M_ARRAY_SIZE, sizeof(uint32_t));
 
 	while (1) {
 
@@ -493,7 +493,7 @@ extern void *sn_validate_result_thread(void *userdata) {
 		if (g_sn_doubles) memset(vm_d, 0, g_sn_doubles * sizeof(double));
 
 		// Load Input Data
-		for (i = 0; i < VM_INPUTS; i++) {
+		for (i = 0; i < VM_M_ARRAY_SIZE; i++) {
 			vm_m[i] = req->input[i];
 		}
 
@@ -596,10 +596,18 @@ static bool sn_validate_package(const json_t *pkg, char *elastic_src, char *err_
 	}
 
 	// Convert ElasticPL Into AST
-	if (!create_epl_vm(elastic_src, &work_package)) {
+	if (!create_epl_vm(elastic_src)) {
 		sprintf(err_msg, "Unable to convert 'source' to AST for work_id: %s", work_package.work_str);
 		return false;
 	}
+
+	// Copy Global Array Sizes Into Work Package
+	work_package.vm_ints = ast_vm_ints;
+	work_package.vm_uints = ast_vm_uints;
+	work_package.vm_longs = ast_vm_longs;
+	work_package.vm_ulongs = ast_vm_ulongs;
+	work_package.vm_floats = ast_vm_floats;
+	work_package.vm_doubles = ast_vm_doubles;
 
 	// Calculate WCET
 	if (!calc_wcet()) {

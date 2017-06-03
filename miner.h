@@ -46,9 +46,6 @@
 #define JSON_LOAD_FILE(path, err_ptr) json_load_file(path, err_ptr)
 #endif
 
-#define MAX_SOURCE_SIZE 1024 * 512	// 512K
-#define VM_INPUTS 12
-
 extern __thread _ALIGN(64) uint32_t *vm_m;
 extern __thread _ALIGN(64) int32_t *vm_i;
 extern __thread _ALIGN(64) uint32_t *vm_u;

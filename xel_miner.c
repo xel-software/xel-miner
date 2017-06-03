@@ -534,8 +534,6 @@ static void *test_vm_thread(void *userdata) {
 		// Create A Test Package
 		work_package.work_id = i;
 		sprintf(work_package.work_str, "%llu", work_package.work_id);
-		add_work_package(&work_package);
-		package_idx = i;
 
 		if (opt_supernode)
 			sprintf(file_name, "sn%d.epl", i);
@@ -547,10 +545,18 @@ static void *test_vm_thread(void *userdata) {
 			exit(EXIT_FAILURE);
 
 		// Convert The Source Code Into ElasticPL AST
-		if (!create_epl_vm(test_code, &g_work_package[i])) {
+		if (!create_epl_vm(test_code)) {
 			applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
 			exit(EXIT_FAILURE);
 		}
+
+		// Copy Global Array Sizes Into Work Package
+		work_package.vm_ints = ast_vm_ints;
+		work_package.vm_uints = ast_vm_uints;
+		work_package.vm_longs = ast_vm_longs;
+		work_package.vm_ulongs = ast_vm_ulongs;
+		work_package.vm_floats = ast_vm_floats;
+		work_package.vm_doubles = ast_vm_doubles;
 
 		// Calculate WCET
 		if (!calc_wcet()) {
@@ -560,10 +566,13 @@ static void *test_vm_thread(void *userdata) {
 
 		// Convert The ElasticPL Source Into A C Program
 		use_elasticpl_math = false;
-		if (!convert_ast_to_c(g_work_package[i].work_str)) {
+		if (!convert_ast_to_c(work_package.work_str)) {
 			applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
 			exit(EXIT_FAILURE);
 		}
+
+		add_work_package(&work_package);
+		package_idx = i;
 
 		if (!opt_supernode)
 			break;
@@ -745,7 +754,7 @@ static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work
 		get_vm_input(work);
 
 		// Reset VM Memory / State
-		memcpy(vm_m, work->vm_input, VM_INPUTS * sizeof(uint32_t));
+		memcpy(vm_m, work->vm_input, VM_M_ARRAY_SIZE * sizeof(uint32_t));
 		memset(vm_state, 0, 4 * sizeof(int));
 
 		// Execute The VM Logic
@@ -772,7 +781,7 @@ static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work
 		msg32[2] = swap32(msg32[2]);
 		msg32[3] = swap32(msg32[3]);
 
-		for (i = 0; i < VM_INPUTS; i++)
+		for (i = 0; i < VM_M_ARRAY_SIZE; i++)
 			msg32[i + 4] = swap32(work->vm_input[i]);
 
 		MD5(msg, 64, hash);
@@ -808,7 +817,7 @@ static void dump_vm(int idx) {
 
 	// Dump VM Values
 	printf("\n\t   VM Initialized Unsigned Integers:\n");
-	for (i = 0; i < VM_INPUTS; i++) {
+	for (i = 0; i < VM_M_ARRAY_SIZE; i++) {
 		printf("\t\t  vm_m[%*d] = %*u\t%08X\n", 4, i, 10, vm_m[i], vm_m[i]);
 	}
 
@@ -1091,15 +1100,20 @@ static int work_decode(const json_t *val, struct work *work) {
 				applog(LOG_DEBUG, "DEBUG: ElasticPL Source Code -\n%s", elastic_src);
 
 			// Convert ElasticPL Into AST
-			if (!create_epl_vm(elastic_src, &work_package)) {
+			if (!create_epl_vm(elastic_src)) {
 				work_package.blacklisted = true;
 				applog(LOG_ERR, "ERROR: Unable to convert 'source' to AST for work_id: %s\n\n%s\n", work_package.work_str, str);
-// FIX WHEN SN DONE
-//				free(elastic_src);
-//				return 0;
-// FIX WHEN SN DONE
-				continue;
+				free(elastic_src);
+				return 0;
 			}
+
+			// Copy Global Array Sizes Into Work Package
+			work_package.vm_ints = ast_vm_ints;
+			work_package.vm_uints = ast_vm_uints;
+			work_package.vm_longs = ast_vm_longs;
+			work_package.vm_ulongs = ast_vm_ulongs;
+			work_package.vm_floats = ast_vm_floats;
+			work_package.vm_doubles = ast_vm_doubles;
 
 			free(elastic_src);
 
@@ -1388,7 +1402,7 @@ static void *cpu_miner_thread(void *userdata) {
 		thread_low_priority();
 
 	// Initialize Global Variables
-	vm_m = calloc(VM_INPUTS, sizeof(uint32_t));
+	vm_m = calloc(VM_M_ARRAY_SIZE, sizeof(uint32_t));
 	vm_state = calloc(4, sizeof(uint32_t));
 
 	if (!vm_m || !vm_state) {
