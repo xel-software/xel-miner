@@ -41,7 +41,7 @@
 
 #define MAX_QUEUED_CONNECTIONS 1
 #define SOCKET_BUF_SIZE 4096
-#define MAX_BUF_SIZE 100000 // Need To Finalize This
+#define MAX_BUF_SIZE 100000		// TODO: Finalize Size
 
 #ifdef WIN32
 	SOCKET s, core;
@@ -102,8 +102,6 @@ extern void *supernode_thread(void *userdata) {
 		applog(LOG_ERR, "ERROR: Unable to initialize SuperNode socket (%s)", strerror(errno));
 		goto out;
 	}
-#else
-	// Need Linux init logic
 #endif
 
 	// Create Socket For Core Server To Connect To
@@ -152,8 +150,7 @@ extern void *supernode_thread(void *userdata) {
 		applog(LOG_ERR, "ERROR: Unable to set Queue for SuperNode socket (%s)", strerror(errno));
 		goto out;
 	}
-
-
+	
 	// Main Loop To Reconnect If Connection Is Lost
 	while (1) {
 

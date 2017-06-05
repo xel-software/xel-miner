@@ -2,18 +2,11 @@
 
 Please use the fork create by EK at https://github.com/OrdinaryDude/elastic-miner
 
-Once mainnet is launched, if I get some free time I may create an updated miner...but as of now this miner will no longer work with elastic coin due to recent changes to the protocol.
 
+# xel_miner 	0.9.1
+# xel_supernode	0.1
 
-# xel_miner 0.9.1
-
-<a href="https://scan.coverity.com/projects/ordinarydude-xel_miner">
-  <img alt="Coverity Scan Build Status"
-       src="https://scan.coverity.com/projects/10948/badge.svg"/>
-</a>  <img src="https://travis-ci.org/OrdinaryDude/xel_miner.svg?branch=master"/> [![contributions welcome](https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=flat)](https://github.com/OrdinaryDude/elastic-core/issues)
-
-<i>This code is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+<i>This code is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 See the GNU General Public License for more details.</i>
 
 This is a prototype of a miner for solving XEL work packages.  The miner is still in the early stages of development...it is simply a prototype that attempts demonstrate all the functionality of an XEL miner.
@@ -35,16 +28,28 @@ Below are the steps I used to get the miner running on my Raspberry Pi.
 
 <b>*** Don't forget to use "make install" and not just "make" ***</b>
 
-To run the Miner using CPU
+To run the Miner using CPU:
 
     sudo ./xel_miner -t <num_threads> -P <secret_phrase> -D
 
-To run the Miner using GPU (Note: Crypto & Big Integer ElasticPL jobs are not supported for GPU mining)
+To run the Miner using GPU:
 
     sudo ./xel_miner -t <num_threads> -P <secret_phrase> -D --opencl
 
+To run the SuperNode backend:
+
+    sudo ./xel_miner -S -D
+
 Use "sudo ./xel_miner -h" to see a full list of options.
+
 ________________________________________________________________________________________________
+
+<b>Donations are welcome to support my work on this project:</b>
+
+	BTC: 1N9dkpttDi7HncRd1q4t8MfFxCLvmLxAGU
+	XEL: XEL-AZJK-TAVH-3KN3-9EZSH
+________________________________________________________________________________________________
+
 
 #Credits
 <ul>

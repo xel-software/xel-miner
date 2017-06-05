@@ -1228,7 +1228,7 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 	json_t *val = NULL;
 	struct timeval tv_start, tv_end, diff;
 	char data[1000];
-	char *url, *err_desc, *accepted;
+	char *url, *err_desc;
 
 	url = calloc(1, strlen(rpc_url) + 50);
 	if (!url) {
@@ -1236,20 +1236,22 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 		return false;
 	}
 
-	if (req->req_type == SUBMIT_BTY_ANN) {
-		sprintf(url, "%s?requestType=bountyAnnouncement", rpc_url);
-		sprintf(data, "deadline=3&feeNQT=0&amountNQT=5000&work_id=%s&hash_announcement=%s&secretPhrase=%s", req->work_str, req->hash, passphrase);
-	}
-	else if (req->req_type == SUBMIT_BTY_CONF) {
-		sprintf(url, "%s?requestType=getApprovedBounties", rpc_url);
-		sprintf(data, "work_id=%s&hash_announcement=%s&secretPhrase=%s", req->work_str, req->hash, passphrase);
-	}
-	else if (req->req_type == SUBMIT_BOUNTY) {
-		sprintf(url, "%s?requestType=createPoX", rpc_url);
-		sprintf(data, "deadline=3&feeNQT=0&amountNQT=0&work_id=%s&multiplicator=%s&is_pow=false&secretPhrase=%s", req->work_str, req->mult, passphrase);
+// TODO - Not sure what this value is used for.
+//        Hardcoded for now until it is determined if it's needed
+	uint32_t rand_id = 0;
+
+	if (req->req_type == SUBMIT_BOUNTY) {
+
+// TODO - The following 2 values need to be redone once the new storage model is determined
+//        They are just hardcoded for now so the interface doesn't fail
+		char storage_height[] = "00000000000000000000000000000000";	// 32 Byte Value
+		char st_ints[] = "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";	// 256 Bytes In Hex Format
+
+		sprintf(url, "%s?requestType=createPoX&random=%u", rpc_url, rand_id);
+		sprintf(data, "deadline=3&feeNQT=0&amountNQT=0&referenced_storage_height=%s&work_id=%s&storage=%s&multiplicator=%s&is_pow=false&secretPhrase=%s", storage_height, req->work_str, st_ints, req->mult, passphrase);
 	}
 	else if (req->req_type == SUBMIT_POW) {
-		sprintf(url, "%s?requestType=createPoX", rpc_url);
+		sprintf(url, "%s?requestType=createPoX&random=%u", rpc_url, rand_id);
 		sprintf(data, "deadline=3&feeNQT=0&amountNQT=0&work_id=%s&multiplicator=%s&is_pow=true&secretPhrase=%s", req->work_str, req->mult, passphrase);
 	}
 	else {
@@ -1276,52 +1278,12 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 
 	applog(LOG_DEBUG, "DEBUG: Submit request - %s %s", url, data);
 
-	accepted = (char *)json_string_value(json_object_get(val, "approved"));
 	err_desc = (char *)json_string_value(json_object_get(val, "errorDescription"));
 
 	if (err_desc)
 		applog(LOG_DEBUG, "DEBUG: Submit response error - %s", err_desc);
 
-	if (req->req_type == SUBMIT_BTY_ANN) {
-		if (err_desc) {
-			if (strstr(err_desc, "Duplicate unconfirmed transaction:")) {
-				applog(LOG_NOTICE, "%s: %s***** Bounty Discarded *****", thr_info[req->thr_id].name, CL_YLW);
-				applog(LOG_DEBUG, "Work ID: %s - No more bounty announcement slots available", req->work_str, err_desc);
-				//				req->delay_tm = time(NULL) + 30;  // Retry In 30s
-				req->req_type = SUBMIT_COMPLETE;
-			}
-			else {
-				applog(LOG_NOTICE, "%s: %s***** Bounty Rejected *****", thr_info[req->thr_id].name, CL_RED);
-				applog(LOG_DEBUG, "Reason: %s", err_desc);
-				//				req->delay_tm = time(NULL) + 30;  // Retry In 30s
-				req->req_type = SUBMIT_COMPLETE;
-				g_bounty_error_cnt++;
-			}
-		}
-		else {
-			req->req_type = SUBMIT_BTY_CONF;
-		}
-	}
-	else if (req->req_type == SUBMIT_BTY_CONF) {
-		if (accepted && !strcmp(accepted, "true")) {
-			req->req_type = SUBMIT_BOUNTY;
-		}
-		else if (accepted && !strcmp(accepted, "deprecated")) {
-			applog(LOG_NOTICE, "%s: %s***** Bounty Rejected - Deprecated *****", thr_info[req->thr_id].name, CL_RED);
-			g_bounty_deprecated_cnt++;
-			req->req_type = SUBMIT_COMPLETE;
-		}
-		else if (req->retries++ > 20) {		// Timeout After 10 Min
-			applog(LOG_NOTICE, "%s: %s***** Bounty Timed Out *****", thr_info[req->thr_id].name, CL_RED);
-			g_bounty_timeout_cnt++;
-			req->req_type = SUBMIT_COMPLETE;
-		}
-		else {
-			req->delay_tm = time(NULL) + 30;  // Retry In 30s
-			applog(LOG_DEBUG, "DEBUG: Retry confirmation in 30s");
-		}
-	}
-	else if (req->req_type == SUBMIT_BOUNTY) {
+	if (req->req_type == SUBMIT_BOUNTY) {
 		if (err_desc) {
 			if (strstr(err_desc, "Duplicate unconfirmed transaction:")) {
 				applog(LOG_NOTICE, "%s: %s***** Bounty Discarded *****", thr_info[req->thr_id].name, CL_YLW);
@@ -1525,7 +1487,7 @@ static void *cpu_miner_thread(void *userdata) {
 				goto out;
 			}
 
-			wc->cmd = SUBMIT_BTY_ANN;
+			wc->cmd = SUBMIT_BOUNTY;
 			wc->thr = mythr;
 			memcpy(&wc->work, &work, sizeof(struct work));
 
@@ -1696,7 +1658,7 @@ static void *gpu_miner_thread(void *userdata) {
 					goto out;
 				}
 
-				wc->cmd = SUBMIT_BTY_ANN;
+				wc->cmd = SUBMIT_BOUNTY;
 				wc->thr = mythr;
 				memcpy(&wc->work, &work, sizeof(struct work));
 
@@ -1934,6 +1896,9 @@ static void *workio_thread(void *userdata)
 
 		// Submit POW / Bounty
 		for (i = 0; i < g_submit_req_cnt; i++) {
+
+// TODO - The Hold / Complete logic was originally used when bounties were announced, then confirmed.
+//        The logic will remain in place until it's determined if we need any retry logic around bounty submissions
 
 			// Skip Completed Requests
 			if (g_submit_req[i].req_type == SUBMIT_COMPLETE)

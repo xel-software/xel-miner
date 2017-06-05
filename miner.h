@@ -85,8 +85,6 @@ static const int BASE85_POW[] = {
 };
 
 enum submit_commands {
-	SUBMIT_BTY_ANN,
-	SUBMIT_BTY_CONF,
 	SUBMIT_BOUNTY,
 	SUBMIT_POW,
 	SUBMIT_COMPLETE
