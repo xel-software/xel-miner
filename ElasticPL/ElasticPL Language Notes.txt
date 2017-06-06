@@ -17,6 +17,7 @@ PROGRAM LAYOUT
 
 	An ElasticPL program consists of:
 		- 1 or more Global Variable arrays
+		- Storage declarations (Optional)
 		- "main" Function
 		- "verify" Function
 		- User-Defined Functions (Optional)
@@ -54,11 +55,6 @@ GLOBAL VARIABLES
 		u[5] = u[3] * 10;
 		d[6] = u[5] / i[5];
 	
-		Note 1: XXXX represents the number of elements in the array.
-		Note 2: Only 1 instance of each data type can be declared.
-		Note 3: The maximim combined storage size of all Global Variables can
-		        not exceed (TBD - need to determine max memory)
-				
 	Although it is discouraged to mix data types, there are times when this may
 	be necessary.  Because ElasticPL does not have an explicit 'cast' operation,
 	when an array variable is combined with a variable or constant of a different
@@ -102,11 +98,40 @@ VM INITIALIZED VARIABLES
 		.
 		m[11]	Random 32 bit Unsigned Int
 
-	The variables allow the job authors to randomize thier algorithm inputs
+	The variables allow the job authors to randomize their algorithm inputs
 	as well as trigger functions to run at specific intervals (i.e. run an 
 	'init' function only on run/iteration 0)
 	
+
+DATA STORAGE
+------------------------
+
+	ElasticPL has the ability to store a limited amount of data to be used to
+	intialize subsequent iterations of the algorithm.  This allows job authors
+	to create algorithms that build off the accepted Bounty Solutions from prior
+	iterations in the same work package.
+	
+	The use of stored data is optional.
+	
+	Currently, all stored data must be Unsigned Ints from the m[] array.
+	
+	Authors will provide the number of storage items, the m[] index to export
+	the data from, and the m[] index to re-import the data into a later iteration.
+	
+	There are three declarations required to use the storage feature:
 		
+		storage_cnt         XXXX  // Identifies # of Unsigned Ints to store
+		storage_import_idx  XXXX  // Identifies starting index in m[] array to import stored data into
+		storage_export_idx  XXXX  // Identifies starting index in m[] array to export stored data from
+		
+		Note: storage_cnt is currently limited to a max size of (TBD - Need To Determine)
+
+	It is assumed that there will be no overlap between the	imported / exported
+	m[] array values.  If there is, the job may	behave eradically as the
+	imported data is only loaded the first time the the iteration is run
+	(i.e. Run 0 for each Iteration)
+
+	
 FUNCTIONS
 ---------
 
@@ -207,8 +232,8 @@ ELASTICPL STATEMENTS
 	RESULT Statement
 	----------------
 
-		All ElasticPL programs must have a 'result' statement that includes a
-		right operand that can be evaluated to True or False.
+		All ElasticPL programs must have a 'result' statement that includes an
+		expression that can be evaluated to True or False.
 	
 		This result is used to indicate whether or not a given solution
 		satisfies the Bounty requirements.  For Example:

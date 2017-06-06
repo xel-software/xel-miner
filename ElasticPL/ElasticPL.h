@@ -42,6 +42,11 @@ uint32_t ast_vm_ulongs;
 uint32_t ast_vm_floats;
 uint32_t ast_vm_doubles;
 
+// Number Of Unsigned Ints To Store Per Interation / Import & Export Index
+uint32_t ast_storage_cnt;
+uint32_t ast_storage_import_idx;
+uint32_t ast_storage_export_idx;
+
 // Index Value Of Main & Verify Functions In AST Array
 int ast_func_idx;
 int ast_main_idx;
@@ -130,6 +135,9 @@ typedef enum {
 	NODE_ARRAY_ULONG,
 	NODE_ARRAY_FLOAT,
 	NODE_ARRAY_DOUBLE,
+	NODE_STORAGE_CNT,
+	NODE_STORAGE_IMP,
+	NODE_STORAGE_EXP,
 	NODE_FUNCTION,
 	NODE_CALL_FUNCTION,
 	NODE_RESULT
@@ -222,6 +230,9 @@ typedef enum {
 	TOKEN_ARRAY_ULONG,
 	TOKEN_ARRAY_FLOAT,
 	TOKEN_ARRAY_DOUBLE,
+	TOKEN_STORAGE_CNT,
+	TOKEN_STORAGE_IMP,
+	TOKEN_STORAGE_EXP,
 	TOKEN_FUNCTION,
 	TOKEN_CALL_FUNCTION,
 	TOKEN_RESULT
@@ -302,7 +313,7 @@ int *stack_op;		// List Of Operators For Parsing
 ast **stack_exp;	// List Of Expresions For Parsing / Final Expression List
 
 // Function Declarations
-extern bool create_epl_vm(char *source);
+extern bool create_epl_ast(char *source);
 
 extern bool init_token_list(SOURCE_TOKEN_LIST *token_list, size_t size);
 static DATA_TYPE validate_literal(char *str);

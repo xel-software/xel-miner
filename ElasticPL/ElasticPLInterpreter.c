@@ -76,6 +76,10 @@ static uint32_t calc_function_weight(ast* root, uint32_t *ast_depth) {
 				if ((ast_ptr->type == NODE_IF) || (ast_ptr->type == NODE_ELSE))
 					weight = get_node_weight(ast_ptr);
 
+				// Check For Built In Function
+				if ((ast_ptr->exp == EXP_FUNCTION))
+					weight = get_node_weight(ast_ptr);
+
 				// Check For "Repeat" Blocks
 				if (ast_ptr->type == NODE_REPEAT) {
 					weight = get_node_weight(ast_ptr);
@@ -114,6 +118,10 @@ static uint32_t calc_function_weight(ast* root, uint32_t *ast_depth) {
 				if ((ast_ptr->type == NODE_IF) || (ast_ptr->type == NODE_ELSE))
 					weight = get_node_weight(ast_ptr);
 
+				// Check For Built In Function
+				if ((ast_ptr->exp == EXP_FUNCTION))
+					weight = get_node_weight(ast_ptr);
+
 				// Check For "Repeat" Blocks
 				if (ast_ptr->type == NODE_REPEAT) {
 					weight = get_node_weight(ast_ptr);
@@ -126,7 +134,6 @@ static uint32_t calc_function_weight(ast* root, uint32_t *ast_depth) {
 					weight = get_node_weight(ast_ptr->parent);
 					depth--;
 				}
-
 			}
 			else {
 				if (((ast_ptr->type == NODE_IF) && (ast_ptr->right->type != NODE_ELSE) ) || (ast_ptr->type == NODE_ELSE))

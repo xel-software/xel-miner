@@ -312,6 +312,39 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 		}
 		break;
 
+	// VM Storage Declarations
+	case NODE_STORAGE_CNT:
+	case NODE_STORAGE_IMP:
+	case NODE_STORAGE_EXP:
+		if ((stack_exp_idx > 0) &&
+			(stack_exp[stack_exp_idx]->token_num > token_num) &&
+			(stack_exp[stack_exp_idx]->type == NODE_CONSTANT) &&
+			(stack_exp[stack_exp_idx]->data_type == DT_UINT)) {
+
+			// Check That Global Unsigned Int Array Has Been Declared
+			if (!ast_vm_uints) {
+				applog(LOG_ERR, "Syntax Error: Line: %d - Unsigned Int array must be declared before 'storage' statements", token->line_num);
+				return false;
+			}
+
+			// Save Storage Value
+			if (node_type == NODE_STORAGE_CNT)
+				ast_storage_cnt = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
+			else if(node_type == NODE_STORAGE_IMP)
+				ast_storage_import_idx = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
+			else if (node_type == NODE_STORAGE_EXP)
+				ast_storage_export_idx = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
+
+			// Check That Storage Indexes Are Within Unsigned Int Array
+			if ((ast_vm_uints < (ast_storage_cnt + ast_storage_import_idx)) || (ast_vm_uints < (ast_storage_cnt + ast_storage_export_idx))) {
+				applog(LOG_ERR, "Syntax Error: Line: %d - Storage range must be within Unsigned Int array range", token->line_num);
+				return false;
+			}
+
+			return true;
+		}
+		break;
+
 	// CONSTANT Declaration (1 Number)
 	case NODE_CONSTANT:
 		if ((stack_exp[stack_exp_idx]->token_num < token_num) && (stack_exp[stack_exp_idx]->data_type != DT_NONE))
@@ -674,6 +707,9 @@ static NODE_TYPE get_node_type(SOURCE_TOKEN *token, int token_num) {
 	case TOKEN_ARRAY_ULONG:		node_type = NODE_ARRAY_ULONG; 	break;
 	case TOKEN_ARRAY_FLOAT:		node_type = NODE_ARRAY_FLOAT; 	break;
 	case TOKEN_ARRAY_DOUBLE:	node_type = NODE_ARRAY_DOUBLE; 	break;
+	case TOKEN_STORAGE_CNT:		node_type = NODE_STORAGE_CNT; 	break;
+	case TOKEN_STORAGE_IMP:		node_type = NODE_STORAGE_IMP; 	break;
+	case TOKEN_STORAGE_EXP:		node_type = NODE_STORAGE_EXP; 	break;
 	case TOKEN_FUNCTION:		node_type = NODE_FUNCTION;		break;
 	case TOKEN_CALL_FUNCTION:	node_type = NODE_CALL_FUNCTION;	break;
 	case TOKEN_RESULT:			node_type = NODE_RESULT;		break;
@@ -1178,7 +1214,7 @@ static bool validate_ast() {
 	}
 
 	for (i = 0; i < stack_exp_idx; i++) {
-		if ((stack_exp[i]->type != NODE_ARRAY_INT) && (stack_exp[i]->type != NODE_ARRAY_UINT) && (stack_exp[i]->type != NODE_ARRAY_LONG) && (stack_exp[i]->type != NODE_ARRAY_ULONG) && (stack_exp[i]->type != NODE_ARRAY_FLOAT) && (stack_exp[i]->type != NODE_ARRAY_DOUBLE)) {
+		if ((stack_exp[i]->type != NODE_ARRAY_INT) && (stack_exp[i]->type != NODE_ARRAY_UINT) && (stack_exp[i]->type != NODE_ARRAY_LONG) && (stack_exp[i]->type != NODE_ARRAY_ULONG) && (stack_exp[i]->type != NODE_ARRAY_FLOAT) && (stack_exp[i]->type != NODE_ARRAY_DOUBLE) && (stack_exp[i]->type != NODE_STORAGE_CNT) && (stack_exp[i]->type != NODE_STORAGE_IMP) && (stack_exp[i]->type != NODE_STORAGE_EXP)) {
 			break;
 		}
 		ast_func_idx++;
@@ -1187,6 +1223,21 @@ static bool validate_ast() {
 	if (ast_func_idx == 0) {
 		applog(LOG_ERR, "Syntax Error: Line: %d - At least one variable array must be declared", stack_exp[0]->line_num);
 		return false;
+	}
+
+	if (ast_storage_cnt || ast_storage_import_idx || ast_storage_import_idx) {
+		if (!ast_storage_cnt) {
+			applog(LOG_ERR, "Syntax Error: Line: %d - Missing 'storage_cnt' declaration");
+			return false;
+		}
+		else if (!ast_storage_import_idx) {
+			applog(LOG_ERR, "Syntax Error: Line: %d - Missing 'storage_import_idx' declaration");
+			return false;
+		}
+		else if (!ast_storage_export_idx) {
+			applog(LOG_ERR, "Syntax Error: Line: %d - Missing 'storage_export_idx' declaration");
+			return false;
+		}
 	}
 
 	if (!validate_functions())

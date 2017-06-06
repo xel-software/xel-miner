@@ -19,7 +19,12 @@ uint32_t ast_vm_ulongs = 0;
 uint32_t ast_vm_floats = 0;
 uint32_t ast_vm_doubles = 0;
 
-extern bool create_epl_vm(char *source) {
+uint32_t ast_storage_cnt = 0;
+uint32_t ast_storage_import_idx = 0;
+uint32_t ast_storage_export_idx = 0;
+
+
+extern bool create_epl_ast(char *source) {
 	int i;
 	SOURCE_TOKEN_LIST token_list;
 
@@ -51,6 +56,13 @@ extern bool create_epl_vm(char *source) {
 		return false;
 	}
 
+// TODO - Fix Token List Allocation
+
+	if (!init_token_list(&token_list, TOKEN_LIST_SIZE)) {
+		applog(LOG_ERR, "ERROR: Unable To Allocate Token List For Parser!");
+		return false;
+	}
+
 	// Reset Stack Counters
 	stack_op_idx = -1;
 	stack_exp_idx = -1;
@@ -64,10 +76,10 @@ extern bool create_epl_vm(char *source) {
 	ast_vm_floats = 0;
 	ast_vm_doubles = 0;
 
-	if (!init_token_list(&token_list, TOKEN_LIST_SIZE)) {
-		applog(LOG_ERR, "ERROR: Unable To Allocate Token List For Parser!");
-		return false;
-	}
+	// Reset Storage Variables
+	ast_storage_cnt = 0;
+	ast_storage_import_idx = 0;
+	ast_storage_export_idx = 0;
 
 	// Parse EPL Source Code Into Tokens
 	if (!get_token_list(source, &token_list)) {
@@ -124,6 +136,10 @@ extern void dump_vm_ast(ast* root) {
 				ast_ptr = ast_ptr->left;
 			}
 
+			// Print Build In Functions
+			if (ast_ptr->exp == EXP_FUNCTION)
+				print_node(ast_ptr);
+
 			// If There Is A Right Node, Switch To It
 			if (ast_ptr->right) {
 				ast_ptr = ast_ptr->right;
@@ -156,6 +172,9 @@ extern void dump_vm_ast(ast* root) {
 static void print_node(ast* node) {
 	char val[18];
 	val[0] = 0;
+
+	if (node->type == NODE_PARAM)
+		return;
 
 	switch (node->type) {
 	case NODE_CONSTANT:
@@ -286,6 +305,9 @@ extern char* get_node_str(NODE_TYPE node_type) {
 	case NODE_ARRAY_ULONG:	return "array_ulong";
 	case NODE_ARRAY_FLOAT:	return "array_float";
 	case NODE_ARRAY_DOUBLE:	return "array_double";
+	case NODE_STORAGE_CNT:	return "storage_cnt";
+	case NODE_STORAGE_IMP:	return "storage_import_idx";
+	case NODE_STORAGE_EXP:	return "storage_export_idx";
 	case NODE_CONSTANT:		return "";
 	case NODE_VAR_CONST:	return "array[]";
 	case NODE_VAR_EXP:		return "array[x]";
@@ -338,7 +360,6 @@ extern char* get_node_str(NODE_TYPE node_type) {
 	case NODE_REPEAT:		return "repeat";
 	case NODE_BREAK:		return "break";
 	case NODE_CONTINUE:		return "continue";
-	case NODE_PARAM:		return "param";
 	case NODE_SIN:			return "sin";
 	case NODE_COS:			return "cos";
 	case NODE_TAN:			return "tan";

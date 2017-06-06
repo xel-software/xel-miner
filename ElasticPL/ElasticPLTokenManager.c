@@ -15,7 +15,7 @@
 /*****************************************************************************
 ElasticPL Token List
 
-Format:  Str, Len, Type, Exp, Inputs, Prec, Data Type
+Format:  Str, Len, Type, Exp, Inputs, Prec, Initial Data Type
 
 Str:		Token String
 Len:		String Length Used For "memcmp"
@@ -41,6 +41,9 @@ struct EXP_TOKEN_LIST epl_token[] = {
 	{ "array_ulong",				11,	TOKEN_ARRAY_ULONG,	EXP_STATEMENT,	1,	0,	DT_NONE },
 	{ "array_float",				11,	TOKEN_ARRAY_FLOAT,	EXP_STATEMENT,	1,	0,	DT_NONE },
 	{ "array_double",				12,	TOKEN_ARRAY_DOUBLE,	EXP_STATEMENT,	1,	0,	DT_NONE },
+	{ "storage_cnt",				11,	TOKEN_STORAGE_CNT,	EXP_STATEMENT,	1,	0,	DT_NONE },
+	{ "storage_import_idx",			18,	TOKEN_STORAGE_IMP,	EXP_STATEMENT,	1,	0,	DT_NONE },
+	{ "storage_export_idx",			18,	TOKEN_STORAGE_EXP,	EXP_STATEMENT,	1,	0,	DT_NONE },
 	{ "repeat",						6,	TOKEN_REPEAT,		EXP_STATEMENT,	4,	2,	DT_NONE },
 	{ "if",							2,	TOKEN_IF,			EXP_STATEMENT,	2,	2,	DT_NONE },
 	{ "else",						4,	TOKEN_ELSE,			EXP_STATEMENT,	2,	2,	DT_NONE },
