@@ -101,12 +101,24 @@ struct work_package {
 	uint64_t bty_reward;
 	int pending_bty_cnt;
 	bool blacklisted;
+	bool active;
+
+	// VM Memory
 	uint32_t vm_ints;
 	uint32_t vm_uints;
 	uint32_t vm_longs;
 	uint32_t vm_ulongs;
 	uint32_t vm_floats;
 	uint32_t vm_doubles;
+
+	// Data Storage
+	uint32_t iteration_id;
+	uint32_t storage_id;
+	uint32_t storage_cnt;
+	uint32_t storage_imp_idx;
+	uint32_t storage_exp_idx;
+	unsigned char *storage;
+
 
 };
 
@@ -115,12 +127,14 @@ struct work {
 	int package_id;
 	uint64_t block_id;
 	uint64_t work_id;
+	uint32_t iteration_id;
 	unsigned char work_str[22];
 	unsigned char work_nm[50];
 	uint32_t pow_target[4];
 	uint32_t vm_input[12];
 	unsigned char multiplicator[32];
 	unsigned char announcement_hash[32];
+	unsigned char *storage;
 };
 
 struct thr_info {

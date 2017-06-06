@@ -545,7 +545,7 @@ static void *test_vm_thread(void *userdata) {
 			exit(EXIT_FAILURE);
 
 		// Convert The Source Code Into ElasticPL AST
-		if (!create_epl_vm(test_code)) {
+		if (!create_epl_ast(test_code)) {
 			applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
 			exit(EXIT_FAILURE);
 		}
@@ -557,6 +557,15 @@ static void *test_vm_thread(void *userdata) {
 		work_package.vm_ulongs = ast_vm_ulongs;
 		work_package.vm_floats = ast_vm_floats;
 		work_package.vm_doubles = ast_vm_doubles;
+
+		// Copy Storage Variables Into Work Package
+		work_package.iteration_id = 0;
+		work_package.storage_id = 0;
+		work_package.storage_cnt = ast_storage_cnt;
+		work_package.storage_imp_idx = ast_storage_import_idx;
+		work_package.storage_exp_idx = ast_storage_export_idx;
+		if (ast_storage_cnt)
+			work_package.storage = calloc(ast_storage_cnt, sizeof(uint32_t));
 
 		// Calculate WCET
 		if (!calc_wcet()) {
@@ -1038,6 +1047,8 @@ static int work_decode(const json_t *val, struct work *work) {
 		work_id = strtoull(str, NULL, 10);
 		applog(LOG_DEBUG, "DEBUG: Checking work_id: %s", str);
 
+// TODO: Need To Add Iteration Number To Message
+
 		// Check If Work Package Exists
 		work_pkg_id = -1;
 		for (j = 0; j < g_work_package_cnt; j++) {
@@ -1093,12 +1104,14 @@ static int work_decode(const json_t *val, struct work *work) {
 				applog(LOG_DEBUG, "DEBUG: ElasticPL Source Code -\n%s", elastic_src);
 
 			// Convert ElasticPL Into AST
-			if (!create_epl_vm(elastic_src)) {
+			if (!create_epl_ast(elastic_src)) {
 				work_package.blacklisted = true;
 				applog(LOG_ERR, "ERROR: Unable to convert 'source' to AST for work_id: %s\n\n%s\n", work_package.work_str, str);
 				free(elastic_src);
 				return 0;
 			}
+
+			free(elastic_src);
 
 			// Copy Global Array Sizes Into Work Package
 			work_package.vm_ints = ast_vm_ints;
@@ -1108,7 +1121,14 @@ static int work_decode(const json_t *val, struct work *work) {
 			work_package.vm_floats = ast_vm_floats;
 			work_package.vm_doubles = ast_vm_doubles;
 
-			free(elastic_src);
+			// Copy Storage Variables Into Work Package
+			work_package.iteration_id = 0;
+			work_package.storage_id = 0;
+			work_package.storage_cnt = ast_storage_cnt;
+			work_package.storage_imp_idx = ast_storage_import_idx;
+			work_package.storage_exp_idx = ast_storage_export_idx;
+			if (ast_storage_cnt)
+				work_package.storage = calloc(ast_storage_cnt, sizeof(uint32_t));
 
 			// Calculate WCET
 			work_package.WCET = calc_wcet();
@@ -1382,9 +1402,6 @@ static void *cpu_miner_thread(void *userdata) {
 		// Check If We Are Mining The Most Current Work
 		if (work.work_id != g_work.work_id) {
 
-			rnd = 0;
-			iteration = 0;
-
 			// Copy Global Work Into Local Thread Work
 			memcpy((void *)&work, (void *)&g_work, sizeof(struct work));
 			work.thr_id = thr_id;
@@ -1439,10 +1456,31 @@ static void *cpu_miner_thread(void *userdata) {
 			inst = calloc(1, sizeof(struct instance));
 			create_instance(inst, work.work_str);
 			inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d);
+
+			// Set Round / Iteration For The Work
+			rnd = 0;
+			iteration = g_work_package[work.package_id].iteration_id;
+
+			// Copy New Storage Values To VM
+			if (g_work_package[work.package_id].storage_cnt)
+				memcpy(vm_u, g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_cnt * sizeof(uint32_t));
+
 		}
-		// Otherwise, Just Update POW Target
+		// Otherwise, Just Update POW Target / Iteration / Storage
 		else {
 			memcpy(&work.pow_target, &g_work.pow_target, 4 * sizeof(uint32_t));
+
+			if (work.iteration_id != g_work.iteration_id) {
+
+				// Set Round / Iteration For The Work
+				rnd = 0;
+				iteration = g_work_package[work.package_id].iteration_id;
+
+				// Copy New Storage Values To VM
+				if (g_work_package[work.package_id].storage_cnt)
+					memcpy(&vm_u[g_work_package[work.package_id].storage_imp_idx], g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_cnt * sizeof(uint32_t));
+
+			}
 		}
 
 		work_restart[thr_id].restart = 0;
@@ -1490,6 +1528,9 @@ static void *cpu_miner_thread(void *userdata) {
 			wc->cmd = SUBMIT_BOUNTY;
 			wc->thr = mythr;
 			memcpy(&wc->work, &work, sizeof(struct work));
+
+			if (g_work_package[work.package_id].storage_cnt)
+				memcpy(work.storage, &vm_u[g_work_package[work.package_id].storage_exp_idx], g_work_package[work.package_id].storage_cnt * sizeof(uint32_t));
 
 			// Add Solution To Queue
 			if (!tq_push(thr_info[work_thr_id].q, wc)) {
@@ -2365,6 +2406,10 @@ int main(int argc, char **argv) {
 
 	if (test_filename)
 		free(test_filename);
+
+// TODO: Cleanup any still running threads on exit.
+
+// TODO: Cleanup global workpackages on exit.
 
 	return 0;
 }

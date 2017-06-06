@@ -645,7 +645,7 @@ static bool sn_validate_package(const json_t *pkg, char *elastic_src, char *err_
 	}
 
 	// Convert ElasticPL Into AST
-	if (!create_epl_vm(elastic_src)) {
+	if (!create_epl_ast(elastic_src)) {
 		sprintf(err_msg, "Unable to convert 'source' to AST for work_id: %s", work_package.work_str);
 		return false;
 	}
@@ -657,6 +657,15 @@ static bool sn_validate_package(const json_t *pkg, char *elastic_src, char *err_
 	work_package.vm_ulongs = ast_vm_ulongs;
 	work_package.vm_floats = ast_vm_floats;
 	work_package.vm_doubles = ast_vm_doubles;
+
+	// Copy Storage Variables Into Work Package
+	work_package.iteration_id = 0;
+	work_package.storage_id = 0;
+	work_package.storage_cnt = ast_storage_cnt;
+	work_package.storage_imp_idx = ast_storage_import_idx;
+	work_package.storage_exp_idx = ast_storage_export_idx;
+	if (ast_storage_cnt)
+		work_package.storage = calloc(ast_storage_cnt, sizeof(uint32_t));
 
 	// Calculate WCET
 	if (!calc_wcet()) {
