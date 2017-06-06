@@ -113,23 +113,23 @@ DATA STORAGE
 	
 	The use of stored data is optional.
 	
-	Currently, all stored data must be Unsigned Ints from the m[] array.
+	Currently, all stored data must be Unsigned Ints from the u[] array.
 	
-	Authors will provide the number of storage items, the m[] index to export
+	Authors will provide the number of storage items, the u[] index to export
 	the data from, and the m[] index to re-import the data into a later iteration.
 	
 	There are three declarations required to use the storage feature:
 		
 		storage_cnt         XXXX  // Identifies # of Unsigned Ints to store
-		storage_import_idx  XXXX  // Identifies starting index in m[] array to import stored data into
-		storage_export_idx  XXXX  // Identifies starting index in m[] array to export stored data from
+		storage_import_idx  XXXX  // Identifies starting index in u[] array to import stored data into
+		storage_export_idx  XXXX  // Identifies starting index in u[] array to export stored data from
 		
 		Note: storage_cnt is currently limited to a max size of (TBD - Need To Determine)
 
 	It is assumed that there will be no overlap between the	imported / exported
-	m[] array values.  If there is, the job may	behave eradically as the
+	u[] array values.  If there is, the job may	behave eradically as the
 	imported data is only loaded the first time the the iteration is run
-	(i.e. Run 0 for each Iteration)
+	(i.e. Run 0 for each Iteration > 0)
 
 	
 FUNCTIONS
