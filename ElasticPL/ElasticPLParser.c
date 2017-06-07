@@ -257,6 +257,11 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 	case NODE_ARRAY_DOUBLE:
 		if ((stack_exp[stack_exp_idx]->token_num > token_num) && !stack_exp[stack_exp_idx]->is_signed && !stack_exp[stack_exp_idx]->is_float) {
 
+			if (stack_exp[stack_exp_idx]->uvalue == 0) {
+				applog(LOG_ERR, "Syntax Error: Line: %d - Array size must be greater than zero", token->line_num);
+				return false;
+			}
+
 			// Check That There Is Only One Instance Of Each Data Type Array
 			switch (node_type) {
 			case NODE_ARRAY_INT:
@@ -330,7 +335,7 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 			// Save Storage Value
 			if (node_type == NODE_STORAGE_CNT)
 				ast_storage_cnt = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
-			else if(node_type == NODE_STORAGE_IMP)
+			else if (node_type == NODE_STORAGE_IMP)
 				ast_storage_import_idx = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
 			else if (node_type == NODE_STORAGE_EXP)
 				ast_storage_export_idx = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
@@ -1204,7 +1209,7 @@ extern bool parse_token_list(SOURCE_TOKEN_LIST *token_list) {
 }
 
 static bool validate_ast() {
-	int i;
+	int i, cnt_idx = 0, imp_idx = 0, exp_idx = 0;
 	
 	ast_func_idx = 0;
 
@@ -1213,6 +1218,7 @@ static bool validate_ast() {
 		return false;
 	}
 
+	// Get Index Of First Function
 	for (i = 0; i < stack_exp_idx; i++) {
 		if ((stack_exp[i]->type != NODE_ARRAY_INT) && (stack_exp[i]->type != NODE_ARRAY_UINT) && (stack_exp[i]->type != NODE_ARRAY_LONG) && (stack_exp[i]->type != NODE_ARRAY_ULONG) && (stack_exp[i]->type != NODE_ARRAY_FLOAT) && (stack_exp[i]->type != NODE_ARRAY_DOUBLE) && (stack_exp[i]->type != NODE_STORAGE_CNT) && (stack_exp[i]->type != NODE_STORAGE_IMP) && (stack_exp[i]->type != NODE_STORAGE_EXP)) {
 			break;
@@ -1225,16 +1231,42 @@ static bool validate_ast() {
 		return false;
 	}
 
-	if (ast_storage_cnt || ast_storage_import_idx || ast_storage_import_idx) {
-		if (!ast_storage_cnt) {
-			applog(LOG_ERR, "Syntax Error: Line: %d - Missing 'storage_cnt' declaration");
+	// Get Index Of Storage Declarations
+	for (i = 0; i < stack_exp_idx; i++) {
+		if (stack_exp[i]->type == NODE_STORAGE_CNT) {
+			if (cnt_idx) {
+				applog(LOG_ERR, "Syntax Error: Line: %d - Storage declaration 'storage_cnt' can only be declared once", stack_exp[i]->line_num);
+				return false;
+			}
+			cnt_idx = i;
+		}
+		else if (stack_exp[i]->type == NODE_STORAGE_IMP) {
+			if (imp_idx) {
+				applog(LOG_ERR, "Syntax Error: Line: %d - Storage declaration 'storage_import_idx' can only be declared once", stack_exp[i]->line_num);
+				return false;
+			}
+			imp_idx = i;
+		}
+		else if (stack_exp[i]->type == NODE_STORAGE_EXP) {
+			if (exp_idx) {
+				applog(LOG_ERR, "Syntax Error: Line: %d - Storage declaration 'storage_export_idx' can only be declared once", stack_exp[i]->line_num);
+				return false;
+			}
+			exp_idx = i;
+		}
+	}
+
+	// If Storage Is Declared, Ensure All 3 Values Are There
+	if (cnt_idx || imp_idx || exp_idx) {
+		if (!cnt_idx || !ast_storage_cnt) {
+			applog(LOG_ERR, "Syntax Error: Line: %d - 'storage_cnt' must be declared and greater than zero");
 			return false;
 		}
-		else if (!ast_storage_import_idx) {
+		else if (!imp_idx) {
 			applog(LOG_ERR, "Syntax Error: Line: %d - Missing 'storage_import_idx' declaration");
 			return false;
 		}
-		else if (!ast_storage_export_idx) {
+		else if (!exp_idx) {
 			applog(LOG_ERR, "Syntax Error: Line: %d - Missing 'storage_export_idx' declaration");
 			return false;
 		}
