@@ -769,10 +769,10 @@ static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work
 		// Execute The VM Logic
 		rc = inst->execute(work->work_id);
 
-		if (opt_test_miner) {
-			dump_vm(work->package_id);
-			exit(EXIT_SUCCESS);
-		}
+		//if (opt_test_miner) {
+		//	dump_vm(work->package_id);
+		//	exit(EXIT_SUCCESS);
+		//}
 
 		// Bounty Found, Exit Immediately
 		if (rc == 1) {
@@ -1462,8 +1462,8 @@ static void *cpu_miner_thread(void *userdata) {
 			iteration = g_work_package[work.package_id].iteration_id;
 
 			// Copy New Storage Values To VM
-			if (g_work_package[work.package_id].storage_cnt)
-				memcpy(vm_u, g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_cnt * sizeof(uint32_t));
+			if (iteration && g_work_package[work.package_id].storage_cnt)
+				memcpy(&vm_u[g_work_package[work.package_id].storage_imp_idx], g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_cnt * sizeof(uint32_t));
 
 		}
 		// Otherwise, Just Update POW Target / Iteration / Storage
@@ -1529,12 +1529,16 @@ static void *cpu_miner_thread(void *userdata) {
 			wc->thr = mythr;
 			memcpy(&wc->work, &work, sizeof(struct work));
 
-			if (g_work_package[work.package_id].storage_cnt)
-				memcpy(work.storage, &vm_u[g_work_package[work.package_id].storage_exp_idx], g_work_package[work.package_id].storage_cnt * sizeof(uint32_t));
+			// Save Storage Data
+			if (g_work_package[work.package_id].storage_cnt) {
+				wc->storage = malloc(g_work_package[work.package_id].storage_cnt * sizeof(uint32_t));
+				memcpy(wc->storage, &vm_u[g_work_package[work.package_id].storage_exp_idx], g_work_package[work.package_id].storage_cnt * sizeof(uint32_t));
+			}
 
 			// Add Solution To Queue
 			if (!tq_push(thr_info[work_thr_id].q, wc)) {
 				applog(LOG_ERR, "ERROR: Unable to add solution to queue.  Shutting down thread for CPU%d", thr_id);
+				if (wc->storage) free(wc->storage);
 				free(wc);
 				goto out;
 			}
@@ -1706,6 +1710,7 @@ static void *gpu_miner_thread(void *userdata) {
 				// Add Solution To Queue
 				if (!tq_push(thr_info[work_thr_id].q, wc)) {
 					applog(LOG_ERR, "ERROR: Unable to add solution to queue.  Shutting down thread for %s", mythr->name);
+					if (wc->storage) free(wc->storage);
 					free(wc);
 					goto out;
 				}
@@ -1930,8 +1935,8 @@ static void *workio_thread(void *userdata)
 		// Check For New Solutions On Queue
 		wc = (struct workio_cmd *) tq_pop_nowait(mythr->q);
 		while (wc) {
-			add_submit_req(&wc->work, wc->cmd);
-			free(wc);
+			add_submit_req(&wc->work, wc->storage, wc->cmd);
+			free(wc);  // Storage Will Be Cleaned Up After Submit
 			wc = (struct workio_cmd *) tq_pop_nowait(mythr->q);
 		}
 
@@ -1956,7 +1961,6 @@ static void *workio_thread(void *userdata)
 
 		// Remove Completed Solutions
 		for (i = 0; i < g_submit_req_cnt; i++) {
-
 			if (g_submit_req[i].req_type == SUBMIT_COMPLETE) {
 				applog(LOG_DEBUG, "DEBUG: Submit complete...deleting request");
 				delete_submit_req(i);
@@ -1987,7 +1991,7 @@ static void *workio_thread(void *userdata)
 	return NULL;
 }
 
-static bool add_submit_req(struct work *work, enum submit_commands req_type) {
+static bool add_submit_req(struct work *work, unsigned char *storage, enum submit_commands req_type) {
 	uint32_t *hash32 = (uint32_t *)work->announcement_hash;
 	uint32_t *mult32 = (uint32_t *)work->multiplicator;
 
@@ -2009,6 +2013,7 @@ static bool add_submit_req(struct work *work, enum submit_commands req_type) {
 	strncpy(g_submit_req[g_submit_req_cnt].work_str, work->work_str, 21);
 	sprintf(g_submit_req[g_submit_req_cnt].hash, "%08X%08X%08X%08X%08X%08X%08X%08X", swap32(hash32[0]), swap32(hash32[1]), swap32(hash32[2]), swap32(hash32[3]), swap32(hash32[4]), swap32(hash32[5]), swap32(hash32[6]), swap32(hash32[7]));
 	sprintf(g_submit_req[g_submit_req_cnt].mult, "%08X%08X%08X%08X%08X%08X%08X%08X", swap32(mult32[0]), swap32(mult32[1]), swap32(mult32[2]), swap32(mult32[3]), swap32(mult32[4]), swap32(mult32[5]), swap32(mult32[6]), swap32(mult32[7]));
+	g_submit_req[g_submit_req_cnt].storage = storage;
 	if (req_type != SUBMIT_POW) {
 		g_submit_req[g_submit_req_cnt].bounty = true;
 		update_pending_cnt(work->work_id, true);
@@ -2024,6 +2029,10 @@ static bool delete_submit_req(int idx) {
 	int i;
 
 	pthread_mutex_lock(&submit_lock);
+
+	// Clear Storage Buffer
+	if (g_submit_req[idx].storage)
+		free(g_submit_req[idx].storage);
 
 	if (g_submit_req[idx].bounty)
 		update_pending_cnt(g_submit_req[idx].work_id, false);

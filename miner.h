@@ -134,7 +134,6 @@ struct work {
 	uint32_t vm_input[12];
 	unsigned char multiplicator[32];
 	unsigned char announcement_hash[32];
-	unsigned char *storage;
 };
 
 struct thr_info {
@@ -161,12 +160,14 @@ struct submit_req {
 	char mult[65];		// Multiplicator In Hex
 	uint64_t work_id;
 	unsigned char work_str[22];
+	unsigned char *storage;
 };
 
 struct workio_cmd {
 	enum submit_commands cmd;
 	struct thr_info *thr;
 	struct work work;
+	unsigned char *storage;
 };
 
 struct header_info {
@@ -338,7 +339,7 @@ static void update_pending_cnt(uint64_t work_id, bool add);
 
 static bool submit_work(CURL *curl, struct submit_req *req);
 static bool delete_submit_req(int idx);
-static bool add_submit_req(struct work *work, enum submit_commands req_type);
+static bool add_submit_req(struct work *work, unsigned char *storage, enum submit_commands req_type);
 
 static bool get_opencl_base_data(struct work *work, uint32_t *vm_input);
 
