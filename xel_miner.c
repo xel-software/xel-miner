@@ -580,6 +580,8 @@ static void *test_vm_thread(void *userdata) {
 			exit(EXIT_FAILURE);
 		}
 
+		// Add Work Package To Global List
+		work_package.active = true;
 		add_work_package(&work_package);
 		package_idx = i;
 
@@ -960,7 +962,7 @@ static bool get_work(CURL *curl) {
 	if (rc > 0) {
 		strncpy(g_work_id, work.work_str, 21);
 		strncpy(g_work_nm, work.work_nm, 49);
-		sprintf(g_pow_target_str, "%08X%08X%08X%08X", work.pow_target[0], work.pow_target[1], work.pow_target[2], work.pow_target[3]);
+		ints2hex(work.pow_target, 4, g_pow_target_str, 33);
 		memcpy(g_pow_target, work.pow_target, 4 * sizeof(uint32_t));
 		memcpy(&g_work, &work, sizeof(struct work));
 
@@ -1005,7 +1007,7 @@ static double calc_diff(uint32_t *target) {
 }
 
 static int work_decode(const json_t *val, struct work *work) {
-	int i, j, rc, num_pkg, best_pkg, bty_rcvd, work_pkg_id;
+	int i, j, rc, num_pkg, best_pkg, bty_rcvd, work_pkg_id, iteration_id;
 	uint64_t work_id;
 	uint32_t best_wcet = 0xFFFFFFFF, pow_tgt[4];
 	double difficulty, best_profit = 0, profit = 0;
@@ -1027,7 +1029,11 @@ static int work_decode(const json_t *val, struct work *work) {
 		return 0;
 	}
 
-	// Check If Any Work Packages Are Available
+	// Set All Packages In Global List To Inactive
+	for (i = 0; i < g_work_package_cnt; i++)
+		g_work_package[i].active = false;
+
+	// Check If Any Active Work Packages Are Available
 	num_pkg = json_array_size(wrk);
 	if (num_pkg == 0) {
 		applog(LOG_INFO, "No work available...retrying in %ds", opt_scantime);
@@ -1040,20 +1046,32 @@ static int work_decode(const json_t *val, struct work *work) {
 		pkg = json_array_get(wrk, i);
 		tgt = (char *)json_string_value(json_object_get(pkg, "target"));
 		str = (char *)json_string_value(json_object_get(pkg, "work_id"));
-		if (!str || !tgt) {
+
+// TODO: Need To Add Iteration Number To Message
+
+		iteration_id = -1;
+//		iteration_id = (int)json_integer_value(json_object_get(pkg, "iteration_id"));
+		iteration_id = 0;
+
+		if (!tgt || !str || (iteration_id < 0)) {
 			applog(LOG_ERR, "Unable to parse work package");
 			return 0;
 		}
 		work_id = strtoull(str, NULL, 10);
-		applog(LOG_DEBUG, "DEBUG: Checking work_id: %s", str);
-
-// TODO: Need To Add Iteration Number To Message
+		applog(LOG_DEBUG, "DEBUG: Checking work_id: %s (iteration_id: %d)", str, iteration_id);
 
 		// Check If Work Package Exists
 		work_pkg_id = -1;
 		for (j = 0; j < g_work_package_cnt; j++) {
 			if (work_id == g_work_package[j].work_id) {
 				work_pkg_id = j;
+
+				// Update Iteration ID
+				g_work_package[j].iteration_id = iteration_id;
+
+				// Set Status To Active
+				g_work_package[j].active = true;
+
 				break;
 			}
 		}
@@ -1122,7 +1140,7 @@ static int work_decode(const json_t *val, struct work *work) {
 			work_package.vm_doubles = ast_vm_doubles;
 
 			// Copy Storage Variables Into Work Package
-			work_package.iteration_id = 0;
+			work_package.iteration_id = iteration_id;
 			work_package.storage_id = 0;
 			work_package.storage_cnt = ast_storage_cnt;
 			work_package.storage_imp_idx = ast_storage_import_idx;
@@ -1166,6 +1184,8 @@ static int work_decode(const json_t *val, struct work *work) {
 
 			applog(LOG_DEBUG, "DEBUG: Adding work package to list, work_id: %s", work_package.work_str);
 
+			// Add Work Package To Global List
+			work_package.active = true;
 			add_work_package(&work_package);
 			work_pkg_id = g_work_package_cnt - 1;
 		}
@@ -1244,11 +1264,10 @@ static int work_decode(const json_t *val, struct work *work) {
 }
 
 static bool submit_work(CURL *curl, struct submit_req *req) {
-	int err;
+	int err, storage_sz;
 	json_t *val = NULL;
 	struct timeval tv_start, tv_end, diff;
-	char data[1000];
-	char *url, *err_desc;
+	char *url = NULL, *data = NULL, *storage_hex = NULL, *err_desc = NULL;
 
 	url = calloc(1, strlen(rpc_url) + 50);
 	if (!url) {
@@ -1262,15 +1281,32 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 
 	if (req->req_type == SUBMIT_BOUNTY) {
 
-// TODO - The following 2 values need to be redone once the new storage model is determined
-//        They are just hardcoded for now so the interface doesn't fail
+		// Allocate Memory For Data Buffer
+		storage_sz = (req->storage_cnt * 8) + 1;
+		data = calloc(1, 512 + storage_sz);
+		if (req->storage_cnt)
+			storage_hex = calloc(1, storage_sz);
+		if (!data || !storage_hex) {
+			applog(LOG_ERR, "ERROR: Unable to allocate memory for submit work data");
+			return false;
+		}
+
+		if (!ints2hex(req->storage, req->storage_cnt, storage_hex, storage_sz))
+			return false;
+
+// TODO - The following value need to be redone once the new storage model is determined
+//        It is just hardcoded for now so the interface doesn't fail
 		char storage_height[] = "00000000000000000000000000000000";	// 32 Byte Value
-		char st_ints[] = "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000";	// 256 Bytes In Hex Format
 
 		sprintf(url, "%s?requestType=createPoX&random=%u", rpc_url, rand_id);
-		sprintf(data, "deadline=3&feeNQT=0&amountNQT=0&referenced_storage_height=%s&work_id=%s&storage=%s&multiplicator=%s&is_pow=false&secretPhrase=%s", storage_height, req->work_str, st_ints, req->mult, passphrase);
+		sprintf(data, "deadline=3&feeNQT=0&amountNQT=0&referenced_storage_height=%s&work_id=%s&storage=%s&multiplicator=%s&is_pow=false&secretPhrase=%s", storage_height, req->work_str, storage_hex, req->mult, passphrase);
 	}
 	else if (req->req_type == SUBMIT_POW) {
+		data = calloc(1, 512);
+		if (!data) {
+			applog(LOG_ERR, "ERROR: Unable to allocate memory for submit work url");
+			return false;
+		}
 		sprintf(url, "%s?requestType=createPoX&random=%u", rpc_url, rand_id);
 		sprintf(data, "deadline=3&feeNQT=0&amountNQT=0&work_id=%s&multiplicator=%s&is_pow=true&secretPhrase=%s", req->work_str, req->mult, passphrase);
 	}
@@ -1342,6 +1378,8 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 
 	json_decref(val);
 	free(url);
+	if (data) free(data);
+	if (storage_hex) free(storage_hex);
 
 	return true;
 }
@@ -1991,9 +2029,7 @@ static void *workio_thread(void *userdata)
 	return NULL;
 }
 
-static bool add_submit_req(struct work *work, unsigned char *storage, enum submit_commands req_type) {
-	uint32_t *hash32 = (uint32_t *)work->announcement_hash;
-	uint32_t *mult32 = (uint32_t *)work->multiplicator;
+static bool add_submit_req(struct work *work, uint32_t *storage, enum submit_commands req_type) {
 
 	pthread_mutex_lock(&submit_lock);
 
@@ -2011,8 +2047,10 @@ static bool add_submit_req(struct work *work, unsigned char *storage, enum submi
 	g_submit_req[g_submit_req_cnt].retries = 0;
 	g_submit_req[g_submit_req_cnt].work_id = work->work_id;
 	strncpy(g_submit_req[g_submit_req_cnt].work_str, work->work_str, 21);
-	sprintf(g_submit_req[g_submit_req_cnt].hash, "%08X%08X%08X%08X%08X%08X%08X%08X", swap32(hash32[0]), swap32(hash32[1]), swap32(hash32[2]), swap32(hash32[3]), swap32(hash32[4]), swap32(hash32[5]), swap32(hash32[6]), swap32(hash32[7]));
-	sprintf(g_submit_req[g_submit_req_cnt].mult, "%08X%08X%08X%08X%08X%08X%08X%08X", swap32(mult32[0]), swap32(mult32[1]), swap32(mult32[2]), swap32(mult32[3]), swap32(mult32[4]), swap32(mult32[5]), swap32(mult32[6]), swap32(mult32[7]));
+	bin2hex(work->announcement_hash, 32, g_submit_req[g_submit_req_cnt].hash, 65);
+	bin2hex(work->multiplicator, 32, g_submit_req[g_submit_req_cnt].mult, 65);
+	g_submit_req[g_submit_req_cnt].iteration_id = work->iteration_id;
+	g_submit_req[g_submit_req_cnt].storage_cnt = g_work_package[work->package_id].storage_cnt;
 	g_submit_req[g_submit_req_cnt].storage = storage;
 	if (req_type != SUBMIT_POW) {
 		g_submit_req[g_submit_req_cnt].bounty = true;

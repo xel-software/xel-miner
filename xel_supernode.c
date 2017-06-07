@@ -681,7 +681,8 @@ static bool sn_validate_package(const json_t *pkg, char *elastic_src, char *err_
 		return false;
 	}
 
-	// Add Package To Global List
+	// Add Work Package To Global List
+	work_package.active = true;
 	add_work_package(&work_package);
 	work_pkg_id = g_work_package_cnt - 1;
 

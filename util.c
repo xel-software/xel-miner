@@ -185,7 +185,59 @@ int timeval_subtract(struct timeval *result, struct timeval *x,	struct timeval *
 	return x->tv_sec < y->tv_sec;
 }
 
-bool hex2ints(uint32_t *p, int array_sz, const char *hex, int len) {
+extern bool bin2hex(unsigned char *in, int in_sz, unsigned char *out, int out_sz) {
+	int i;
+	const char * hex = "0123456789ABCDEF";
+	unsigned char *pin = in, *pout = out;
+
+	if (in_sz <= 0 || (out_sz <= (in_sz * 2))) {
+		applog(LOG_ERR, "ERROR: Can't convert array of %d bytes into %d byte hex string", in_sz, out_sz);
+		return false;
+	}
+
+	for (i = 0; i < in_sz; i++) {
+			pout[0] = hex[(*pin >> 4) & 0xF];
+			pout[1] = hex[*pin & 0xF];
+			pout += 2;
+			pin++;
+	}
+	pout[0] = 0;
+	return true;
+}
+
+extern bool ints2hex(uint32_t *in, int num, unsigned char *out, int out_sz) {
+	int i;
+	const char * hex = "0123456789ABCDEF";
+//	unsigned char *pin, *pout = out;
+	unsigned char *pout = out;
+
+	if (num <= 0 || (out_sz <= (num * 8))) {
+		applog(LOG_ERR, "ERROR: Can't convert array of %d ints into %d byte hex string", num, out_sz);
+		return false;
+	}
+
+	for (i = 0; i < num; i++) {
+		sprintf(pout, "%08X", in[i]);
+		pout += 8;
+	}
+
+	// Alternate Method
+	//for (i = 0; i < num; i++) {
+	//	// Start At End Of Int (To Reverse Bytes)
+	//	pin = ((unsigned char *)&in[i]) + 3;
+	//	for (j = 0; j < 4; j++) {
+	//		pout[0] = hex[(*pin >> 4) & 0xF];
+	//		pout[1] = hex[*pin & 0xF];
+	//		pout += 2;
+	//		pin--;
+	//	}
+	//}
+	//pout[0] = 0;
+
+	return true;
+}
+
+extern bool hex2ints(uint32_t *p, int array_sz, const char *hex, int len) {
 	int i, j, idx;
 	unsigned char val;
 	unsigned char *c = (unsigned char*)p;
@@ -193,7 +245,7 @@ bool hex2ints(uint32_t *p, int array_sz, const char *hex, int len) {
 	char *ep;
 
 	if (array_sz <= 0 || len <= 0 || len > (8 * array_sz)) {
-		applog(LOG_ERR, "ERROR: Can't convert %d byte hex string to array of %d ints'", len, array_sz);
+		applog(LOG_ERR, "ERROR: Can't convert %d byte hex string to array of %d ints", len, array_sz);
 		return false;
 	}
 

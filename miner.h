@@ -117,8 +117,7 @@ struct work_package {
 	uint32_t storage_cnt;
 	uint32_t storage_imp_idx;
 	uint32_t storage_exp_idx;
-	unsigned char *storage;
-
+	uint32_t *storage;
 
 };
 
@@ -160,14 +159,16 @@ struct submit_req {
 	char mult[65];		// Multiplicator In Hex
 	uint64_t work_id;
 	unsigned char work_str[22];
-	unsigned char *storage;
+	uint32_t iteration_id;
+	uint32_t storage_cnt;
+	uint32_t *storage;
 };
 
 struct workio_cmd {
 	enum submit_commands cmd;
 	struct thr_info *thr;
 	struct work work;
-	unsigned char *storage;
+	uint32_t *storage;
 };
 
 struct header_info {
@@ -339,14 +340,16 @@ static void update_pending_cnt(uint64_t work_id, bool add);
 
 static bool submit_work(CURL *curl, struct submit_req *req);
 static bool delete_submit_req(int idx);
-static bool add_submit_req(struct work *work, unsigned char *storage, enum submit_commands req_type);
+static bool add_submit_req(struct work *work, uint32_t *storage, enum submit_commands req_type);
 
 static bool get_opencl_base_data(struct work *work, uint32_t *vm_input);
 
 // Function Prototypes - util.c
 extern void applog(int prio, const char *fmt, ...);
 extern int timeval_subtract(struct timeval *result, struct timeval *x, struct timeval *y);
+extern bool bin2hex(unsigned char *in, int in_sz, unsigned char *out, int out_sz);
 extern bool hex2ints(uint32_t *p, int array_sz, const char *hex, int len);
+extern bool ints2hex(uint32_t *in, int num, unsigned char *out, int out_sz);
 extern int32_t bin2int(unsigned char *str);
 extern bool ascii85dec(unsigned char *str, int strsz, const char *ascii85);
 static void databuf_free(struct data_buffer *db);

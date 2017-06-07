@@ -15,7 +15,7 @@
 #endif
 
 bool create_c_source(char *work_str) {
-	int i;
+	int i, job_cnt;
 
 	FILE* f = fopen("./work/work_lib.c", "w");
 	if (!f)
@@ -62,9 +62,10 @@ bool create_c_source(char *work_str) {
 	}
 	else {
 		for (i = 0; i < g_work_package_cnt; i++) {
-			if (!g_work_package[g_work_package_idx].blacklisted)
+			if (g_work_package[g_work_package_idx].active)
 				fprintf(f, "#include \"job_%s.h\"\n", g_work_package[i].work_str);
 		}
+
 	}
 	fprintf(f, "\n");
 
@@ -117,16 +118,19 @@ bool create_c_source(char *work_str) {
 		fprintf(f, "\treturn main_%s();\n\n", work_str);
 	}
 	else {
+		job_cnt = 0;
 		for (i = 0; i < g_work_package_cnt; i++) {
-			if (!g_work_package[g_work_package_idx].blacklisted) {
-				if (i == 0)
+			if (g_work_package[g_work_package_idx].active) {
+				if (job_cnt == 0)
 					fprintf(f, "\tif (work_id == %s)\n", g_work_package[i].work_str);
 				else
 					fprintf(f, "\telse if (work_id == %s)\n", g_work_package[i].work_str);
 				fprintf(f, "\t\treturn main_%s();\n", g_work_package[i].work_str);
+				job_cnt++;
 			}
 		}
-		fprintf(f, "\telse\n");
+		if (job_cnt > 0)
+			fprintf(f, "\telse\n");
 		fprintf(f, "\t\treturn -1;\n\n");
 	}
 	fprintf(f, "}\n\n");
@@ -142,16 +146,19 @@ bool create_c_source(char *work_str) {
 		fprintf(f, "\treturn verify_%s();\n\n", work_str);
 	}
 	else {
+		job_cnt = 0;
 		for (i = 0; i < g_work_package_cnt; i++) {
 			if (!g_work_package[g_work_package_idx].blacklisted) {
-				if (i == 0)
+				if (job_cnt == 0)
 					fprintf(f, "\tif (work_id == %s)\n", g_work_package[i].work_str);
 				else
 					fprintf(f, "\telse if (work_id == %s)\n", g_work_package[i].work_str);
 				fprintf(f, "\t\treturn verify_%s();\n", g_work_package[i].work_str);
+				job_cnt++;
 			}
 		}
-		fprintf(f, "\telse\n");
+		if (job_cnt > 0)
+			fprintf(f, "\telse\n");
 		fprintf(f, "\t\treturn -1;\n\n");
 	}
 	fprintf(f, "}\n\n");
