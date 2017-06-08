@@ -449,14 +449,28 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 	// IF Statement (1 Number & 1 Statement)
 	case NODE_IF:
 		if ((stack_exp[stack_exp_idx - 1]->data_type != DT_NONE) &&
-			((stack_exp[stack_exp_idx]->end_stmnt == true) || (stack_exp[stack_exp_idx]->type == NODE_IF) || (stack_exp[stack_exp_idx]->type == NODE_ELSE) || (stack_exp[stack_exp_idx]->type == NODE_REPEAT) || (stack_exp[stack_exp_idx]->type == NODE_BREAK) || (stack_exp[stack_exp_idx]->type == NODE_CONTINUE)))
+			((stack_exp[stack_exp_idx]->end_stmnt == true) || (stack_exp[stack_exp_idx]->type == NODE_IF) || (stack_exp[stack_exp_idx]->type == NODE_ELSE) || (stack_exp[stack_exp_idx]->type == NODE_REPEAT) || (stack_exp[stack_exp_idx]->type == NODE_BREAK) || (stack_exp[stack_exp_idx]->type == NODE_CONTINUE))) {
+
+			if (stack_exp[stack_exp_idx]->type == NODE_REPEAT) {
+				applog(LOG_ERR, "Syntax Error: Line: %d - A 'repeat' statement under an 'if' statement must be enclosed in {} brackets", token->line_num);
+				return false;
+			}
+
 			return true;
+		}
 		break;
 
 	// ELSE Statement (2 Statements)
 	case NODE_ELSE:
-		if ((stack_exp[stack_exp_idx - 1]->end_stmnt == true) && (stack_exp[stack_exp_idx]->end_stmnt == true))
+		if ((stack_exp[stack_exp_idx - 1]->end_stmnt == true) && (stack_exp[stack_exp_idx]->end_stmnt == true)) {
+
+			if (stack_exp[stack_exp_idx]->type == NODE_REPEAT) {
+				applog(LOG_ERR, "Syntax Error: Line: %d - A 'repeat' statement under an 'else' statement must be enclosed in {} brackets", token->line_num);
+				return false;
+			}
+
 			return true;
+		}
 		break;
 
 	// REPEAT Statement (2 Unsigned Int & 1 Constant Unsigned Int & 1 Block)
