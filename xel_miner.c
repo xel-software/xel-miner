@@ -558,15 +558,6 @@ static void *test_vm_thread(void *userdata) {
 		work_package.vm_floats = ast_vm_floats;
 		work_package.vm_doubles = ast_vm_doubles;
 
-		// Copy Storage Variables Into Work Package
-		work_package.iteration_id = 0;
-		work_package.storage_id = 0;
-		work_package.storage_cnt = ast_storage_cnt;
-		work_package.storage_imp_idx = ast_storage_import_idx;
-		work_package.storage_exp_idx = ast_storage_export_idx;
-		if (ast_storage_cnt)
-			work_package.storage = calloc(ast_storage_cnt, sizeof(uint32_t));
-
 		// Calculate WCET
 		if (!calc_wcet()) {
 			applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
@@ -589,7 +580,7 @@ static void *test_vm_thread(void *userdata) {
 			break;
 	}
 	// Initialize Global Variables
-	vm_m = calloc(12, sizeof(uint32_t));
+	vm_m = calloc(VM_M_ARRAY_SIZE, sizeof(uint32_t));
 	if (g_work_package[package_idx].vm_ints) vm_i = calloc(g_work_package[package_idx].vm_ints, sizeof(int32_t));
 	if (g_work_package[package_idx].vm_uints) vm_u = calloc(g_work_package[package_idx].vm_uints, sizeof(uint32_t));
 	if (g_work_package[package_idx].vm_longs) vm_l = calloc(g_work_package[package_idx].vm_longs, sizeof(int64_t));
@@ -643,7 +634,8 @@ static void *test_vm_thread(void *userdata) {
 		//		break;
 		//}
 
-		free_library(inst);
+		if (inst)
+			free_library(inst);
 	}
 
 	if (rc < 0) {
@@ -771,10 +763,10 @@ static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work
 		// Execute The VM Logic
 		rc = inst->execute(work->work_id);
 
-		//if (opt_test_miner) {
-		//	dump_vm(work->package_id);
-		//	exit(EXIT_SUCCESS);
-		//}
+		if (opt_test_miner) {
+			dump_vm(work->package_id);
+			exit(EXIT_SUCCESS);
+		}
 
 		// Bounty Found, Exit Immediately
 		if (rc == 1) {
@@ -1145,8 +1137,6 @@ static int work_decode(const json_t *val, struct work *work) {
 			work_package.storage_cnt = ast_storage_cnt;
 			work_package.storage_imp_idx = ast_storage_import_idx;
 			work_package.storage_exp_idx = ast_storage_export_idx;
-			if (ast_storage_cnt)
-				work_package.storage = calloc(ast_storage_cnt, sizeof(uint32_t));
 
 			// Calculate WCET
 			work_package.WCET = calc_wcet();
@@ -1244,6 +1234,24 @@ static int work_decode(const json_t *val, struct work *work) {
 		opt_pref = PREF_PROFIT;
 		applog(LOG_INFO, "No work available that matches preference...retrying in %ds", opt_scantime);
 		return -1;
+	}
+
+	// Get Updated Storage Data
+	if (g_work_package[best_pkg].storage_cnt && ((g_work.package_id != best_pkg) || (g_work.iteration_id != g_work_package[best_pkg].iteration_id))) {
+
+		// Allocation Memory For Storage
+		if (!g_work_package[best_pkg].storage) {
+			g_work_package[best_pkg].storage = malloc(g_work_package[best_pkg].storage_cnt * sizeof(uint32_t));
+
+			if (!g_work_package[best_pkg].storage) {
+				applog(LOG_ERR, "Unable to allocate storage for work_id: %s", g_work_package[best_pkg].work_str);
+				return 0;
+			}
+
+// TODO: Work w/ EK To Complete Interface To Get Storage
+
+		}
+
 	}
 
 	// Copy Work Package Details To Work
