@@ -420,11 +420,19 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 					return false;
 				}
 				break;
-			case DT_NONE: // m[]
+			case DT_UINT_M: // m[]
 				if (stack_exp[stack_exp_idx]->uvalue >= VM_M_ARRAY_SIZE) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Array index out of bounds", token->line_num);
 					return false;
 				}
+				token->data_type = DT_UINT;
+				break;
+			case DT_UINT_S: // s[]
+				if (stack_exp[stack_exp_idx]->uvalue >= ast_storage_cnt) {
+					applog(LOG_ERR, "Syntax Error: Line: %d - Array index out of bounds", token->line_num);
+					return false;
+				}
+				token->data_type = DT_UINT;
 				break;
 			}
 			return true;

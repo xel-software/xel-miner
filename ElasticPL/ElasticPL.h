@@ -250,7 +250,9 @@ typedef enum {
 	DT_LONG,
 	DT_ULONG,
 	DT_FLOAT,
-	DT_DOUBLE
+	DT_DOUBLE,
+	DT_UINT_M,
+	DT_UINT_S
 } DATA_TYPE;
 
 // Token Type / Literal Value From ElasticPL Source Code
