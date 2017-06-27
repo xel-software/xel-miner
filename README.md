@@ -1,7 +1,4 @@
-<h1><b>DO NOT USE!</b></h1>
-
-Please use the fork create by EK at https://github.com/OrdinaryDude/elastic-miner
-
+<h1><b>Only Use For Standalone ElasticPL Testing!</b></h1>
 
 # xel_miner 	0.9.1
 # xel_supernode	0.1
