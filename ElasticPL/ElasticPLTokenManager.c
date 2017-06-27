@@ -42,8 +42,7 @@ struct EXP_TOKEN_LIST epl_token[] = {
 	{ "array_float",				11,	TOKEN_ARRAY_FLOAT,	EXP_STATEMENT,	1,	0,	DT_NONE },
 	{ "array_double",				12,	TOKEN_ARRAY_DOUBLE,	EXP_STATEMENT,	1,	0,	DT_NONE },
 	{ "storage_cnt",				11,	TOKEN_STORAGE_CNT,	EXP_STATEMENT,	1,	0,	DT_NONE },
-	{ "storage_import_idx",			18,	TOKEN_STORAGE_IMP,	EXP_STATEMENT,	1,	0,	DT_NONE },
-	{ "storage_export_idx",			18,	TOKEN_STORAGE_EXP,	EXP_STATEMENT,	1,	0,	DT_NONE },
+	{ "storage_idx",				11,	TOKEN_STORAGE_IDX,	EXP_STATEMENT,	1,	0,	DT_NONE },
 	{ "repeat",						6,	TOKEN_REPEAT,		EXP_STATEMENT,	4,	2,	DT_NONE },
 	{ "if",							2,	TOKEN_IF,			EXP_STATEMENT,	2,	2,	DT_NONE },
 	{ "else",						4,	TOKEN_ELSE,			EXP_STATEMENT,	2,	2,	DT_NONE },
@@ -58,7 +57,8 @@ struct EXP_TOKEN_LIST epl_token[] = {
 	{ "ul[",						3,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_ULONG },
 	{ "f[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_FLOAT },
 	{ "d[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_DOUBLE },
-	{ "m[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_NONE },
+	{ "m[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_UINT },
+	{ "s[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_UINT },
 	{ "]",							1,	TOKEN_VAR_END,		EXP_EXPRESSION,	1,	4,	DT_INT },
 
 	{ "++",							2,	TOKEN_INCREMENT,	EXP_EXPRESSION,	1,	5,	DT_INT },	// Increment
