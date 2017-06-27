@@ -662,8 +662,7 @@ static bool sn_validate_package(const json_t *pkg, char *elastic_src, char *err_
 	work_package.iteration_id = 0;
 	work_package.storage_id = 0;
 	work_package.storage_cnt = ast_storage_cnt;
-	work_package.storage_imp_idx = ast_storage_import_idx;
-	work_package.storage_exp_idx = ast_storage_export_idx;
+	work_package.storage_idx = ast_storage_idx;
 	if (ast_storage_cnt)
 		work_package.storage = calloc(ast_storage_cnt, sizeof(uint32_t));
 

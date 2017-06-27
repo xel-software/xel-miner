@@ -53,6 +53,7 @@ extern __thread _ALIGN(64) int64_t *vm_l;
 extern __thread _ALIGN(64) uint64_t *vm_ul;
 extern __thread _ALIGN(64) float *vm_f;
 extern __thread _ALIGN(64) double *vm_d;
+extern __thread _ALIGN(64) uint32_t *vm_s;
 extern __thread _ALIGN(64) uint32_t *vm_state;
 
 extern bool use_elasticpl_math;
@@ -115,8 +116,7 @@ struct work_package {
 	uint32_t iteration_id;
 	uint32_t storage_id;
 	uint32_t storage_cnt;
-	uint32_t storage_imp_idx;
-	uint32_t storage_exp_idx;
+	uint32_t storage_idx;
 	uint32_t *storage;
 
 };

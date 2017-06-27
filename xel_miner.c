@@ -89,6 +89,7 @@ __thread _ALIGN(64) int64_t *vm_l = NULL;
 __thread _ALIGN(64) uint64_t *vm_ul = NULL;
 __thread _ALIGN(64) float *vm_f = NULL;
 __thread _ALIGN(64) double *vm_d = NULL;
+__thread _ALIGN(64) uint32_t *vm_s = NULL;
 __thread _ALIGN(64) uint32_t *vm_state = NULL;
 
 bool use_elasticpl_math;
@@ -1135,8 +1136,7 @@ static int work_decode(const json_t *val, struct work *work) {
 			work_package.iteration_id = iteration_id;
 			work_package.storage_id = 0;
 			work_package.storage_cnt = ast_storage_cnt;
-			work_package.storage_imp_idx = ast_storage_import_idx;
-			work_package.storage_exp_idx = ast_storage_export_idx;
+			work_package.storage_idx = ast_storage_idx;
 
 			// Calculate WCET
 			work_package.WCET = calc_wcet();
@@ -1417,6 +1417,7 @@ static void *cpu_miner_thread(void *userdata) {
 	uint32_t vm_ulongs = 0;
 	uint32_t vm_floats = 0;
 	uint32_t vm_doubles = 0;
+	uint32_t vm_storage = 0;
 
 	// Set lower priority
 	if (!opt_norenice)
@@ -1484,13 +1485,19 @@ static void *cpu_miner_thread(void *userdata) {
 				vm_d = realloc(vm_d, vm_doubles * sizeof(double));
 				memset(vm_d, 0, vm_doubles * sizeof(double));
 			}
+			if (g_work_package[work.package_id].storage_cnt > vm_storage) {
+				vm_storage = g_work_package[work.package_id].storage_cnt;
+				vm_s = realloc(vm_s, vm_storage * sizeof(uint32_t));
+				memset(vm_s, 0, vm_storage * sizeof(uint32_t));
+			}
 
 			if ((vm_ints && !vm_i) ||
 				(vm_uints && !vm_u) ||
 				(vm_longs && !vm_l) ||
 				(vm_ulongs && !vm_ul) ||
 				(vm_floats && !vm_f) ||
-				(vm_doubles && !vm_d)) {
+				(vm_doubles && !vm_d) ||
+				(vm_storage && !vm_s)) {
 
 				applog(LOG_ERR, "CPU%d: Unable to allocate VM memory", thr_id);
 				goto out;
@@ -1509,7 +1516,9 @@ static void *cpu_miner_thread(void *userdata) {
 
 			// Copy New Storage Values To VM
 			if (iteration && g_work_package[work.package_id].storage_cnt)
-				memcpy(&vm_u[g_work_package[work.package_id].storage_imp_idx], g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_cnt * sizeof(uint32_t));
+				memcpy(&vm_s[0], g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_cnt * sizeof(uint32_t));
+			else
+				memset(vm_s, 0, g_work_package[work.package_id].storage_cnt * sizeof(uint32_t));
 
 		}
 		// Otherwise, Just Update POW Target / Iteration / Storage
@@ -1524,7 +1533,7 @@ static void *cpu_miner_thread(void *userdata) {
 
 				// Copy New Storage Values To VM
 				if (g_work_package[work.package_id].storage_cnt)
-					memcpy(&vm_u[g_work_package[work.package_id].storage_imp_idx], g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_cnt * sizeof(uint32_t));
+					memcpy(&vm_s[0], g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_cnt * sizeof(uint32_t));
 
 			}
 		}
@@ -1578,7 +1587,7 @@ static void *cpu_miner_thread(void *userdata) {
 			// Save Storage Data
 			if (g_work_package[work.package_id].storage_cnt) {
 				wc->storage = malloc(g_work_package[work.package_id].storage_cnt * sizeof(uint32_t));
-				memcpy(wc->storage, &vm_u[g_work_package[work.package_id].storage_exp_idx], g_work_package[work.package_id].storage_cnt * sizeof(uint32_t));
+				memcpy(wc->storage, &vm_u[g_work_package[work.package_id].storage_idx], g_work_package[work.package_id].storage_cnt * sizeof(uint32_t));
 			}
 
 			// Add Solution To Queue
