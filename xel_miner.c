@@ -558,7 +558,7 @@ static void *test_vm_thread(void *userdata) {
 		work_package.vm_ulongs = ast_vm_ulongs;
 		work_package.vm_floats = ast_vm_floats;
 		work_package.vm_doubles = ast_vm_doubles;
-		work_package.storage_cnt = ast_storage_cnt;
+		work_package.storage_sz = ast_storage_sz;
 		work_package.storage_idx = ast_storage_idx;
 
 		// Calculate WCET
@@ -590,7 +590,7 @@ static void *test_vm_thread(void *userdata) {
 	if (g_work_package[package_idx].vm_ulongs) vm_ul = calloc(g_work_package[package_idx].vm_ulongs, sizeof(uint64_t));
 	if (g_work_package[package_idx].vm_floats) vm_f = calloc(g_work_package[package_idx].vm_floats, sizeof(float));
 	if (g_work_package[package_idx].vm_doubles) vm_d = calloc(g_work_package[package_idx].vm_doubles, sizeof(double));
-	if (g_work_package[package_idx].storage_cnt) vm_s = calloc(g_work_package[package_idx].storage_cnt, sizeof(int32_t));
+	if (g_work_package[package_idx].storage_sz) vm_s = calloc(g_work_package[package_idx].storage_sz, sizeof(int32_t));
 
 	if ((g_work_package[package_idx].vm_ints && !vm_i) ||
 		(g_work_package[package_idx].vm_uints && !vm_u) ||
@@ -598,7 +598,7 @@ static void *test_vm_thread(void *userdata) {
 		(g_work_package[package_idx].vm_ulongs && !vm_ul) ||
 		(g_work_package[package_idx].vm_floats && !vm_f) ||
 		(g_work_package[package_idx].vm_doubles && !vm_d) ||
-		(g_work_package[package_idx].storage_cnt && !vm_s)) {
+		(g_work_package[package_idx].storage_sz && !vm_s)) {
 
 		applog(LOG_ERR, "%s: Unable to allocate VM memory", "'test-vm'");
 		exit(EXIT_FAILURE);
@@ -663,6 +663,7 @@ static void *test_vm_thread(void *userdata) {
 	if (vm_ul) free(vm_ul);
 	if (vm_f) free(vm_f);
 	if (vm_d) free(vm_d);
+	if (vm_s) free(vm_s);
 	//	if (vm_state) free(vm_state);
 
 	tq_freeze(mythr->q);
@@ -1139,7 +1140,7 @@ static int work_decode(const json_t *val, struct work *work) {
 			// Copy Storage Variables Into Work Package
 			work_package.iteration_id = iteration_id;
 			work_package.storage_id = 0;
-			work_package.storage_cnt = ast_storage_cnt;
+			work_package.storage_sz = ast_storage_sz;
 			work_package.storage_idx = ast_storage_idx;
 
 			// Calculate WCET
@@ -1241,11 +1242,11 @@ static int work_decode(const json_t *val, struct work *work) {
 	}
 
 	// Get Updated Storage Data
-	if (g_work_package[best_pkg].storage_cnt && ((g_work.package_id != best_pkg) || (g_work.iteration_id != g_work_package[best_pkg].iteration_id))) {
+	if (g_work_package[best_pkg].storage_sz && ((g_work.package_id != best_pkg) || (g_work.iteration_id != g_work_package[best_pkg].iteration_id))) {
 
 		// Allocation Memory For Storage
 		if (!g_work_package[best_pkg].storage) {
-			g_work_package[best_pkg].storage = malloc(g_work_package[best_pkg].storage_cnt * sizeof(uint32_t));
+			g_work_package[best_pkg].storage = malloc(g_work_package[best_pkg].storage_sz * sizeof(uint32_t));
 
 			if (!g_work_package[best_pkg].storage) {
 				applog(LOG_ERR, "Unable to allocate storage for work_id: %s", g_work_package[best_pkg].work_str);
@@ -1294,16 +1295,16 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 	if (req->req_type == SUBMIT_BOUNTY) {
 
 		// Allocate Memory For Data Buffer
-		storage_sz = (req->storage_cnt * 8) + 1;
+		storage_sz = (req->storage_sz * 8) + 1;
 		data = calloc(1, 512 + storage_sz);
-		if (req->storage_cnt)
+		if (req->storage_sz)
 			storage_hex = calloc(1, storage_sz);
 		if (!data || !storage_hex) {
 			applog(LOG_ERR, "ERROR: Unable to allocate memory for submit work data");
 			return false;
 		}
 
-		if (!ints2hex(req->storage, req->storage_cnt, storage_hex, storage_sz))
+		if (!ints2hex(req->storage, req->storage_sz, storage_hex, storage_sz))
 			return false;
 
 // TODO - The following value need to be redone once the new storage model is determined
@@ -1489,8 +1490,8 @@ static void *cpu_miner_thread(void *userdata) {
 				vm_d = realloc(vm_d, vm_doubles * sizeof(double));
 				memset(vm_d, 0, vm_doubles * sizeof(double));
 			}
-			if (g_work_package[work.package_id].storage_cnt > vm_storage) {
-				vm_storage = g_work_package[work.package_id].storage_cnt;
+			if (g_work_package[work.package_id].storage_sz > vm_storage) {
+				vm_storage = g_work_package[work.package_id].storage_sz;
 				vm_s = realloc(vm_s, vm_storage * sizeof(uint32_t));
 				memset(vm_s, 0, vm_storage * sizeof(uint32_t));
 			}
@@ -1519,10 +1520,10 @@ static void *cpu_miner_thread(void *userdata) {
 			iteration = g_work_package[work.package_id].iteration_id;
 
 			// Copy New Storage Values To VM
-			if (iteration && g_work_package[work.package_id].storage_cnt)
-				memcpy(&vm_s[0], g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_cnt * sizeof(uint32_t));
+			if (iteration && g_work_package[work.package_id].storage_sz)
+				memcpy(&vm_s[0], g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
 			else
-				memset(vm_s, 0, g_work_package[work.package_id].storage_cnt * sizeof(uint32_t));
+				memset(vm_s, 0, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
 
 		}
 		// Otherwise, Just Update POW Target / Iteration / Storage
@@ -1536,8 +1537,8 @@ static void *cpu_miner_thread(void *userdata) {
 				iteration = g_work_package[work.package_id].iteration_id;
 
 				// Copy New Storage Values To VM
-				if (g_work_package[work.package_id].storage_cnt)
-					memcpy(&vm_s[0], g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_cnt * sizeof(uint32_t));
+				if (g_work_package[work.package_id].storage_sz)
+					memcpy(&vm_s[0], g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
 
 			}
 		}
@@ -1589,9 +1590,9 @@ static void *cpu_miner_thread(void *userdata) {
 			memcpy(&wc->work, &work, sizeof(struct work));
 
 			// Save Storage Data
-			if (g_work_package[work.package_id].storage_cnt) {
-				wc->storage = malloc(g_work_package[work.package_id].storage_cnt * sizeof(uint32_t));
-				memcpy(wc->storage, &vm_u[g_work_package[work.package_id].storage_idx], g_work_package[work.package_id].storage_cnt * sizeof(uint32_t));
+			if (g_work_package[work.package_id].storage_sz) {
+				wc->storage = malloc(g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
+				memcpy(wc->storage, &vm_u[g_work_package[work.package_id].storage_idx], g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
 			}
 
 			// Add Solution To Queue
@@ -1635,6 +1636,7 @@ out:
 	if (vm_ul) free(vm_ul);
 	if (vm_f) free(vm_f);
 	if (vm_d) free(vm_d);
+	if (vm_s) free(vm_s);
 	if (vm_state) free(vm_state);
 
 	tq_freeze(mythr->q);
@@ -2071,7 +2073,7 @@ static bool add_submit_req(struct work *work, uint32_t *storage, enum submit_com
 	bin2hex(work->announcement_hash, 32, g_submit_req[g_submit_req_cnt].hash, 65);
 	bin2hex(work->multiplicator, 32, g_submit_req[g_submit_req_cnt].mult, 65);
 	g_submit_req[g_submit_req_cnt].iteration_id = work->iteration_id;
-	g_submit_req[g_submit_req_cnt].storage_cnt = g_work_package[work->package_id].storage_cnt;
+	g_submit_req[g_submit_req_cnt].storage_sz = g_work_package[work->package_id].storage_sz;
 	g_submit_req[g_submit_req_cnt].storage = storage;
 	if (req_type != SUBMIT_POW) {
 		g_submit_req[g_submit_req_cnt].bounty = true;
@@ -2328,7 +2330,11 @@ int main(int argc, char **argv) {
 	if (!work_restart)
 		return 1;
 
-	thr_info = (struct thr_info*) calloc(opt_n_threads + 3, sizeof(*thr));
+	if (opt_supernode)
+		thr_info = (struct thr_info*) calloc(4, sizeof(*thr));
+	else
+		thr_info = (struct thr_info*) calloc(opt_n_threads + 3, sizeof(*thr));
+
 	if (!thr_info)
 		return 1;
 
@@ -2463,6 +2469,17 @@ int main(int argc, char **argv) {
 			return 1;
 		if (thread_create(thr, sn_validate_result_thread)) {
 			applog(LOG_ERR, "SuperNode 'validate result' thread create failed");
+			return 1;
+		}
+
+		// Start Thread For Updating Storage
+		thr = &thr_info[3];
+		thr->id = 3;
+		thr->q = tq_new();
+		if (!thr->q)
+			return 1;
+		if (thread_create(thr, sn_update_storage_thread)) {
+			applog(LOG_ERR, "SuperNode 'update storage' thread create failed");
 			return 1;
 		}
 

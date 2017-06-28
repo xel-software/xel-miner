@@ -114,10 +114,11 @@ struct work_package {
 
 	// Data Storage
 	uint32_t iteration_id;
-	uint32_t storage_id;
-	uint32_t storage_cnt;
-	uint32_t storage_idx;
-	uint32_t *storage;
+	uint32_t storage_id;	// Current Storage ID Used By Miner
+	uint32_t storage_sz;	// Number Of Unsigned Ints In Storage
+	uint32_t storage_idx;	// Index In u[] To Extract Storage From
+	uint32_t storage_cnt;	// Number Of Storage Solutions For Iteration
+	uint32_t **storage;
 
 };
 
@@ -160,7 +161,7 @@ struct submit_req {
 	uint64_t work_id;
 	unsigned char work_str[22];
 	uint32_t iteration_id;
-	uint32_t storage_cnt;
+	uint32_t storage_sz;
 	uint32_t *storage;
 };
 
@@ -372,8 +373,9 @@ int curve25519_donna(uint8_t *mypublic, const uint8_t *secret, const uint8_t *ba
 extern void *supernode_thread(void *userdata);
 extern void *sn_validate_package_thread(void *userdata);
 extern void *sn_validate_result_thread(void *userdata);
+extern void *sn_update_storage_thread(void *userdata);
 
 static bool sn_validate_package(const json_t *val, char *elastic_src, char *err_msg);
-
+static bool sn_update_storage(uint64_t work_id, uint32_t iteration_id, uint32_t storage_id, uint32_t *state, char *err_msg);
 
 #endif /* __MINER_H__ */

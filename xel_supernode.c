@@ -54,6 +54,8 @@ struct request {
 	uint32_t req_type;
 	char *package;
 	uint64_t work_id;
+	uint32_t iteration_id;
+	uint32_t storage_id;
 	uint32_t input[VM_M_ARRAY_SIZE];
 	uint32_t state[32];
 	uint32_t target[8];
@@ -69,6 +71,8 @@ uint32_t g_sn_longs = 0;
 uint32_t g_sn_ulongs = 0;
 uint32_t g_sn_floats = 0;
 uint32_t g_sn_doubles = 0;
+uint32_t **g_sn_storage = NULL;
+uint32_t **g_sn_storage_ptr = NULL;
 
 bool g_upd_sn_ints = false;
 bool g_upd_sn_uints = false;
@@ -222,7 +226,7 @@ extern void *supernode_thread(void *userdata) {
 				req_type = (uint32_t)json_integer_value(json_object_get(val, "req_type"));
 
 				// Check For Valid Request Type
-				if (!req_type || (req_type > 4)) {
+				if (!req_type || (req_type > 5)) {
 					applog(LOG_DEBUG, "DEBUG: Invalid request type - Req_Id: %d, Req_Type: %d", req_id, req_type);
 					sleep(1);
 					sprintf(msg, "{\"req_id\": %lu,\"req_type\": %lu,\"success\": %d,\"error\": \"%s\"}", req_id, req_type, 0, "Invalid Request Type");
@@ -310,6 +314,33 @@ extern void *supernode_thread(void *userdata) {
 
 				// Push Request To Validate Results Queue
 				tq_push(thr_info[2].q, &req);
+			}
+
+			// Update Storage 
+			else if (req_type == 5) {
+
+				// Get Work ID
+				str = (char *)json_string_value(json_object_get(val, "work_id"));
+				if (str)
+					req.work_id = strtoull(str, NULL, 10);
+				else
+					req.work_id = 0;
+
+				// Get Iteration / Storage ID
+				req.iteration_id = (uint32_t)json_integer_value(json_object_get(val, "iteration_id"));
+				req.storage_id = (uint32_t)json_integer_value(json_object_get(val, "storage_id"));
+
+				// Get State
+				memset(&req.state[0], 0, 32 * sizeof(uint32_t));
+				state = json_object_get(val, "state");
+				n = json_array_size(state);
+
+				for (i = 0; i < n; i++) {
+					req.state[i] = (uint32_t)json_integer_value(json_array_get(state, i));
+				}
+
+				// Push Request To Update Storage Queue
+				tq_push(thr_info[3].q, &req);
 			}
 
 			if (val)
@@ -503,9 +534,7 @@ extern void *sn_validate_result_thread(void *userdata) {
 			// Link Updated SuperNode Library
 			inst = calloc(1, sizeof(struct instance));
 			create_instance(inst, NULL);
-			inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d, NULL);
-// TODO: FIX This to pass pointer to storage
-//			inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d, vm_s);
+			inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d, vm_s);
 
 			g_new_sn_library = false;
 		}
@@ -592,6 +621,7 @@ extern void *sn_validate_result_thread(void *userdata) {
 	if (vm_ul) free(vm_ul);
 	if (vm_f) free(vm_f);
 	if (vm_d) free(vm_d);
+	if (vm_s) free(vm_s);
 
 	tq_freeze(mythr->q);
 
@@ -663,10 +693,19 @@ static bool sn_validate_package(const json_t *pkg, char *elastic_src, char *err_
 	// Copy Storage Variables Into Work Package
 	work_package.iteration_id = 0;
 	work_package.storage_id = 0;
-	work_package.storage_cnt = ast_storage_cnt;
+	work_package.storage_sz = ast_storage_sz;
 	work_package.storage_idx = ast_storage_idx;
-	if (ast_storage_cnt)
-		work_package.storage = calloc(ast_storage_cnt, sizeof(uint32_t));
+	work_package.storage = NULL;
+
+// TODO: Add Number Of Storage Solutions To Work Package Message
+//	work_package.storage_cnt = ????
+	work_package.storage_cnt = 10;
+// TODO: Add Number Of Storage Solutions To Work Package Message
+
+	if (work_package.storage_cnt)
+		work_package.storage = calloc(work_package.storage_cnt, sizeof(uint32_t));
+	else
+		work_package.storage = NULL;
 
 	// Calculate WCET
 	if (!calc_wcet()) {
@@ -703,6 +742,102 @@ static bool sn_validate_package(const json_t *pkg, char *elastic_src, char *err_
 
 	g_new_sn_library = true;
 	g_sn_library_loaded = true;
+
+	return true;
+}
+
+extern void *sn_update_storage_thread(void *userdata) {
+	struct thr_info *mythr = (struct thr_info*)userdata;
+	struct request *req;
+	char msg[512], err_msg[256];
+	uint32_t success;
+
+	while (1) {
+
+		success = 1;
+		err_msg[0] = '\0';
+
+		// Wait For New Requests On Queue
+		req = (struct request *) tq_pop(mythr->q, NULL);
+		applog(LOG_DEBUG, "Updating Storage (req_id: %d)", req->req_id);
+
+		if (!sn_update_storage(req->work_id, req->iteration_id, req->storage_id, req->state, err_msg)) {
+			success = 0;
+			applog(LOG_DEBUG, "DEBUG: Unable to update storage for work_id: %lu, iteration_Id: %d, storage_id: %d", req->work_id, req->iteration_id, req->storage_id);
+		}
+
+		// Create Response
+		sprintf(msg, "{\"req_id\": %lu,\"req_type\": %lu,\"success\": %d,\"error\": \"%s\"}", req->req_id, req->req_type, success, err_msg);
+
+		// Send Response
+		pthread_mutex_lock(&response_lock);
+		send(core, msg, strlen(msg), 0);
+		pthread_mutex_unlock(&response_lock);
+	}
+
+	tq_freeze(mythr->q);
+	return NULL;
+}
+
+static bool sn_update_storage(uint64_t work_id, uint32_t iteration_id, uint32_t storage_id, uint32_t *state, char *err_msg) {
+	int i, work_pkg_id;
+	char *str = NULL;
+
+	applog(LOG_DEBUG, "DEBUG: Updating storage for work_id: %lu", work_id);
+
+	// Check If Work Package Exists
+	work_pkg_id = -1;
+	for (i = 0; i < g_work_package_cnt; i++) {
+		if (work_id == g_work_package[i].work_id) {
+			work_pkg_id = i;
+			break;
+		}
+	}
+
+	if (work_pkg_id < 0) {
+		sprintf(err_msg, "No Package exists for work_id: %llu", work_id);
+		return false;
+	}
+
+	if (!g_work_package[work_pkg_id].storage) {
+		sprintf(err_msg, "Package for work_id: %llu does not support storage", work_id);
+		return false;
+	}
+
+	if (iteration_id != g_work_package[work_pkg_id].iteration_id) {
+		sprintf(err_msg, "Value for iteration_id: %d does not match current iteration for package", iteration_id);
+		return false;
+	}
+
+	if (storage_id > g_work_package[work_pkg_id].storage_cnt) {
+		sprintf(err_msg, "Value for storage_id: %d exceeds max allowed", storage_id);
+		return false;
+	}
+
+	// Check If Storage Values Already Exist For The Storage ID
+	if (g_work_package[work_pkg_id].storage[storage_id]) {
+		free(g_work_package[work_pkg_id].storage[storage_id]);
+	}
+
+	// Update Values For The Storage ID
+	g_work_package[work_pkg_id].storage[storage_id] = malloc(32 * sizeof(uint32_t));
+
+	if (!g_work_package[work_pkg_id].storage[storage_id]) {
+		sprintf(err_msg, "Unable to allocate storage");
+		return false;
+	}
+
+	memcpy(g_work_package[work_pkg_id].storage[storage_id], state, 32 * sizeof(uint32_t));
+
+	//uint32_t t[10];
+	//for (i = 0; i < 10; i++) {
+	//	t[i] = g_work_package[work_pkg_id].storage[i];
+	//}
+
+	//uint32_t t2[32];
+	//for (i = 0; i < 32; i++) {
+	//	t2[i] = g_work_package[work_pkg_id].storage[0][i];
+	//}
 
 	return true;
 }
