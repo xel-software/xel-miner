@@ -119,7 +119,7 @@ ITERATION DATA STORAGE
 
 	There are two declarations required to use the storage feature:
 		
-		storage_cnt  XXXX  // Identifies # of Unsigned Ints to store
+		storage_sz   XXXX  // Identifies # of Unsigned Ints to store
 		storage_idx  XXXX  // Identifies starting index in u[] array to export stored data from
 		
 		Note: storage_cnt is currently limited to a max size of (TBD - Need To Determine)

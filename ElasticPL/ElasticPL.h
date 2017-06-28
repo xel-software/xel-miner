@@ -43,7 +43,7 @@ uint32_t ast_vm_floats;
 uint32_t ast_vm_doubles;
 
 // Number Of Unsigned Ints To Store Per Interation / Import & Export Index
-uint32_t ast_storage_cnt;
+uint32_t ast_storage_sz;
 uint32_t ast_storage_idx;
 
 // Index Value Of Main & Verify Functions In AST Array
@@ -134,7 +134,7 @@ typedef enum {
 	NODE_ARRAY_ULONG,
 	NODE_ARRAY_FLOAT,
 	NODE_ARRAY_DOUBLE,
-	NODE_STORAGE_CNT,
+	NODE_STORAGE_SZ,
 	NODE_STORAGE_IDX,
 	NODE_FUNCTION,
 	NODE_CALL_FUNCTION,
@@ -228,7 +228,7 @@ typedef enum {
 	TOKEN_ARRAY_ULONG,
 	TOKEN_ARRAY_FLOAT,
 	TOKEN_ARRAY_DOUBLE,
-	TOKEN_STORAGE_CNT,
+	TOKEN_STORAGE_SZ,
 	TOKEN_STORAGE_IDX,
 	TOKEN_FUNCTION,
 	TOKEN_CALL_FUNCTION,

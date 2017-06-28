@@ -19,7 +19,7 @@ uint32_t ast_vm_ulongs = 0;
 uint32_t ast_vm_floats = 0;
 uint32_t ast_vm_doubles = 0;
 
-uint32_t ast_storage_cnt = 0;
+uint32_t ast_storage_sz = 0;
 uint32_t ast_storage_idx = 0;
 
 
@@ -76,7 +76,7 @@ extern bool create_epl_ast(char *source) {
 	ast_vm_doubles = 0;
 
 	// Reset Storage Variables
-	ast_storage_cnt = 0;
+	ast_storage_sz = 0;
 	ast_storage_idx = 0;
 	
 	// Parse EPL Source Code Into Tokens
@@ -303,7 +303,7 @@ extern char* get_node_str(NODE_TYPE node_type) {
 	case NODE_ARRAY_ULONG:	return "array_ulong";
 	case NODE_ARRAY_FLOAT:	return "array_float";
 	case NODE_ARRAY_DOUBLE:	return "array_double";
-	case NODE_STORAGE_CNT:	return "storage_cnt";
+	case NODE_STORAGE_SZ:	return "storage_sz";
 	case NODE_STORAGE_IDX:	return "storage_idx";
 	case NODE_CONSTANT:		return "";
 	case NODE_VAR_CONST:	return "array[]";
