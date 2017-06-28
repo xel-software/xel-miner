@@ -206,12 +206,12 @@ struct instance {
 
 #ifdef WIN32
 	HINSTANCE hndl;
-	int32_t(__cdecl* initialize)(uint32_t *, int32_t *, uint32_t *, int64_t *, uint64_t *, float *, double *);
+	int32_t(__cdecl* initialize)(uint32_t *, int32_t *, uint32_t *, int64_t *, uint64_t *, float *, double *, uint32_t *);
 	int32_t(__cdecl* execute)(uint64_t);
 	int32_t(__cdecl* verify)(uint64_t);
 #else
 	void *hndl;
-	int32_t(*initialize)(uint32_t *, int32_t *, uint32_t *, int64_t *, uint64_t *, float *, double *);
+	int32_t(*initialize)(uint32_t *, int32_t *, uint32_t *, int64_t *, uint64_t *, float *, double *, uint32_t *);
 	int32_t(*execute)(uint64_t);
 	int32_t(*verify)(uint64_t);
 #endif

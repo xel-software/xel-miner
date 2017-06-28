@@ -558,6 +558,8 @@ static void *test_vm_thread(void *userdata) {
 		work_package.vm_ulongs = ast_vm_ulongs;
 		work_package.vm_floats = ast_vm_floats;
 		work_package.vm_doubles = ast_vm_doubles;
+		work_package.storage_cnt = ast_storage_cnt;
+		work_package.storage_idx = ast_storage_idx;
 
 		// Calculate WCET
 		if (!calc_wcet()) {
@@ -588,13 +590,15 @@ static void *test_vm_thread(void *userdata) {
 	if (g_work_package[package_idx].vm_ulongs) vm_ul = calloc(g_work_package[package_idx].vm_ulongs, sizeof(uint64_t));
 	if (g_work_package[package_idx].vm_floats) vm_f = calloc(g_work_package[package_idx].vm_floats, sizeof(float));
 	if (g_work_package[package_idx].vm_doubles) vm_d = calloc(g_work_package[package_idx].vm_doubles, sizeof(double));
+	if (g_work_package[package_idx].storage_cnt) vm_s = calloc(g_work_package[package_idx].storage_cnt, sizeof(int32_t));
 
 	if ((g_work_package[package_idx].vm_ints && !vm_i) ||
 		(g_work_package[package_idx].vm_uints && !vm_u) ||
 		(g_work_package[package_idx].vm_longs && !vm_l) ||
 		(g_work_package[package_idx].vm_ulongs && !vm_ul) ||
 		(g_work_package[package_idx].vm_floats && !vm_f) ||
-		(g_work_package[package_idx].vm_doubles && !vm_d)) {
+		(g_work_package[package_idx].vm_doubles && !vm_d) ||
+		(g_work_package[package_idx].storage_cnt && !vm_s)) {
 
 		applog(LOG_ERR, "%s: Unable to allocate VM memory", "'test-vm'");
 		exit(EXIT_FAILURE);
@@ -623,7 +627,7 @@ static void *test_vm_thread(void *userdata) {
 			free_library(inst);
 		inst = calloc(1, sizeof(struct instance));
 		create_instance(inst, g_work_package[package_idx].work_str);
-		inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d);
+		inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d, vm_s);
 
 		// Execute The VM Logic
 		rc = inst->execute(g_work_package[package_idx].work_id);
@@ -1508,7 +1512,7 @@ static void *cpu_miner_thread(void *userdata) {
 				free_library(inst);
 			inst = calloc(1, sizeof(struct instance));
 			create_instance(inst, work.work_str);
-			inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d);
+			inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d, vm_s);
 
 			// Set Round / Iteration For The Work
 			rnd = 0;

@@ -503,7 +503,9 @@ extern void *sn_validate_result_thread(void *userdata) {
 			// Link Updated SuperNode Library
 			inst = calloc(1, sizeof(struct instance));
 			create_instance(inst, NULL);
-			inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d);
+			inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d, NULL);
+// TODO: FIX This to pass pointer to storage
+//			inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d, vm_s);
 
 			g_new_sn_library = false;
 		}
