@@ -517,6 +517,11 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 	// Expressions w/ 1 Variable (Left Operand)
 	case NODE_INCREMENT_R:
 	case NODE_DECREMENT_R:
+		if (stack_exp[stack_exp_idx]->is_vm_mem || stack_exp[stack_exp_idx]->is_vm_storage) {
+			applog(LOG_ERR, "Syntax Error: Line: %d - Illegal assignment to m/s array", token->line_num);
+			return false;
+		}
+
 		if ((stack_exp[stack_exp_idx]->token_num > token_num) &&
 			((stack_exp[stack_exp_idx]->type == NODE_VAR_CONST) || (stack_exp[stack_exp_idx]->type == NODE_VAR_EXP)))
 			return true;
@@ -525,6 +530,11 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 	// Expressions w/ 1 Variable (Right Operand)
 	case NODE_INCREMENT_L:
 	case NODE_DECREMENT_L:
+		if (stack_exp[stack_exp_idx]->is_vm_mem || stack_exp[stack_exp_idx]->is_vm_storage) {
+			applog(LOG_ERR, "Syntax Error: Line: %d - Illegal assignment to m/s array", token->line_num);
+			return false;
+		}
+
 		if ((stack_exp[stack_exp_idx]->token_num < token_num) &&
 			((stack_exp[stack_exp_idx]->type == NODE_VAR_CONST) || (stack_exp[stack_exp_idx]->type == NODE_VAR_EXP)))
 				return true;
@@ -536,6 +546,11 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 	case NODE_SUB_ASSIGN:
 	case NODE_MUL_ASSIGN:
 	case NODE_DIV_ASSIGN:
+		if (stack_exp[stack_exp_idx - 1]->is_vm_mem || stack_exp[stack_exp_idx - 1]->is_vm_storage) {
+			applog(LOG_ERR, "Syntax Error: Line: %d - Illegal assignment to m/s array", token->line_num);
+			return false;
+		}
+
 		if (((stack_exp[stack_exp_idx - 1]->token_num < token_num) && (stack_exp[stack_exp_idx]->token_num > token_num)) &&
 			((stack_exp[stack_exp_idx - 1]->type == NODE_VAR_CONST) || (stack_exp[stack_exp_idx - 1]->type == NODE_VAR_EXP)) &&
 			(stack_exp[stack_exp_idx]->data_type != DT_NONE))
@@ -549,6 +564,11 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 	case NODE_AND_ASSIGN:
 	case NODE_XOR_ASSIGN:
 	case NODE_OR_ASSIGN:
+		if (stack_exp[stack_exp_idx - 1]->is_vm_mem || stack_exp[stack_exp_idx - 1]->is_vm_storage) {
+			applog(LOG_ERR, "Syntax Error: Line: %d - Illegal assignment to m/s array", token->line_num);
+			return false;
+		}
+
 		if (((stack_exp[stack_exp_idx - 1]->token_num < token_num) && (stack_exp[stack_exp_idx]->token_num > token_num)) &&
 			((stack_exp[stack_exp_idx - 1]->type == NODE_VAR_CONST) || (stack_exp[stack_exp_idx - 1]->type == NODE_VAR_EXP)) &&
 			(!stack_exp[stack_exp_idx - 1]->is_float) &&
