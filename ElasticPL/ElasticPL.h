@@ -299,6 +299,7 @@ typedef struct AST {
 	bool is_signed;
 	bool is_float;
 	bool is_vm_mem;
+	bool is_vm_storage;
 	struct AST*	parent;
 	struct AST*	left;
 	struct AST*	right;
@@ -330,7 +331,7 @@ static ast* pop_exp();
 static void push_exp(ast* exp);
 static int pop_op();
 static void push_op(int token_id);
-static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_vm_mem, int64_t val_int64, uint64_t val_uint64, double val_double, unsigned char *svalue, int token_num, int line_num, DATA_TYPE data_type, ast* left, ast* right);
+static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_vm_mem, bool is_vm_storage, int64_t val_int64, uint64_t val_uint64, double val_double, unsigned char *svalue, int token_num, int line_num, DATA_TYPE data_type, ast* left, ast* right);
 extern char* get_node_str(NODE_TYPE node_type);
 extern void dump_vm_ast(ast* root);
 static void print_node(ast* node);

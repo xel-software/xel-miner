@@ -228,6 +228,8 @@ static bool convert_node(ast* node) {
 		case DT_UINT:
 			if (node->is_vm_mem)
 				sprintf(str, "m[%llu]", ((node->uvalue >= ast_vm_uints) ? 0 : node->uvalue));
+			else if (node->is_vm_storage)
+				sprintf(str, "s[%llu]", ((node->uvalue >= ast_vm_uints) ? 0 : node->uvalue));
 			else
 				sprintf(str, "u[%llu]", ((node->uvalue >= ast_vm_uints) ? 0 : node->uvalue));
 			break;
@@ -257,6 +259,8 @@ static bool convert_node(ast* node) {
 		case DT_UINT:
 			if (node->is_vm_mem)
 				sprintf(str, "m[%s]", lstr);
+			else if (node->is_vm_storage)
+				sprintf(str, "s[%s]", lstr);
 			else
 				sprintf(str, "u[%s]", lstr);
 			break;

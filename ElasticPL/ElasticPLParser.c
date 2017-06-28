@@ -20,7 +20,7 @@ int d_stack_op[10];	// DEBUG
 ast *d_stack_exp[10];	// DEBUG
 
 
-static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_vm_mem, int64_t val_int64, uint64_t val_uint64, double val_double, unsigned char *svalue, int token_num, int line_num, DATA_TYPE data_type, ast* left, ast* right) {
+static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_vm_mem, bool is_vm_storage, int64_t val_int64, uint64_t val_uint64, double val_double, unsigned char *svalue, int token_num, int line_num, DATA_TYPE data_type, ast* left, ast* right) {
 	DATA_TYPE dt_l, dt_r;
 	ast* e = calloc(1, sizeof(ast));
 
@@ -28,6 +28,7 @@ static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_vm_mem, int6
 		e->type = node_type;
 		e->exp = exp_type;
 		e->is_vm_mem = is_vm_mem;
+		e->is_vm_storage = is_vm_storage;
 		e->ivalue = val_int64;
 		e->uvalue = val_uint64;
 		e->fvalue = val_double;
@@ -365,7 +366,7 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 					applog(LOG_ERR, "Syntax Error: Line: %d - Int array not declared", token->line_num);
 					return false;
 				}
-				else if (stack_exp[stack_exp_idx]->uvalue >= ast_vm_ints) {
+				else if ((node_type == NODE_VAR_CONST) && (stack_exp[stack_exp_idx]->uvalue >= ast_vm_ints)) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Array index out of bounds", token->line_num);
 					return false;
 				}
@@ -375,7 +376,7 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 					applog(LOG_ERR, "Syntax Error: Line: %d - Unsigned Int array not declared", token->line_num);
 					return false;
 				}
-				else if (stack_exp[stack_exp_idx]->uvalue >= ast_vm_uints) {
+				else if ((node_type == NODE_VAR_CONST) && (stack_exp[stack_exp_idx]->uvalue >= ast_vm_uints)) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Array index out of bounds", token->line_num);
 					return false;
 				}
@@ -385,7 +386,7 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 					applog(LOG_ERR, "Syntax Error: Line: %d - Long array not declared", token->line_num);
 					return false;
 				}
-				else if (stack_exp[stack_exp_idx]->uvalue >= ast_vm_longs) {
+				else if ((node_type == NODE_VAR_CONST) && (stack_exp[stack_exp_idx]->uvalue >= ast_vm_longs)) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Array index out of bounds", token->line_num);
 					return false;
 				}
@@ -395,7 +396,7 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 					applog(LOG_ERR, "Syntax Error: Line: %d - Unsigned Long array not declared", token->line_num);
 					return false;
 				}
-				else if (stack_exp[stack_exp_idx]->uvalue >= ast_vm_ulongs) {
+				else if ((node_type == NODE_VAR_CONST) && (stack_exp[stack_exp_idx]->uvalue >= ast_vm_ulongs)) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Array index out of bounds", token->line_num);
 					return false;
 				}
@@ -405,7 +406,7 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 					applog(LOG_ERR, "Syntax Error: Line: %d - Float array not declared", token->line_num);
 					return false;
 				}
-				else if (stack_exp[stack_exp_idx]->uvalue >= ast_vm_floats) {
+				else if ((node_type == NODE_VAR_CONST) && (stack_exp[stack_exp_idx]->uvalue >= ast_vm_floats)) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Array index out of bounds", token->line_num);
 					return false;
 				}
@@ -415,24 +416,22 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 					applog(LOG_ERR, "Syntax Error: Line: %d - Double array not declared", token->line_num);
 					return false;
 				}
-				else if (stack_exp[stack_exp_idx]->uvalue >= ast_vm_doubles) {
+				else if ((node_type == NODE_VAR_CONST) && (stack_exp[stack_exp_idx]->uvalue >= ast_vm_doubles)) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Array index out of bounds", token->line_num);
 					return false;
 				}
 				break;
 			case DT_UINT_M: // m[]
-				if (stack_exp[stack_exp_idx]->uvalue >= VM_M_ARRAY_SIZE) {
+				if ((node_type == NODE_VAR_CONST) && (stack_exp[stack_exp_idx]->uvalue >= VM_M_ARRAY_SIZE)) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Array index out of bounds", token->line_num);
 					return false;
 				}
-				token->data_type = DT_UINT;
 				break;
 			case DT_UINT_S: // s[]
-				if (stack_exp[stack_exp_idx]->uvalue >= ast_storage_cnt) {
+				if ((node_type == NODE_VAR_CONST) && (stack_exp[stack_exp_idx]->uvalue >= ast_storage_cnt)) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Array index out of bounds", token->line_num);
 					return false;
 				}
-				token->data_type = DT_UINT;
 				break;
 			}
 			return true;
@@ -747,6 +746,7 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 	uint32_t len;
 	bool is_signed = false;
 	bool is_vm_mem = false;
+	bool is_vm_storage = false;
 	int64_t val_int64 = 0;
 	uint64_t val_uint64 = 0;
 	double val_double = 0.0;
@@ -894,8 +894,14 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 			}
 
 			// Set Indicator For m[] Array
-			if (((node_type == NODE_VAR_CONST) || (node_type == NODE_VAR_EXP)) && (token->data_type == DT_NONE)) {
+			if (((node_type == NODE_VAR_CONST) || (node_type == NODE_VAR_EXP)) && (token->data_type == DT_UINT_M)) {
 				is_vm_mem = true;
+				data_type = DT_UINT;
+			}
+
+			// Set Indicator For s[] Array
+			if (((node_type == NODE_VAR_CONST) || (node_type == NODE_VAR_EXP)) && (token->data_type == DT_UINT_S)) {
+				is_vm_storage = true;
 				data_type = DT_UINT;
 			}
 
@@ -955,14 +961,14 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 		if (token->inputs > 0) {
 			// First Paramater
 			left = pop_exp();
-			exp = add_exp(NODE_PARAM, EXP_EXPRESSION, false, 0, 0, 0.0, NULL, 0, 0, DT_NONE, left, NULL);
+			exp = add_exp(NODE_PARAM, EXP_EXPRESSION, false, false, 0, 0, 0.0, NULL, 0, 0, DT_NONE, left, NULL);
 			push_exp(exp);
 
 			// Remaining Paramaters
 			for (i = 1; i < token->inputs; i++) {
 				right = pop_exp();
 				left = pop_exp();
-				exp = add_exp(NODE_PARAM, EXP_EXPRESSION, false, 0, 0, 0.0, NULL, 0, 0, DT_NONE, left, right);
+				exp = add_exp(NODE_PARAM, EXP_EXPRESSION, false, false, 0, 0, 0.0, NULL, 0, 0, DT_NONE, left, right);
 				push_exp(exp);
 			}
 			left = NULL;
@@ -974,7 +980,7 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 		}
 	}
 
-	exp = add_exp(node_type, token->exp, is_vm_mem, val_int64, val_uint64, val_double, svalue, token_num, token->line_num, data_type, left, right);
+	exp = add_exp(node_type, token->exp, is_vm_mem, is_vm_storage, val_int64, val_uint64, val_double, svalue, token_num, token->line_num, data_type, left, right);
 
 	// Update The "End Statement" Indicator For If/Else/Repeat/Block/Function/Result
 	if ((exp->type == NODE_IF) || (exp->type == NODE_ELSE) || (exp->type == NODE_REPEAT) || (exp->type == NODE_BLOCK) || (exp->type == NODE_FUNCTION) || (exp->type == NODE_RESULT))
