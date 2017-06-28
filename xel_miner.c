@@ -89,7 +89,7 @@ __thread _ALIGN(64) int64_t *vm_l = NULL;
 __thread _ALIGN(64) uint64_t *vm_ul = NULL;
 __thread _ALIGN(64) float *vm_f = NULL;
 __thread _ALIGN(64) double *vm_d = NULL;
-__thread _ALIGN(64) uint32_t *vm_s = NULL;
+__thread _ALIGN(64) uint32_t **vm_s = NULL;
 __thread _ALIGN(64) uint32_t *vm_state = NULL;
 
 bool use_elasticpl_math;
@@ -582,15 +582,17 @@ static void *test_vm_thread(void *userdata) {
 		if (!opt_supernode)
 			break;
 	}
+
 	// Initialize Global Variables
 	vm_m = calloc(VM_M_ARRAY_SIZE, sizeof(uint32_t));
+	vm_s = calloc(1, sizeof(uint32_t **));
 	if (g_work_package[package_idx].vm_ints) vm_i = calloc(g_work_package[package_idx].vm_ints, sizeof(int32_t));
 	if (g_work_package[package_idx].vm_uints) vm_u = calloc(g_work_package[package_idx].vm_uints, sizeof(uint32_t));
 	if (g_work_package[package_idx].vm_longs) vm_l = calloc(g_work_package[package_idx].vm_longs, sizeof(int64_t));
 	if (g_work_package[package_idx].vm_ulongs) vm_ul = calloc(g_work_package[package_idx].vm_ulongs, sizeof(uint64_t));
 	if (g_work_package[package_idx].vm_floats) vm_f = calloc(g_work_package[package_idx].vm_floats, sizeof(float));
 	if (g_work_package[package_idx].vm_doubles) vm_d = calloc(g_work_package[package_idx].vm_doubles, sizeof(double));
-	if (g_work_package[package_idx].storage_sz) vm_s = calloc(g_work_package[package_idx].storage_sz, sizeof(int32_t));
+	if (g_work_package[package_idx].storage_sz) *vm_s = calloc(g_work_package[package_idx].storage_sz, sizeof(int32_t));
 
 	if ((g_work_package[package_idx].vm_ints && !vm_i) ||
 		(g_work_package[package_idx].vm_uints && !vm_u) ||
@@ -598,7 +600,7 @@ static void *test_vm_thread(void *userdata) {
 		(g_work_package[package_idx].vm_ulongs && !vm_ul) ||
 		(g_work_package[package_idx].vm_floats && !vm_f) ||
 		(g_work_package[package_idx].vm_doubles && !vm_d) ||
-		(g_work_package[package_idx].storage_sz && !vm_s)) {
+		(g_work_package[package_idx].storage_sz && !*vm_s)) {
 
 		applog(LOG_ERR, "%s: Unable to allocate VM memory", "'test-vm'");
 		exit(EXIT_FAILURE);
@@ -663,6 +665,7 @@ static void *test_vm_thread(void *userdata) {
 	if (vm_ul) free(vm_ul);
 	if (vm_f) free(vm_f);
 	if (vm_d) free(vm_d);
+	if (*vm_s) free(*vm_s);
 	if (vm_s) free(vm_s);
 	//	if (vm_state) free(vm_state);
 
@@ -1430,9 +1433,10 @@ static void *cpu_miner_thread(void *userdata) {
 
 	// Initialize Global Variables
 	vm_m = calloc(VM_M_ARRAY_SIZE, sizeof(uint32_t));
+	vm_s = calloc(1, sizeof(uint32_t **));
 	vm_state = calloc(4, sizeof(uint32_t));
 
-	if (!vm_m || !vm_state) {
+	if (!vm_m || !vm_s || !vm_state) {
 		applog(LOG_ERR, "CPU%d: Unable to allocate VM memory", thr_id);
 		goto out;
 	}
@@ -1492,8 +1496,8 @@ static void *cpu_miner_thread(void *userdata) {
 			}
 			if (g_work_package[work.package_id].storage_sz > vm_storage) {
 				vm_storage = g_work_package[work.package_id].storage_sz;
-				vm_s = realloc(vm_s, vm_storage * sizeof(uint32_t));
-				memset(vm_s, 0, vm_storage * sizeof(uint32_t));
+				*vm_s = realloc(*vm_s, vm_storage * sizeof(uint32_t));
+				memset(*vm_s, 0, vm_storage * sizeof(uint32_t));
 			}
 
 			if ((vm_ints && !vm_i) ||
@@ -1502,7 +1506,7 @@ static void *cpu_miner_thread(void *userdata) {
 				(vm_ulongs && !vm_ul) ||
 				(vm_floats && !vm_f) ||
 				(vm_doubles && !vm_d) ||
-				(vm_storage && !vm_s)) {
+				(vm_storage && !*vm_s)) {
 
 				applog(LOG_ERR, "CPU%d: Unable to allocate VM memory", thr_id);
 				goto out;
@@ -1521,9 +1525,9 @@ static void *cpu_miner_thread(void *userdata) {
 
 			// Copy New Storage Values To VM
 			if (iteration && g_work_package[work.package_id].storage_sz)
-				memcpy(&vm_s[0], g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
+				memcpy(*vm_s, g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
 			else
-				memset(vm_s, 0, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
+				memset(*vm_s, 0, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
 
 		}
 		// Otherwise, Just Update POW Target / Iteration / Storage
@@ -1538,7 +1542,7 @@ static void *cpu_miner_thread(void *userdata) {
 
 				// Copy New Storage Values To VM
 				if (g_work_package[work.package_id].storage_sz)
-					memcpy(&vm_s[0], g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
+					memcpy(*vm_s, g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
 
 			}
 		}
@@ -1636,6 +1640,7 @@ out:
 	if (vm_ul) free(vm_ul);
 	if (vm_f) free(vm_f);
 	if (vm_d) free(vm_d);
+	if (*vm_s) free(*vm_s);
 	if (vm_s) free(vm_s);
 	if (vm_state) free(vm_state);
 

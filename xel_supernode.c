@@ -53,12 +53,14 @@ struct request {
 	uint32_t req_id;
 	uint32_t req_type;
 	char *package;
+	uint32_t work_pkg_id;
 	uint64_t work_id;
+	uint32_t input[VM_M_ARRAY_SIZE];
+	uint32_t target[8];
 	uint32_t iteration_id;
 	uint32_t storage_id;
-	uint32_t input[VM_M_ARRAY_SIZE];
-	uint32_t state[32];
-	uint32_t target[8];
+	uint32_t storage_sz;
+	uint32_t *storage;
 	bool success;
 	char *err_msg;
 };
@@ -241,6 +243,7 @@ extern void *supernode_thread(void *userdata) {
 			struct request req;
 			req.req_id = req_id;
 			req.req_type = req_type;
+			req.work_pkg_id = -1;
 
 			// Validate ElasticPL Syntax 
 			if (req_type == 2) {
@@ -253,9 +256,7 @@ extern void *supernode_thread(void *userdata) {
 				// Push Request To Validate ElasticPL Queue
 				tq_push(thr_info[1].q, &req);
 			}
-
-			// Validate POW / Bounty Solutions 
-			else if ((req_type == 3) || (req_type == 4)) {
+			else {
 
 				// Get Work ID
 				str = (char *)json_string_value(json_object_get(val, "work_id"));
@@ -263,6 +264,48 @@ extern void *supernode_thread(void *userdata) {
 					req.work_id = strtoull(str, NULL, 10);
 				else
 					req.work_id = 0;
+
+				// Check If Work Package Exists
+				for (i = 0; i < g_work_package_cnt; i++) {
+					if (req.work_id == g_work_package[i].work_id) {
+						req.work_pkg_id = i;
+						break;
+					}
+				}
+
+				if (req.work_pkg_id < 0) {
+					applog(LOG_DEBUG, "DEBUG: No Package exists for work_id: %llu - Req_Id: %d, Req_Type: %d", req.work_id, req_id, req_type);
+					sleep(1);
+					sprintf(msg, "{\"req_id\": %lu,\"req_type\": %lu,\"success\": %d,\"error\": \"%s\"}", req_id, req_type, 0, "Job not found");
+					pthread_mutex_lock(&response_lock);
+					send(core, msg, strlen(msg), 0);
+					pthread_mutex_unlock(&response_lock);
+					if (val) json_decref(val);
+					continue;
+				}
+
+				// Get Iteration / Storage ID
+				req.iteration_id = (uint32_t)json_integer_value(json_object_get(val, "iteration_id"));
+				req.storage_id = (uint32_t)json_integer_value(json_object_get(val, "storage_id"));
+
+				// Get Storage
+				req.storage = NULL;
+				req.storage_sz = 0;
+				state = json_object_get(val, "state");
+				if (state) {
+					n = json_array_size(state);
+					if (n) {
+						req.storage = malloc(n * sizeof(uint32_t));
+						req.storage_sz = n;
+					}
+				}
+
+				// Push Request To Update Storage Queue
+				if (req_type == 5) {
+					tq_push(thr_info[3].q, &req);
+					if (val) json_decref(val);
+					continue;
+				}
 
 				// Get Inputs
 				memset(&req.input[0], 0, VM_M_ARRAY_SIZE * sizeof(uint32_t));
@@ -276,20 +319,12 @@ extern void *supernode_thread(void *userdata) {
 					pthread_mutex_lock(&response_lock);
 					send(core, msg, strlen(msg), 0);
 					pthread_mutex_unlock(&response_lock);
+					if (val) json_decref(val);
 					continue;
 				}
 
 				for (i = 0; i < n; i++) {
 					req.input[i] = (uint32_t)json_integer_value(json_array_get(input, i));
-				}
-				
-				// Get State
-				memset(&req.state[0], 0, 32 * sizeof(uint32_t));
-				state = json_object_get(val, "state");
-				n = json_array_size(state);
-
-				for (i = 0; i < n; i++) {
-					req.state[i] = (uint32_t)json_integer_value(json_array_get(state, i));
 				}
 
 				// Get Target
@@ -304,6 +339,7 @@ extern void *supernode_thread(void *userdata) {
 						pthread_mutex_lock(&response_lock);
 						send(core, msg, strlen(msg), 0);
 						pthread_mutex_unlock(&response_lock);
+						if (val) json_decref(val);
 						continue;
 					}
 
@@ -314,33 +350,6 @@ extern void *supernode_thread(void *userdata) {
 
 				// Push Request To Validate Results Queue
 				tq_push(thr_info[2].q, &req);
-			}
-
-			// Update Storage 
-			else if (req_type == 5) {
-
-				// Get Work ID
-				str = (char *)json_string_value(json_object_get(val, "work_id"));
-				if (str)
-					req.work_id = strtoull(str, NULL, 10);
-				else
-					req.work_id = 0;
-
-				// Get Iteration / Storage ID
-				req.iteration_id = (uint32_t)json_integer_value(json_object_get(val, "iteration_id"));
-				req.storage_id = (uint32_t)json_integer_value(json_object_get(val, "storage_id"));
-
-				// Get State
-				memset(&req.state[0], 0, 32 * sizeof(uint32_t));
-				state = json_object_get(val, "state");
-				n = json_array_size(state);
-
-				for (i = 0; i < n; i++) {
-					req.state[i] = (uint32_t)json_integer_value(json_array_get(state, i));
-				}
-
-				// Push Request To Update Storage Queue
-				tq_push(thr_info[3].q, &req);
 			}
 
 			if (val)
@@ -458,6 +467,9 @@ extern void *sn_validate_result_thread(void *userdata) {
 	if (!vm_m)
 		vm_m = calloc(VM_M_ARRAY_SIZE, sizeof(uint32_t));
 
+	if (!vm_s)
+		vm_s = calloc(1, sizeof(uint32_t **));
+
 	if (!vm_state)
 		vm_state = calloc(4, sizeof(uint32_t));
 
@@ -552,12 +564,31 @@ extern void *sn_validate_result_thread(void *userdata) {
 			vm_m[i] = req->input[i];
 		}
 
+		// Point To Storage For This Work ID
+		if (g_work_package[req->work_pkg_id].storage_sz && req->iteration_id) {
+			if (g_work_package[req->work_pkg_id].storage[req->iteration_id][req->storage_id]) {
+				*vm_s = &g_work_package[req->work_pkg_id].storage[req->iteration_id][req->storage_id];
+			}
+			else {
+				success = 0;
+				sprintf(err_msg, "Storage not found");
+			}
+		}
+
 		// Validate Bounty
 		if (req->req_type == 4) {
 			rc = inst->execute(req->work_id);
 			if (rc == 1) {
 				success = 1;
 				sprintf(err_msg, "");
+
+				// Check If Storage Needs To be Updated
+				if (req->storage) {
+					if (!sn_update_storage(req->work_id, req->iteration_id, req->storage_id, req->storage, req->storage_sz, err_msg)) {
+						success = 0;
+						free(req->storage);
+					}
+				}
 			}
 			else if (rc == 0) {
 				success = 0;
@@ -622,6 +653,8 @@ extern void *sn_validate_result_thread(void *userdata) {
 	if (vm_f) free(vm_f);
 	if (vm_d) free(vm_d);
 	if (vm_s) free(vm_s);
+
+// TODO: Add Code To Free Work Packages
 
 	tq_freeze(mythr->q);
 
@@ -761,7 +794,7 @@ extern void *sn_update_storage_thread(void *userdata) {
 		req = (struct request *) tq_pop(mythr->q, NULL);
 		applog(LOG_DEBUG, "Updating Storage (req_id: %d)", req->req_id);
 
-		if (!sn_update_storage(req->work_id, req->iteration_id, req->storage_id, req->state, err_msg)) {
+		if (!sn_update_storage(req->work_id, req->iteration_id, req->storage_id, req->storage, req->storage_sz, err_msg)) {
 			success = 0;
 			applog(LOG_DEBUG, "DEBUG: Unable to update storage for work_id: %lu, iteration_Id: %d, storage_id: %d", req->work_id, req->iteration_id, req->storage_id);
 		}
@@ -779,7 +812,7 @@ extern void *sn_update_storage_thread(void *userdata) {
 	return NULL;
 }
 
-static bool sn_update_storage(uint64_t work_id, uint32_t iteration_id, uint32_t storage_id, uint32_t *state, char *err_msg) {
+static bool sn_update_storage(uint64_t work_id, uint32_t iteration_id, uint32_t storage_id, uint32_t *storage, uint32_t storage_sz, char *err_msg) {
 	int i, work_pkg_id;
 	char *str = NULL;
 
@@ -801,6 +834,11 @@ static bool sn_update_storage(uint64_t work_id, uint32_t iteration_id, uint32_t 
 
 	if (!g_work_package[work_pkg_id].storage) {
 		sprintf(err_msg, "Package for work_id: %llu does not support storage", work_id);
+		return false;
+	}
+
+	if (storage_sz != g_work_package[work_pkg_id].storage_sz) {
+		sprintf(err_msg, "Submitted storage size (%d) does not match 'storage_sz' in ElasticPL", storage_sz);
 		return false;
 	}
 
@@ -827,17 +865,7 @@ static bool sn_update_storage(uint64_t work_id, uint32_t iteration_id, uint32_t 
 		return false;
 	}
 
-	memcpy(g_work_package[work_pkg_id].storage[storage_id], state, 32 * sizeof(uint32_t));
-
-	//uint32_t t[10];
-	//for (i = 0; i < 10; i++) {
-	//	t[i] = g_work_package[work_pkg_id].storage[i];
-	//}
-
-	//uint32_t t2[32];
-	//for (i = 0; i < 32; i++) {
-	//	t2[i] = g_work_package[work_pkg_id].storage[0][i];
-	//}
+	g_work_package[work_pkg_id].storage[storage_id] = storage;
 
 	return true;
 }

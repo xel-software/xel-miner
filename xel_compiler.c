@@ -40,8 +40,9 @@ bool create_c_source(char *work_str) {
 	fprintf(f, "__declspec(thread) int64_t *l = NULL;\n");
 	fprintf(f, "__declspec(thread) uint64_t *ul = NULL;\n");
 	fprintf(f, "__declspec(thread) float *f = NULL;\n");
-	fprintf(f, "__declspec(thread) double *d = NULL;\n\n");
+	fprintf(f, "__declspec(thread) double *d = NULL;\n");
 	fprintf(f, "__declspec(thread) uint32_t *s = NULL;\n");
+	fprintf(f, "__declspec(thread) uint32_t **s_ptr = NULL;\n\n");
 #else
 	fprintf(f, "__thread uint32_t *m = NULL;\n");
 	fprintf(f, "__thread int32_t *i = NULL;\n");
@@ -51,6 +52,7 @@ bool create_c_source(char *work_str) {
 	fprintf(f, "__thread float *f = NULL;\n");
 	fprintf(f, "__thread double *d = NULL;\n\n");
 	fprintf(f, "__thread uint32_t *s = NULL;\n");
+	fprintf(f, "__thread uint32_t *s_ptr = NULL;\n");
 #endif
 
 	fprintf(f, "static uint32_t rotl32(uint32_t x, uint32_t n);\n");
@@ -95,7 +97,7 @@ bool create_c_source(char *work_str) {
 	fprintf(f, "}\n\n");
 
 #ifdef WIN32
-	fprintf(f, "__declspec(dllexport) void initialize(uint32_t *vm_m, int32_t *vm_i, uint32_t *vm_u, int64_t *vm_l, uint64_t *vm_ul, float *vm_f, double *vm_d, uint32_t *vm_s) {\n");
+	fprintf(f, "__declspec(dllexport) void initialize(uint32_t *vm_m, int32_t *vm_i, uint32_t *vm_u, int64_t *vm_l, uint64_t *vm_ul, float *vm_f, double *vm_d, uint32_t **vm_s) {\n");
 #else
 	fprintf(f, "void initialize(uint32_t *vm_m, int32_t *vm_i, uint32_t *vm_u, int64_t *vm_l, uint64_t *vm_ul, float *vm_f, double *vm_d) {\n");
 #endif
@@ -106,7 +108,7 @@ bool create_c_source(char *work_str) {
 	fprintf(f, "\tul = vm_ul;\n");
 	fprintf(f, "\tf = vm_f;\n");
 	fprintf(f, "\td = vm_d;\n");
-	fprintf(f, "\ts = vm_s;\n");
+	fprintf(f, "\ts_ptr = vm_s;\n");
 
 	fprintf(f, "}\n\n");
 
@@ -115,6 +117,7 @@ bool create_c_source(char *work_str) {
 #else
 	fprintf(f, "int32_t execute( uint64_t work_id ) {\n\n");
 #endif
+	fprintf(f, "\ts = *s_ptr;\n\n");
 
 	// Call The Main Function For The Current Job
 	if (!opt_supernode) {
@@ -227,7 +230,7 @@ void create_instance(struct instance* inst, char *work_str) {
 		fprintf(stderr, "Unable to load library: '%s' (Error - %d)", file_name, GetLastError());
 		exit(EXIT_FAILURE);
 	}
-	inst->initialize = (int32_t(__cdecl *)(uint32_t *, int32_t *, uint32_t *, int64_t *, uint64_t *, float *, double *, uint32_t *))GetProcAddress((HMODULE)inst->hndl, "initialize");
+	inst->initialize = (int32_t(__cdecl *)(uint32_t *, int32_t *, uint32_t *, int64_t *, uint64_t *, float *, double *, uint32_t **))GetProcAddress((HMODULE)inst->hndl, "initialize");
 	inst->execute = (int32_t(__cdecl *)(uint64_t))GetProcAddress((HMODULE)inst->hndl, "execute");
 	inst->verify = (int32_t(__cdecl *)(uint64_t))GetProcAddress((HMODULE)inst->hndl, "verify");
 	if (!inst->initialize || !inst->execute || !inst->verify) {

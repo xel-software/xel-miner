@@ -53,7 +53,7 @@ extern __thread _ALIGN(64) int64_t *vm_l;
 extern __thread _ALIGN(64) uint64_t *vm_ul;
 extern __thread _ALIGN(64) float *vm_f;
 extern __thread _ALIGN(64) double *vm_d;
-extern __thread _ALIGN(64) uint32_t *vm_s;
+extern __thread _ALIGN(64) uint32_t **vm_s;
 extern __thread _ALIGN(64) uint32_t *vm_state;
 
 extern bool use_elasticpl_math;
@@ -207,12 +207,12 @@ struct instance {
 
 #ifdef WIN32
 	HINSTANCE hndl;
-	int32_t(__cdecl* initialize)(uint32_t *, int32_t *, uint32_t *, int64_t *, uint64_t *, float *, double *, uint32_t *);
+	int32_t(__cdecl* initialize)(uint32_t *, int32_t *, uint32_t *, int64_t *, uint64_t *, float *, double *, uint32_t **);
 	int32_t(__cdecl* execute)(uint64_t);
 	int32_t(__cdecl* verify)(uint64_t);
 #else
 	void *hndl;
-	int32_t(*initialize)(uint32_t *, int32_t *, uint32_t *, int64_t *, uint64_t *, float *, double *, uint32_t *);
+	int32_t(*initialize)(uint32_t *, int32_t *, uint32_t *, int64_t *, uint64_t *, float *, double *, uint32_t **);
 	int32_t(*execute)(uint64_t);
 	int32_t(*verify)(uint64_t);
 #endif
@@ -376,6 +376,6 @@ extern void *sn_validate_result_thread(void *userdata);
 extern void *sn_update_storage_thread(void *userdata);
 
 static bool sn_validate_package(const json_t *val, char *elastic_src, char *err_msg);
-static bool sn_update_storage(uint64_t work_id, uint32_t iteration_id, uint32_t storage_id, uint32_t *state, char *err_msg);
+static bool sn_update_storage(uint64_t work_id, uint32_t iteration_id, uint32_t storage_id, uint32_t *storage, uint32_t storage_sz, char *err_msg);
 
 #endif /* __MINER_H__ */
