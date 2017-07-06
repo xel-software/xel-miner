@@ -175,6 +175,7 @@ static bool convert_node(ast* node) {
 	char *rstr = NULL;
 	char *str = NULL;
 	char *tmp = NULL;
+	bool var_exp_flg = false;
 
 	if (!node)
 		return false;
@@ -251,30 +252,61 @@ static bool convert_node(ast* node) {
 		}
 		break;
 	case NODE_VAR_EXP:
-		str = malloc(strlen(lstr) + 5);
+		if (node->parent->end_stmnt && (node == node->parent->left))
+			var_exp_flg = true;
+
+		str = malloc((3 * strlen(lstr)) + 50);
+
 		switch (node->data_type) {
 		case DT_INT:
-			sprintf(str, "i[%s]", lstr);
+			if (var_exp_flg)
+				sprintf(str, "if((%s) < %lu)\n\t%si[%s]", lstr, ast_vm_ints, tab[tabs], lstr);
+			else
+				sprintf(str, "i[(((%s) < %lu) ? %s : 0)]", lstr, ast_vm_ints, lstr);
 			break;
 		case DT_UINT:
-			if (node->is_vm_mem)
-				sprintf(str, "m[%s]", lstr);
-			else if (node->is_vm_storage)
-				sprintf(str, "s[%s]", lstr);
-			else
-				sprintf(str, "u[%s]", lstr);
+			if (node->is_vm_mem) {
+				if (var_exp_flg)
+					sprintf(str, "if((%s) < %lu)\n\t%sm[%s]", lstr, VM_M_ARRAY_SIZE, tab[tabs], lstr);
+				else
+					sprintf(str, "m[(((%s) < %lu) ? %s : 0)]", lstr, VM_M_ARRAY_SIZE, lstr);
+			}
+			else if (node->is_vm_storage) {
+				if (var_exp_flg)
+					sprintf(str, "if((%s) < %lu)\n\t%ss[%s]", lstr, ast_storage_sz, tab[tabs], lstr);
+				else
+					sprintf(str, "s[(((%s) < %lu) ? %s : 0)]", lstr, ast_storage_sz, lstr);
+			}
+			else {
+				if (var_exp_flg)
+					sprintf(str, "if((%s) < %lu)\n\t%su[%s]", lstr, ast_vm_uints, tab[tabs], lstr);
+				else
+					sprintf(str, "u[(((%s) < %lu) ? %s : 0)]", lstr, ast_vm_uints, lstr);
+			}
 			break;
 		case DT_LONG:
-			sprintf(str, "l[%s]", lstr);
+			if (var_exp_flg)
+				sprintf(str, "if((%s) < %lu)\n\t%sl[%s]", lstr, ast_vm_longs, tab[tabs], lstr);
+			else
+				sprintf(str, "l[(((%s) < %lu) ? %s : 0)]", lstr, ast_vm_longs, lstr);
 			break;
 		case DT_ULONG:
-			sprintf(str, "ul[%s]", lstr);
+			if (var_exp_flg)
+				sprintf(str, "if((%s) < %lu)\n\t%sul[%s]", lstr, ast_vm_ulongs, tab[tabs], lstr);
+			else
+				sprintf(str, "ul[(((%s) < %lu) ? %s : 0)]", lstr, ast_vm_ulongs, lstr);
 			break;
 		case DT_FLOAT:
-			sprintf(str, "f[%s]", lstr);
+			if (var_exp_flg)
+				sprintf(str, "if((%s) < %lu)\n\t%sf[%s]", lstr, ast_vm_floats, tab[tabs], lstr);
+			else
+				sprintf(str, "f[(((%s) < %lu) ? %s : 0)]", lstr, ast_vm_floats, lstr);
 			break;
 		case DT_DOUBLE:
-			sprintf(str, "d[%s]", lstr);
+			if (var_exp_flg)
+				sprintf(str, "if((%s) < %lu)\n\t%sd[%s]", lstr, ast_vm_doubles, tab[tabs], lstr);
+			else
+				sprintf(str, "d[(((%s) < %lu) ? %s : 0)]", lstr, ast_vm_doubles, lstr);
 			break;
 		default:
 			applog(LOG_ERR, "Compiler Error: Invalid variable at Line: %d", node->line_num);
