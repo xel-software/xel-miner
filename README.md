@@ -15,7 +15,7 @@ The miner build has been tested using GCC in Linux as well as MinGW32 (using GCC
 Below are the steps I used to get the miner running on my Raspberry Pi.
 <ul>
 <li>sudo apt-get update</li>
-<li>sudo apt-get install cmake libcurl4-openssl-dev libudev-dev screen libtool pkg-config libjansson-dev libgmp3-dev</li>
+<li>sudo apt-get install cmake libcurl4-openssl-dev libudev-dev screen libtool pkg-config libjansson-dev libssl_dev</li>
 <li>git clone https://github.com/sprocket-fpga/xel_miner.git</li>
 <li>cd xel_miner</li>
 <li>cd build</li>
