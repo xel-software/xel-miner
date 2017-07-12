@@ -796,3 +796,38 @@ static bool get_node_inputs(ast* node, char **lstr, char **rstr) {
 
 	return true;
 }
+
+extern bool convert_verify_to_java(char *verify_src) {
+	int i;
+	size_t old_len, new_len;
+	char *old_str = NULL, *new_str = NULL;
+
+	stack_code_idx = 0;
+	tabs = 0;
+
+	if (!convert_function(stack_exp[ast_verify_idx])) {
+		return false;
+	}
+
+	old_len = 0;
+	old_str = calloc(1, 1);
+
+	for (i = 0; i < stack_code_idx; i++) {
+		if (stack_code[i]) {
+			new_len = strlen(stack_code[i]);
+			new_str = malloc(old_len + new_len + 1);
+			memcpy(new_str, old_str, old_len);
+			memcpy(new_str + old_len, stack_code[i], new_len + 1);
+			old_len = old_len + new_len;
+			old_str = new_str;
+			free(stack_code[i]);
+			stack_code[i] = NULL;
+		}
+	}
+
+	if (!new_str)
+		return false;
+
+	memcpy(verify_src, old_str, old_len + 1);
+	return true;
+}
