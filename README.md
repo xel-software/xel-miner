@@ -1,7 +1,7 @@
 <h1><b>Only Use For Standalone ElasticPL Testing!</b></h1>
 
 # xel_miner 	0.9.1
-# xel_supernode	0.1
+# xel_validate	0.1
 
 <i>This code is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 See the GNU General Public License for more details.</i>
@@ -15,7 +15,7 @@ The miner build has been tested using GCC in Linux as well as MinGW32 (using GCC
 Below are the steps I used to get the miner running on my Raspberry Pi.
 <ul>
 <li>sudo apt-get update</li>
-<li>sudo apt-get install cmake libcurl4-openssl-dev libudev-dev screen libtool pkg-config libjansson-dev libssl_dev</li>
+<li>sudo apt-get install cmake libcurl4-openssl-dev libudev-dev screen libtool pkg-config libjansson-dev libssl-dev</li>
 <li>git clone https://github.com/sprocket-fpga/xel_miner.git</li>
 <li>cd xel_miner</li>
 <li>cd build</li>
@@ -33,9 +33,9 @@ To run the Miner using GPU:
 
     sudo ./xel_miner -t <num_threads> -P <secret_phrase> -D --opencl
 
-To run the SuperNode backend:
+To run the Validation Engine backend:
 
-    sudo ./xel_miner -S -D
+    sudo ./xel_miner -V -D
 
 Use "sudo ./xel_miner -h" to see a full list of options.
 
