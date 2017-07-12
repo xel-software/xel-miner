@@ -375,7 +375,7 @@ extern void *ve_validate_package_thread(void *userdata);
 extern void *ve_validate_result_thread(void *userdata);
 extern void *ve_update_storage_thread(void *userdata);
 
-static bool ve_validate_package(const json_t *val, char *elastic_src, char *err_msg);
+static bool ve_validate_package(const json_t *pkg, char *elastic_src, char *verify_src, char *err_msg);
 static bool ve_update_storage(uint64_t work_id, uint32_t iteration_id, uint32_t storage_id, uint32_t *storage, uint32_t storage_sz, char *err_msg);
 
 #endif /* __MINER_H__ */

@@ -383,7 +383,7 @@ out:
 extern void *ve_validate_package_thread(void *userdata) {
 	struct thr_info *mythr = (struct thr_info*)userdata;
 	struct request *req;
-	char msg[512], err_msg[256], *elastic_src;
+	char msg[512], err_msg[256], *elastic_src, *verify_src;
 	uint32_t success;
 	json_t *val = NULL, *wrk = NULL, *pkg = NULL;
 	json_error_t err;
@@ -391,6 +391,12 @@ extern void *ve_validate_package_thread(void *userdata) {
 	elastic_src = malloc(MAX_SOURCE_SIZE);
 	if (!elastic_src) {
 		applog(LOG_ERR, "ERROR: Unable to allocate memory for ElasticPL Source");
+		return NULL;
+	}
+
+	verify_src = malloc(MAX_SOURCE_SIZE);
+	if (!elastic_src) {
+		applog(LOG_ERR, "ERROR: Unable to allocate memory for Verify Source");
 		return NULL;
 	}
 
@@ -424,7 +430,7 @@ extern void *ve_validate_package_thread(void *userdata) {
 		}
 
 		// Validate Contents Of Package
-		if (!ve_validate_package(pkg, elastic_src, err_msg)) {
+		if (!ve_validate_package(pkg, elastic_src, verify_src, err_msg)) {
 			success = 0;
 			goto send;
 		}
@@ -434,7 +440,7 @@ send:
 			applog(LOG_DEBUG, "DEBUG: %s", err_msg);
 
 		// Create Response
-		sprintf(msg, "{\"req_id\": %lu,\"req_type\": %lu,\"success\": %d,\"error\": \"%s\"}", req->req_id, req->req_type, success, err_msg);
+		sprintf(msg, "{\"req_id\": %lu,\"req_type\": %lu,\"success\": %d,\"verify\": \"%s\",\"error\": \"%s\"}", req->req_id, req->req_type, success, (verify_src ? verify_src : ""), err_msg);
 
 		// Send Response
 		pthread_mutex_lock(&response_lock);
@@ -450,6 +456,9 @@ send:
 
 	if (elastic_src)
 		free(elastic_src);
+
+	if (verify_src)
+		free(verify_src);
 
 	tq_freeze(mythr->q);
 	return NULL;
@@ -661,7 +670,7 @@ extern void *ve_validate_result_thread(void *userdata) {
 	return NULL;
 }
 
-static bool ve_validate_package(const json_t *pkg, char *elastic_src, char *err_msg) {
+static bool ve_validate_package(const json_t *pkg, char *elastic_src, char *verify_src, char *err_msg) {
 	int i, rc, work_pkg_id;
 	uint64_t work_id;
 	char *str = NULL;
@@ -775,6 +784,12 @@ static bool ve_validate_package(const json_t *pkg, char *elastic_src, char *err_
 
 	g_new_ve_library = true;
 	g_ve_library_loaded = true;
+
+	// Create Java Version Of Verify Function
+	if (!convert_verify_to_java(verify_src)) {
+		sprintf(err_msg, "Unable to create Verify Java Code");
+		return false;
+	}
 
 	return true;
 }
