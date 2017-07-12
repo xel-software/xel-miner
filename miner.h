@@ -69,7 +69,7 @@ extern bool opt_test_vm;
 extern bool opt_opencl;
 extern int opt_opencl_gthreads;
 extern int opt_opencl_vwidth;
-extern bool opt_supernode;
+extern bool opt_validate;
 
 extern struct work_package *g_work_package;
 extern int g_work_package_cnt;
@@ -369,13 +369,13 @@ extern bool create_opencl_source(char *work_str);
 
 int curve25519_donna(uint8_t *mypublic, const uint8_t *secret, const uint8_t *basepoint);
 
-// SuperNode Function Declarations
-extern void *supernode_thread(void *userdata);
-extern void *sn_validate_package_thread(void *userdata);
-extern void *sn_validate_result_thread(void *userdata);
-extern void *sn_update_storage_thread(void *userdata);
+// Validate Engine Function Declarations
+extern void *validation_engine_thread(void *userdata);
+extern void *ve_validate_package_thread(void *userdata);
+extern void *ve_validate_result_thread(void *userdata);
+extern void *ve_update_storage_thread(void *userdata);
 
-static bool sn_validate_package(const json_t *val, char *elastic_src, char *err_msg);
-static bool sn_update_storage(uint64_t work_id, uint32_t iteration_id, uint32_t storage_id, uint32_t *storage, uint32_t storage_sz, char *err_msg);
+static bool ve_validate_package(const json_t *val, char *elastic_src, char *err_msg);
+static bool ve_update_storage(uint64_t work_id, uint32_t iteration_id, uint32_t storage_id, uint32_t *storage, uint32_t storage_sz, char *err_msg);
 
 #endif /* __MINER_H__ */

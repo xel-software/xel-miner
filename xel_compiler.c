@@ -50,9 +50,9 @@ bool create_c_source(char *work_str) {
 	fprintf(f, "__thread int64_t *l = NULL;\n");
 	fprintf(f, "__thread uint64_t *ul = NULL;\n");
 	fprintf(f, "__thread float *f = NULL;\n");
-	fprintf(f, "__thread double *d = NULL;\n\n");
+	fprintf(f, "__thread double *d = NULL;\n");
 	fprintf(f, "__thread uint32_t *s = NULL;\n");
-	fprintf(f, "__thread uint32_t *s_ptr = NULL;\n");
+	fprintf(f, "__thread uint32_t **s_ptr = NULL;\n\n");
 #endif
 
 	fprintf(f, "static uint32_t rotl32(uint32_t x, uint32_t n);\n");
@@ -61,7 +61,7 @@ bool create_c_source(char *work_str) {
 	fprintf(f, "static uint64_t rotr64(uint64_t x, uint64_t n);\n\n");
 
 	// Include C Source Code For ElasticPL Jobs
-	if (!opt_supernode) {
+	if (!opt_validate) {
 		fprintf(f, "#include \"job_%s.h\"\n", work_str);
 	}
 	else {
@@ -117,10 +117,10 @@ bool create_c_source(char *work_str) {
 #else
 	fprintf(f, "int32_t execute( uint64_t work_id ) {\n\n");
 #endif
-	fprintf(f, "\ts = *s_ptr;\n\n");
+	fprintf(f, "\ts = (uint32_t *)(*s_ptr);\n\n");
 
 	// Call The Main Function For The Current Job
-	if (!opt_supernode) {
+	if (!opt_validate) {
 		fprintf(f, "\treturn main_%s();\n\n", work_str);
 	}
 	else {
@@ -148,7 +148,7 @@ bool create_c_source(char *work_str) {
 #endif
 
 	// Call The Verify Function For The Current Job
-	if (!opt_supernode) {
+	if (!opt_validate) {
 		fprintf(f, "\treturn verify_%s();\n\n", work_str);
 	}
 	else {
@@ -184,8 +184,8 @@ bool compile_library(char *work_str) {
 		return false;
 	}
 
-	if (opt_supernode)
-		sprintf(lib_name, "_supernode");
+	if (opt_validate)
+		sprintf(lib_name, "_validate");
 	else
 		sprintf(lib_name, "job_%s", work_str);
 
@@ -218,8 +218,8 @@ bool compile_library(char *work_str) {
 void create_instance(struct instance* inst, char *work_str) {
 	char lib_name[50], file_name[100];
 
-	if (opt_supernode)
-		sprintf(lib_name, "job_supernode");
+	if (opt_validate)
+		sprintf(lib_name, "job_validate");
 	else
 		sprintf(lib_name, "job_%s", work_str);
 

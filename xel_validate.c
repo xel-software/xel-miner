@@ -7,7 +7,7 @@
 * any later version.
 */
 
-#define SUPERNODE_VERSION "0.1"
+#define VALIDATION_ENGINE_VERSION "0.1"
 
 #ifdef WIN32
 #define  _WINSOCK_DEPRECATED_NO_WARNINGS
@@ -67,26 +67,26 @@ struct request {
 
 pthread_mutex_t response_lock = PTHREAD_MUTEX_INITIALIZER;
 
-uint32_t g_sn_ints = 0;
-uint32_t g_sn_uints = 0;
-uint32_t g_sn_longs = 0;
-uint32_t g_sn_ulongs = 0;
-uint32_t g_sn_floats = 0;
-uint32_t g_sn_doubles = 0;
-uint32_t **g_sn_storage = NULL;
-uint32_t **g_sn_storage_ptr = NULL;
+uint32_t g_ve_ints = 0;
+uint32_t g_ve_uints = 0;
+uint32_t g_ve_longs = 0;
+uint32_t g_ve_ulongs = 0;
+uint32_t g_ve_floats = 0;
+uint32_t g_ve_doubles = 0;
+uint32_t **g_ve_storage = NULL;
+uint32_t **g_ve_storage_ptr = NULL;
 
-bool g_upd_sn_ints = false;
-bool g_upd_sn_uints = false;
-bool g_upd_sn_longs = false;
-bool g_upd_sn_ulongs = false;
-bool g_upd_sn_floats = false;
-bool g_upd_sn_doubles = false;
+bool g_upd_ve_ints = false;
+bool g_upd_ve_uints = false;
+bool g_upd_ve_longs = false;
+bool g_upd_ve_ulongs = false;
+bool g_upd_ve_floats = false;
+bool g_upd_ve_doubles = false;
 
-bool g_new_sn_library = false;
-bool g_sn_library_loaded = false;
+bool g_new_ve_library = false;
+bool g_ve_library_loaded = false;
 
-extern void *supernode_thread(void *userdata) {
+extern void *validation_engine_thread(void *userdata) {
 	struct thr_info *mythr = (struct thr_info*)userdata;
 	char ip[] = "127.0.0.1";	// For Now All Connections Are On LocalHost
 	unsigned short port = 4016;
@@ -98,14 +98,14 @@ extern void *supernode_thread(void *userdata) {
 	json_error_t err;
 	uint32_t idx, req_id, req_type;
 
-	applog(LOG_NOTICE, "Starting SuperNode...");
+	applog(LOG_NOTICE, "Starting Validation Engine...");
 
 	// Initialize The WebSocket
 #ifdef WIN32
 	WSADATA wsa;
 	if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0)
 	{
-		applog(LOG_ERR, "ERROR: Unable to initialize SuperNode socket (%s)", strerror(errno));
+		applog(LOG_ERR, "ERROR: Unable to initialize Validation socket (%s)", strerror(errno));
 		goto out;
 	}
 #endif
@@ -113,17 +113,17 @@ extern void *supernode_thread(void *userdata) {
 	// Create Socket For Core Server To Connect To
 	s = socket(AF_INET, SOCK_STREAM, 0);
 	if (s == INVALID_SOCKET) {
-		applog(LOG_ERR, "ERROR: Unable to create SuperNode socket (%s)", strerror(errno));
+		applog(LOG_ERR, "ERROR: Unable to create Validation socket (%s)", strerror(errno));
 		goto out;
 	}
 
-	// Prepare Socket Address For SuperNode
+	// Prepare Socket Address For Validation
 	server.sin_family = AF_INET;
 	server.sin_port = htons(port);
 	server.sin_addr.s_addr = inet_addr(ip);
 	server.sin_port = htons(port);
 	if (server.sin_addr.s_addr == (in_addr_t)INADDR_NONE) {
-		applog(LOG_ERR, "ERROR: Unable to configure SuperNode IP address (%s)", strerror(errno));
+		applog(LOG_ERR, "ERROR: Unable to configure Validation IP address (%s)", strerror(errno));
 		goto out;
 	}
 
@@ -137,7 +137,7 @@ extern void *supernode_thread(void *userdata) {
 		applog(LOG_DEBUG, "API setsockopt SO_REUSEADDR failed (ignored): %s", strerror(errno));
 #endif
 
-	// Bind Socket To SuperNode Port (6 Tries Max)
+	// Bind Socket To Validation Port (6 Tries Max)
 	applog(LOG_DEBUG, "DEBUG: Binding Socket to port %d", port);
 	for (i = 0; i < 10; i++) {
 		n = bind(s, (struct sockaddr *)(&server), sizeof(server));
@@ -153,7 +153,7 @@ extern void *supernode_thread(void *userdata) {
 
 	// Listen For Incoming Connections
 	if (listen(s, MAX_QUEUED_CONNECTIONS) < 0) {
-		applog(LOG_ERR, "ERROR: Unable to set Queue for SuperNode socket (%s)", strerror(errno));
+		applog(LOG_ERR, "ERROR: Unable to set Queue for Validation socket (%s)", strerror(errno));
 		goto out;
 	}
 	
@@ -164,7 +164,7 @@ extern void *supernode_thread(void *userdata) {
 		len = sizeof(struct sockaddr_in);
 		core = accept(s, (struct sockaddr *)&client, &len);
 		if (core < 0) {
-			applog(LOG_ERR, "ERROR: Unable to accept connection to SuperNode (%s)", strerror(errno));
+			applog(LOG_ERR, "ERROR: Unable to accept connection to Validation engine (%s)", strerror(errno));
 			goto out;
 		}
 
@@ -173,9 +173,9 @@ extern void *supernode_thread(void *userdata) {
 #else
 		if (client.sin_addr.s_addr == server.sin_addr.s_addr)
 #endif
-			applog(LOG_NOTICE, "SuperNode connected to Elastic Core Server");
+			applog(LOG_NOTICE, "Validation Engine connected to Elastic Core Server");
 		else {
-			applog(LOG_ERR, "ERROR: SuperNode blocked connection from IP: %s", inet_ntoa(client.sin_addr));
+			applog(LOG_ERR, "ERROR: Validation Engine blocked connection from IP: %s", inet_ntoa(client.sin_addr));
 			continue;
 		}
 
@@ -218,7 +218,7 @@ extern void *supernode_thread(void *userdata) {
 				// Dump JSON For Debugging
 				if (opt_protocol) {
 					str = json_dumps(val, JSON_INDENT(3));
-					applog(LOG_DEBUG, "DEBUG: JSON SuperNode Request -\n%s", str);
+					applog(LOG_DEBUG, "DEBUG: JSON Validation Request -\n%s", str);
 					free(str);
 					str = NULL;
 				}
@@ -380,7 +380,7 @@ out:
 	return NULL;
 }
 
-extern void *sn_validate_package_thread(void *userdata) {
+extern void *ve_validate_package_thread(void *userdata) {
 	struct thr_info *mythr = (struct thr_info*)userdata;
 	struct request *req;
 	char msg[512], err_msg[256], *elastic_src;
@@ -424,7 +424,7 @@ extern void *sn_validate_package_thread(void *userdata) {
 		}
 
 		// Validate Contents Of Package
-		if (!sn_validate_package(pkg, elastic_src, err_msg)) {
+		if (!ve_validate_package(pkg, elastic_src, err_msg)) {
 			success = 0;
 			goto send;
 		}
@@ -455,7 +455,7 @@ send:
 	return NULL;
 }
 
-extern void *sn_validate_result_thread(void *userdata) {
+extern void *ve_validate_result_thread(void *userdata) {
 	struct thr_info *mythr = (struct thr_info*)userdata;
 	struct request *req;
 	char msg[512], err_msg[256], pow_msg[64], hash[32];
@@ -483,9 +483,9 @@ extern void *sn_validate_result_thread(void *userdata) {
 		applog(LOG_DEBUG, "Validating result for work_id %llu (req_id: %d)", req->work_id, req->req_id);
 
 		
-		if (!g_sn_library_loaded) {
+		if (!g_ve_library_loaded) {
 			success = 0;
-			sprintf(err_msg, "SN Library Not Loaded");
+			sprintf(err_msg, "Validate Library Not Loaded");
 			goto send;
 		}
 
@@ -495,28 +495,28 @@ extern void *sn_validate_result_thread(void *userdata) {
 			goto send;
 		}
 		
-		if (g_new_sn_library) {
+		if (g_new_ve_library) {
 
 			// Allocate Memory For Global Variables
-			if (g_upd_sn_ints)
-				vm_i = realloc(vm_i, g_sn_ints * sizeof(int32_t));
-			if (g_upd_sn_uints)
-				vm_u = realloc(vm_u, g_sn_uints * sizeof(uint32_t));
-			if (g_upd_sn_longs)
-				vm_l = realloc(vm_l, g_sn_longs * sizeof(int64_t));
-			if (g_upd_sn_ulongs)
-				vm_ul = realloc(vm_ul, g_sn_ulongs * sizeof(uint64_t));
-			if (g_upd_sn_floats)
-				vm_f = realloc(vm_f, g_sn_floats * sizeof(float));
-			if (g_upd_sn_doubles)
-				vm_d = realloc(vm_d, g_sn_doubles * sizeof(double));
+			if (g_upd_ve_ints)
+				vm_i = realloc(vm_i, g_ve_ints * sizeof(int32_t));
+			if (g_upd_ve_uints)
+				vm_u = realloc(vm_u, g_ve_uints * sizeof(uint32_t));
+			if (g_upd_ve_longs)
+				vm_l = realloc(vm_l, g_ve_longs * sizeof(int64_t));
+			if (g_upd_ve_ulongs)
+				vm_ul = realloc(vm_ul, g_ve_ulongs * sizeof(uint64_t));
+			if (g_upd_ve_floats)
+				vm_f = realloc(vm_f, g_ve_floats * sizeof(float));
+			if (g_upd_ve_doubles)
+				vm_d = realloc(vm_d, g_ve_doubles * sizeof(double));
 
-			if ((g_sn_ints && !vm_i) ||
-				(g_sn_uints && !vm_u) ||
-				(g_sn_longs && !vm_l) ||
-				(g_sn_ulongs && !vm_ul) ||
-				(g_sn_floats && !vm_f) ||
-				(g_sn_doubles && !vm_d)) {
+			if ((g_ve_ints && !vm_i) ||
+				(g_ve_uints && !vm_u) ||
+				(g_ve_longs && !vm_l) ||
+				(g_ve_ulongs && !vm_ul) ||
+				(g_ve_floats && !vm_f) ||
+				(g_ve_doubles && !vm_d)) {
 
 				applog(LOG_ERR, "ERROR: Unable to allocate VM memory");
 
@@ -524,40 +524,40 @@ extern void *sn_validate_result_thread(void *userdata) {
 				return NULL;
 			}
 
-			g_upd_sn_ints = false;
-			g_upd_sn_uints = false;
-			g_upd_sn_longs = false;
-			g_upd_sn_ulongs = false;
-			g_upd_sn_floats = false;
-			g_upd_sn_doubles = false;
+			g_upd_ve_ints = false;
+			g_upd_ve_uints = false;
+			g_upd_ve_longs = false;
+			g_upd_ve_ulongs = false;
+			g_upd_ve_floats = false;
+			g_upd_ve_doubles = false;
 
-			// Free Old Instance Of SuperNode Libaray
+			// Free Old Instance Of Validation Libaray
 			if (inst) free_library(inst);
 
-			// Copy The Updated SuperNode Libary
+			// Copy The Updated Validation Libary
 #ifdef WIN32
-			remove("./work/job_supernode.dll");
-			rename("./work/_supernode.dll", "./work/job_supernode.dll");
+			remove("./work/job_validate.dll");
+			rename("./work/_validate.dll", "./work/job_validate.dll");
 #else
-			remove("./work/job_supernode.so");
-			rename("./work/_supernode.so", "./work/job_supernode.so");
+			remove("./work/job_validate.so");
+			rename("./work/_validate.so", "./work/job_validate.so");
 #endif
 
-			// Link Updated SuperNode Library
+			// Link Updated Validation Library
 			inst = calloc(1, sizeof(struct instance));
 			create_instance(inst, NULL);
 			inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d, vm_s);
 
-			g_new_sn_library = false;
+			g_new_ve_library = false;
 		}
 
 		// Reset VM Memory
-		if (g_sn_ints) memset(vm_i, 0, g_sn_ints * sizeof(int32_t));
-		if (g_sn_uints) memset(vm_u, 0, g_sn_uints * sizeof(uint32_t));
-		if (g_sn_longs) memset(vm_l, 0, g_sn_longs * sizeof(int64_t));
-		if (g_sn_ulongs) memset(vm_ul, 0, g_sn_ulongs * sizeof(uint64_t));
-		if (g_sn_floats) memset(vm_f, 0, g_sn_floats * sizeof(float));
-		if (g_sn_doubles) memset(vm_d, 0, g_sn_doubles * sizeof(double));
+		if (g_ve_ints) memset(vm_i, 0, g_ve_ints * sizeof(int32_t));
+		if (g_ve_uints) memset(vm_u, 0, g_ve_uints * sizeof(uint32_t));
+		if (g_ve_longs) memset(vm_l, 0, g_ve_longs * sizeof(int64_t));
+		if (g_ve_ulongs) memset(vm_ul, 0, g_ve_ulongs * sizeof(uint64_t));
+		if (g_ve_floats) memset(vm_f, 0, g_ve_floats * sizeof(float));
+		if (g_ve_doubles) memset(vm_d, 0, g_ve_doubles * sizeof(double));
 
 		// Load Input Data
 		for (i = 0; i < VM_M_ARRAY_SIZE; i++) {
@@ -584,7 +584,7 @@ extern void *sn_validate_result_thread(void *userdata) {
 
 				// Check If Storage Needs To be Updated
 				if (req->storage) {
-					if (!sn_update_storage(req->work_id, req->iteration_id, req->storage_id, req->storage, req->storage_sz, err_msg)) {
+					if (!ve_update_storage(req->work_id, req->iteration_id, req->storage_id, req->storage, req->storage_sz, err_msg)) {
 						success = 0;
 						free(req->storage);
 					}
@@ -661,7 +661,7 @@ extern void *sn_validate_result_thread(void *userdata) {
 	return NULL;
 }
 
-static bool sn_validate_package(const json_t *pkg, char *elastic_src, char *err_msg) {
+static bool ve_validate_package(const json_t *pkg, char *elastic_src, char *err_msg) {
 	int i, rc, work_pkg_id;
 	uint64_t work_id;
 	char *str = NULL;
@@ -761,25 +761,25 @@ static bool sn_validate_package(const json_t *pkg, char *elastic_src, char *err_
 
 	// Create A C Program Library With All Active Packages
 	if (!compile_library(g_work_package[work_pkg_id].work_str)) {
-		sprintf(err_msg, "Unable to create SuperNode C Library");
+		sprintf(err_msg, "Unable to create Validation C Library");
 		return false;
 	}
 
 	// Check VM Memory Requirements
-	if (work_package.vm_ints > g_sn_ints) { g_sn_ints = work_package.vm_ints; g_upd_sn_ints = true; }
-	if (work_package.vm_uints > g_sn_uints) { g_sn_uints = work_package.vm_uints; g_upd_sn_uints = true; }
-	if (work_package.vm_longs > g_sn_longs) { g_sn_longs = work_package.vm_longs; g_upd_sn_longs = true; }
-	if (work_package.vm_ulongs > g_sn_ulongs) { g_sn_ulongs = work_package.vm_ulongs; g_upd_sn_ulongs = true; }
-	if (work_package.vm_ints > g_sn_floats) { g_sn_floats = work_package.vm_floats; g_upd_sn_floats = true; }
-	if (work_package.vm_ints > g_sn_doubles) { g_sn_doubles = work_package.vm_doubles; g_upd_sn_doubles = true; }
+	if (work_package.vm_ints > g_ve_ints) { g_ve_ints = work_package.vm_ints; g_upd_ve_ints = true; }
+	if (work_package.vm_uints > g_ve_uints) { g_ve_uints = work_package.vm_uints; g_upd_ve_uints = true; }
+	if (work_package.vm_longs > g_ve_longs) { g_ve_longs = work_package.vm_longs; g_upd_ve_longs = true; }
+	if (work_package.vm_ulongs > g_ve_ulongs) { g_ve_ulongs = work_package.vm_ulongs; g_upd_ve_ulongs = true; }
+	if (work_package.vm_ints > g_ve_floats) { g_ve_floats = work_package.vm_floats; g_upd_ve_floats = true; }
+	if (work_package.vm_ints > g_ve_doubles) { g_ve_doubles = work_package.vm_doubles; g_upd_ve_doubles = true; }
 
-	g_new_sn_library = true;
-	g_sn_library_loaded = true;
+	g_new_ve_library = true;
+	g_ve_library_loaded = true;
 
 	return true;
 }
 
-extern void *sn_update_storage_thread(void *userdata) {
+extern void *ve_update_storage_thread(void *userdata) {
 	struct thr_info *mythr = (struct thr_info*)userdata;
 	struct request *req;
 	char msg[512], err_msg[256];
@@ -794,7 +794,7 @@ extern void *sn_update_storage_thread(void *userdata) {
 		req = (struct request *) tq_pop(mythr->q, NULL);
 		applog(LOG_DEBUG, "Updating Storage (req_id: %d)", req->req_id);
 
-		if (!sn_update_storage(req->work_id, req->iteration_id, req->storage_id, req->storage, req->storage_sz, err_msg)) {
+		if (!ve_update_storage(req->work_id, req->iteration_id, req->storage_id, req->storage, req->storage_sz, err_msg)) {
 			success = 0;
 			applog(LOG_DEBUG, "DEBUG: Unable to update storage for work_id: %lu, iteration_Id: %d, storage_id: %d", req->work_id, req->iteration_id, req->storage_id);
 		}
@@ -812,7 +812,7 @@ extern void *sn_update_storage_thread(void *userdata) {
 	return NULL;
 }
 
-static bool sn_update_storage(uint64_t work_id, uint32_t iteration_id, uint32_t storage_id, uint32_t *storage, uint32_t storage_sz, char *err_msg) {
+static bool ve_update_storage(uint64_t work_id, uint32_t iteration_id, uint32_t storage_id, uint32_t *storage, uint32_t storage_sz, char *err_msg) {
 	int i, work_pkg_id;
 	char *str = NULL;
 

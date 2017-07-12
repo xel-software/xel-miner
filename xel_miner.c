@@ -65,7 +65,7 @@ static int opt_fail_pause = 10;
 static int opt_scantime = 60;  // Get New Work From Server At Least Every 60s
 bool opt_test_miner = false;
 bool opt_test_vm = false;
-bool opt_supernode = false;
+bool opt_validate = false;
 bool opt_opencl = false;
 int opt_opencl_gthreads = 0;
 int opt_opencl_vwidth = 0;
@@ -166,11 +166,11 @@ Options:\n\
   -s, --scan-time <n>         Max time to scan work before requesting new work (Default: 60 sec)\n\
       --test-miner <file>     Run the Miner using JSON formatted work in <file>\n\
       --test-vm <file>        Run the Parser / Compiler using the ElasticPL source code in <file>\n\
-  -S, --supernode             Enable SuperNode Validation\n\
   -t, --threads <n>           Number of miner threads (Default: Number of CPUs)\n\
   -u, --user <username>       Username for mining server\n\
   -T, --timeout <n>           Timeout for rpc calls (Default: 30 sec)\n\
-  -V, --version               Display version information and exit\n\
+  -v, --version               Display version information and exit\n\
+  -V, --validate              Enable Validation Engine\n\
   -X  --no-renice             Do not lower the priority of miner threads\n\
 Options while mining ----------------------------------------------------------\n\n\
    s + <enter>                Display mining summary\n\
@@ -178,7 +178,7 @@ Options while mining ----------------------------------------------------------\
    q + <enter>                Toggle Quite mode\n\
 ";
 
-static char const short_options[] = "c:Dk:hm:o:p:P:qr:R:s:St:T:u:VX";
+static char const short_options[] = "c:Dk:hm:o:p:P:qr:R:s:St:T:u:vVX";
 
 static struct option const options[] = {
 	{ "config",			1, NULL, 'c' },
@@ -199,14 +199,14 @@ static struct option const options[] = {
 	{ "retries",		1, NULL, 'r' },
 	{ "retry-pause",	1, NULL, 'R' },
 	{ "scan-time",		1, NULL, 's' },
-	{ "supernode",		0, NULL, 'S' },
 	{ "test-miner",		1, NULL, 1004 },
 	{ "test-vm",		1, NULL, 1005 },
 	{ "threads",		1, NULL, 't' },
 	{ "timeout",		1, NULL, 'T' },
 	{ "url",			1, NULL, 'o' },
 	{ "user",			1, NULL, 'u' },
-	{ "version",		0, NULL, 'V' },
+	{ "version",		0, NULL, 'v' },
+	{ "validate",		0, NULL, 'V' },
 	{ 0, 0, 0, 0 }
 };
 
@@ -346,9 +346,6 @@ void parse_arg(int key, char *arg)
 			show_usage_and_exit(1);
 		opt_scantime = v;
 		break;
-	case 'S':
-		opt_supernode = true;
-		break;
 	case 't':
 		v = atoi(arg);
 		if (v < 1 || v > 9999)
@@ -365,8 +362,11 @@ void parse_arg(int key, char *arg)
 		free(rpc_user);
 		rpc_user = strdup(arg);
 		break;
-	case 'V':
+	case 'v':
 		show_version_and_exit();
+	case 'V':
+		opt_validate = true;
+		break;
 	case 'X':
 		opt_norenice = true;
 		break;
@@ -536,7 +536,7 @@ static void *test_vm_thread(void *userdata) {
 		work_package.work_id = i;
 		sprintf(work_package.work_str, "%llu", work_package.work_id);
 
-		if (opt_supernode)
+		if (opt_validate)
 			sprintf(file_name, "sn%d.epl", i);
 		else
 			sprintf(file_name, "%s", test_filename);
@@ -579,7 +579,7 @@ static void *test_vm_thread(void *userdata) {
 		add_work_package(&work_package);
 		package_idx = i;
 
-		if (!opt_supernode)
+		if (!opt_validate)
 			break;
 	}
 
@@ -2335,7 +2335,7 @@ int main(int argc, char **argv) {
 	if (!work_restart)
 		return 1;
 
-	if (opt_supernode)
+	if (opt_validate)
 		thr_info = (struct thr_info*) calloc(4, sizeof(*thr));
 	else
 		thr_info = (struct thr_info*) calloc(opt_n_threads + 3, sizeof(*thr));
@@ -2361,7 +2361,7 @@ int main(int argc, char **argv) {
 	}
 
 	// Miner Threads
-	if (!opt_supernode) {
+	if (!opt_validate) {
 
 		pthread_mutex_init(&work_lock, NULL);
 		pthread_mutex_init(&submit_lock, NULL);
@@ -2439,19 +2439,19 @@ int main(int argc, char **argv) {
 		pthread_join(thr_info[work_thr_id].pth, NULL);
 	}
 
-	// SuperNode Threads
+	// Validation Engine Threads
 	else {
 
 		pthread_mutex_init(&response_lock, NULL);
 
-		// Start SuperNode WebSocket Interface
+		// Start Validation Engine WebSocket Interface
 		thr = &thr_info[0];
 		thr->id = 0;
 		thr->q = tq_new();
 		if (!thr->q)
 			return 1;
-		if (thread_create(thr, supernode_thread)) {
-			applog(LOG_ERR, "SuperNode WebSocket thread create failed");
+		if (thread_create(thr, validation_engine_thread)) {
+			applog(LOG_ERR, "Validation Engine WebSocket thread create failed");
 			return 1;
 		}
 
@@ -2461,8 +2461,8 @@ int main(int argc, char **argv) {
 		thr->q = tq_new();
 		if (!thr->q)
 			return 1;
-		if (thread_create(thr, sn_validate_package_thread)) {
-			applog(LOG_ERR, "SuperNode 'validate package' thread create failed");
+		if (thread_create(thr, ve_validate_package_thread)) {
+			applog(LOG_ERR, "Validation Engine 'validate package' thread create failed");
 			return 1;
 		}
 
@@ -2472,8 +2472,8 @@ int main(int argc, char **argv) {
 		thr->q = tq_new();
 		if (!thr->q)
 			return 1;
-		if (thread_create(thr, sn_validate_result_thread)) {
-			applog(LOG_ERR, "SuperNode 'validate result' thread create failed");
+		if (thread_create(thr, ve_validate_result_thread)) {
+			applog(LOG_ERR, "Validation Engine 'validate result' thread create failed");
 			return 1;
 		}
 
@@ -2483,12 +2483,12 @@ int main(int argc, char **argv) {
 		thr->q = tq_new();
 		if (!thr->q)
 			return 1;
-		if (thread_create(thr, sn_update_storage_thread)) {
-			applog(LOG_ERR, "SuperNode 'update storage' thread create failed");
+		if (thread_create(thr, ve_update_storage_thread)) {
+			applog(LOG_ERR, "Validation Engine 'update storage' thread create failed");
 			return 1;
 		}
 
-		// Main Loop - Wait for SuperNode thread to exit
+		// Main Loop - Wait for Validation Engine thread to exit
 		pthread_join(thr_info[0].pth, NULL);
 	}
 
