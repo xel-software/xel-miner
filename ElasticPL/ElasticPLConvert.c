@@ -55,7 +55,7 @@ extern bool convert_ast_to_c(char *work_str) {
 	// Write Function Declarations
 	for (i = ast_func_idx; i <= stack_exp_idx; i++) {
 		if ((i == ast_main_idx) || (i == ast_verify_idx))
-			fprintf(f, "uint32_t %s_%s();\n", stack_exp[i]->svalue, job_suffix);
+			fprintf(f, "void %s_%s(uint32_t *, uint32_t, uint32_t *, uint32_t *);\n", stack_exp[i]->svalue, job_suffix);
 		else
 			fprintf(f, "void %s_%s();\n", stack_exp[i]->svalue, job_suffix);
 	}
@@ -188,17 +188,29 @@ static bool convert_node(ast* node) {
 	case NODE_FUNCTION:
 		str = malloc(256);
 		if ((!strcmp(node->svalue, "main")) || (!strcmp(node->svalue, "verify")))
-			sprintf(str, "uint32_t %s_%s() {\n", node->svalue, job_suffix);
+//			sprintf(str, "uint32_t %s_%s() {\n", node->svalue, job_suffix);
+			sprintf(str, "void %s_%s(uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target) {\n", node->svalue, job_suffix);
 		else
 			sprintf(str, "void %s_%s() {\n", node->svalue, job_suffix);
 		break;
 	case NODE_CALL_FUNCTION:
+
+
+// TODO: Fix This
+
+		if (!strcmp(node->svalue, "verify"))
+			return true;
+
 		str = malloc(256);
 		sprintf(str, "%s_%s()", node->svalue, job_suffix);
 		break;
-	case NODE_RESULT:
+	case NODE_VERIFY_BTY:
 		str = malloc(strlen(lstr) + 50);
-		sprintf(str, "return (%s != 0 ? 1 : 0)", lstr);
+		sprintf(str, "*bounty_found = (uint32_t)(%s != 0 ? 1 : 0)", lstr);
+		break;
+	case NODE_VERIFY_POW:
+		str = malloc(strlen(lstr) + 100);
+		sprintf(str, "if (verify_pow == 1)\n\t\t*pow_found = check_pow(%s, target);\n\telse\n\t\t*pow_found = 0", lstr);
 		break;
 	case NODE_CONSTANT:
 		str = malloc(25);
@@ -335,11 +347,11 @@ static bool convert_node(ast* node) {
 		sprintf(str, "%sint loop%d;\n%sfor (loop%d = 0; loop%d < (%s); loop%d++) {\n%s\tif (loop%d >= %lld) break;\n%s\tu[%lld] = loop%d;\n", tab[tabs - 1], node->token_num, tab[tabs - 1], node->token_num, node->token_num, lstr, node->token_num, tab[tabs - 1], node->token_num, node->ivalue, tab[tabs - 1], node->uvalue, node->token_num);
 		break;
 	case NODE_BLOCK:
-		str = malloc(50);
+		str = malloc(100);
 		if (node->parent->type == NODE_FUNCTION) {
 			// Call Verify Function At End Of Main Function
 			if (!strcmp(node->parent->svalue, "main"))
-				sprintf(str, "\n\treturn verify_%s();\n}\n", job_suffix);
+				sprintf(str, "\n\tverify_%s(bounty_found, verify_pow, pow_found, target);\n}\n", job_suffix);
 			else
 				sprintf(str, "}\n");
 		}
@@ -702,6 +714,8 @@ static void get_cast(char *lcast, char *rcast, DATA_TYPE ldata_type, DATA_TYPE r
 }
 
 static bool get_node_inputs(ast* node, char **lstr, char **rstr) {
+	size_t i;
+	char *tmp[4];
 
 	// Get Left & Right Values From Code Stack
 	switch (node->type) {
@@ -715,7 +729,7 @@ static bool get_node_inputs(ast* node, char **lstr, char **rstr) {
 	case NODE_NEG:
 	case NODE_IF:
 	case NODE_REPEAT:
-	case NODE_RESULT:
+	case NODE_VERIFY_BTY:
 	case NODE_PARAM:
 	case NODE_SIN:
 	case NODE_COS:
@@ -784,6 +798,19 @@ static bool get_node_inputs(ast* node, char **lstr, char **rstr) {
 		}
 		break;
 
+	case NODE_VERIFY_POW:
+		tmp[0] = pop_code();
+		tmp[1] = pop_code();
+		tmp[2] = pop_code();
+		tmp[3] = pop_code();
+		if (!tmp[0] | !tmp[1] | !tmp[2] | !tmp[3] ) {
+			applog(LOG_ERR, "Compiler Error: Corupted code stack at Line: %d", node->line_num);
+			return false;
+		}
+		*lstr = malloc(sizeof(tmp[0]) + sizeof(tmp[1]) + sizeof(tmp[2]) + sizeof(tmp[3]) + 10);
+		sprintf(*lstr, "%s,%s,%s,%s", tmp[3], tmp[2], tmp[1], tmp[0]);
+		break;
+
 	case NODE_ELSE:
 	case NODE_BLOCK:
 	case NODE_COND_ELSE:
@@ -825,7 +852,7 @@ extern bool convert_verify_to_java(char *verify_src) {
 		}
 	}
 
-	if (!new_str)
+	if (!old_str || ((old_len + 1) >= MAX_VERIFY_SIZE))
 		return false;
 
 	memcpy(verify_src, old_str, old_len + 1);

@@ -310,7 +310,8 @@ extern char* get_node_str(NODE_TYPE node_type) {
 	case NODE_VAR_EXP:		return "array[x]";
 	case NODE_FUNCTION:		return "function";
 	case NODE_CALL_FUNCTION:return "";
-	case NODE_RESULT:		return "result";
+	case NODE_VERIFY_BTY:	return "verify_bty";
+	case NODE_VERIFY_POW:	return "verify_pow";
 	case NODE_ASSIGN:		return "=";
 	case NODE_OR:			return "||";
 	case NODE_AND:			return "&&";

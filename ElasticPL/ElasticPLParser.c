@@ -440,8 +440,9 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 
 	// Function Declarations (1 Constant & 1 Block)
 	case NODE_FUNCTION:
-		if ((stack_exp[stack_exp_idx - 1]->type == NODE_CONSTANT) && (stack_exp[stack_exp_idx]->type == NODE_BLOCK))
-			return true;
+//		if ((stack_exp[stack_exp_idx - 1]->type == NODE_CONSTANT) && (stack_exp[stack_exp_idx]->type == NODE_BLOCK))
+		if (((stack_exp[stack_exp_idx - 1]->type == NODE_CONSTANT) || (stack_exp[stack_exp_idx - 1]->type == NODE_FUNCTION) )&& (stack_exp[stack_exp_idx]->type == NODE_BLOCK))
+				return true;
 		break;
 
 	// Function Call Declarations (1 Constant)
@@ -491,7 +492,7 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 		break;
 
 	// Expressions w/ 1 Number (Right Operand)
-	case NODE_RESULT:
+	case NODE_VERIFY_BTY:
 	case NODE_NOT:
 		if ((stack_exp[stack_exp_idx]->token_num > token_num) && (stack_exp[stack_exp_idx]->data_type != DT_NONE))
 			return true;
@@ -612,6 +613,16 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 			(!stack_exp[stack_exp_idx - 1]->is_float) &&
 			(stack_exp[stack_exp_idx]->data_type != DT_NONE) &&
 			(!stack_exp[stack_exp_idx]->is_float))
+			return true;
+		break;
+
+	// Expressions w/ 4 Uints
+	case NODE_VERIFY_POW:
+		if (((stack_exp[stack_exp_idx - 3]->token_num > token_num) && (stack_exp[stack_exp_idx]->token_num > token_num)) &&
+			(stack_exp[stack_exp_idx - 3]->data_type == DT_UINT) &&
+			(stack_exp[stack_exp_idx - 2]->data_type == DT_UINT) &&
+			(stack_exp[stack_exp_idx - 1]->data_type == DT_UINT) &&
+			(stack_exp[stack_exp_idx]->data_type == DT_UINT))
 			return true;
 		break;
 
@@ -754,7 +765,8 @@ static NODE_TYPE get_node_type(SOURCE_TOKEN *token, int token_num) {
 	case TOKEN_STORAGE_IDX:		node_type = NODE_STORAGE_IDX; 	break;
 	case TOKEN_FUNCTION:		node_type = NODE_FUNCTION;		break;
 	case TOKEN_CALL_FUNCTION:	node_type = NODE_CALL_FUNCTION;	break;
-	case TOKEN_RESULT:			node_type = NODE_RESULT;		break;
+	case TOKEN_VERIFY_BTY:		node_type = NODE_VERIFY_BTY;	break;
+	case TOKEN_VERIFY_POW:		node_type = NODE_VERIFY_POW;	break;
 	default: return NODE_ERROR;
 	}
 
@@ -1003,7 +1015,7 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 	exp = add_exp(node_type, token->exp, is_vm_mem, is_vm_storage, val_int64, val_uint64, val_double, svalue, token_num, token->line_num, data_type, left, right);
 
 	// Update The "End Statement" Indicator For If/Else/Repeat/Block/Function/Result
-	if ((exp->type == NODE_IF) || (exp->type == NODE_ELSE) || (exp->type == NODE_REPEAT) || (exp->type == NODE_BLOCK) || (exp->type == NODE_FUNCTION) || (exp->type == NODE_RESULT))
+	if ((exp->type == NODE_IF) || (exp->type == NODE_ELSE) || (exp->type == NODE_REPEAT) || (exp->type == NODE_BLOCK) || (exp->type == NODE_FUNCTION) || (exp->type == NODE_VERIFY_BTY) || (exp->type == NODE_VERIFY_POW))
 		exp->end_stmnt = true;
 
 	if (exp)
@@ -1356,14 +1368,18 @@ static bool validate_functions() {
 		}
 
 		// Validate Function Only Contains Valid Statements
-		exp = stack_exp[i];
-		while (exp->right) {
-			if (exp->right->left && !exp->right->left->end_stmnt) {
-				applog(LOG_ERR, "Syntax Error: Line: %d - Invalid Statement", exp->line_num);
-				return false;
-			}
-			exp = exp->right;
-		}
+
+		// TODO: FIX
+
+
+	//	exp = stack_exp[i];
+	//	while (exp->right) {
+	//		if (exp->right->left && !exp->right->left->end_stmnt) {
+	//			applog(LOG_ERR, "Syntax Error: Line: %d - Invalid Statement", exp->line_num);
+	//			return false;
+	//		}
+	//		exp = exp->right;
+	//	}
 	}
 
 	// Validate That "Main" Function Exists
@@ -1466,8 +1482,12 @@ static bool validate_function_calls() {
 
 				// Validate That "main" & "verify" Functions Are Not Called
 				if ((ast_ptr->uvalue == ast_main_idx) || (ast_ptr->uvalue == ast_verify_idx)) {
-					applog(LOG_ERR, "Syntax Error: Line: %d - Illegal function call", ast_ptr->line_num);
-					return false;
+						applog(LOG_ERR, "Syntax Error: Line: %d - Illegal function call", ast_ptr->line_num);
+//					return false;
+
+
+// TODO: Fix This
+
 				}
 
 				// Validate That Functions Is Not Recursively Called

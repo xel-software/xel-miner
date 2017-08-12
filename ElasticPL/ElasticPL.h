@@ -10,6 +10,8 @@
 #ifndef ELASTICPL_H_
 #define ELASTICPL_H_
 
+#define ELASTICPL_VERSION "0.9.1"
+
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -32,6 +34,7 @@
 #define VM_M_ARRAY_SIZE	12				// Number Of Unsigned Ints Initialized By VM
 
 #define MAX_SOURCE_SIZE 1024 * 512		// 512KB - Maximum Size Of Decoded ElasticPL Source Code
+#define MAX_VERIFY_SIZE 1024 * 512		// 512KB - TODO: Finalize Size
 
 
 // Max Array Variable Index For Each Data Type
@@ -138,7 +141,8 @@ typedef enum {
 	NODE_STORAGE_IDX,
 	NODE_FUNCTION,
 	NODE_CALL_FUNCTION,
-	NODE_RESULT
+	NODE_VERIFY_BTY,
+	NODE_VERIFY_POW
 } NODE_TYPE;
 
 
@@ -232,7 +236,8 @@ typedef enum {
 	TOKEN_STORAGE_IDX,
 	TOKEN_FUNCTION,
 	TOKEN_CALL_FUNCTION,
-	TOKEN_RESULT
+	TOKEN_VERIFY_BTY,
+	TOKEN_VERIFY_POW
 } EPL_TOKEN_TYPE;
 
 typedef enum {
