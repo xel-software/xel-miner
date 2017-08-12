@@ -114,6 +114,18 @@ function sha256 {
 
 function main {
 	
+	// In this example, the full SHA256d algo is needed to verify results.
+	// Also, because the algo is small / fast enough (less than WCET = TBD);
+	// the logic does not need to be broken into pieces and the complete logic
+	// will fit in the verify function.
+	// Therfore, the only logic needed in the main function is to call the
+	// verify function.
+	
+	verify();
+}
+
+function verify {
+	
 	// Only Initialize Input & K Values Once
 	if (m[1] == 0) {
 		init_K();
@@ -245,14 +257,13 @@ function main {
 	u[55] = u[205];
 	u[56] = u[206];
 	u[57] = u[207];
-}
-
-function verify {
-	// Check If h7 Of Hash2 Is Zero
-	result (u[57] == 0)
 	
+	// Bounty Is Rewarded When h7 Of Hash2 Is Zero
 	// For This Example h7 Equals Zero When u[19] = 0x1DAC2B7C;
+	verify_bty (u[57] == 0)
 	
+	// POW Is Rewarded When The MD5 Hash Of h7, h6, h5 & h4 Is Less Than Target
+	verify_pow (u[57], u[56], u[55], u[54])
 }
 
 function init_K {
