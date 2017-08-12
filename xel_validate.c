@@ -7,8 +7,6 @@
 * any later version.
 */
 
-#define VALIDATION_ENGINE_VERSION "0.1"
-
 #ifdef WIN32
 #define  _WINSOCK_DEPRECATED_NO_WARNINGS
 #endif
@@ -394,7 +392,7 @@ extern void *ve_validate_package_thread(void *userdata) {
 		return NULL;
 	}
 
-	verify_src = malloc(MAX_SOURCE_SIZE);
+	verify_src = malloc(MAX_VERIFY_SIZE);
 	if (!elastic_src) {
 		applog(LOG_ERR, "ERROR: Unable to allocate memory for Verify Source");
 		return NULL;
@@ -585,8 +583,12 @@ extern void *ve_validate_result_thread(void *userdata) {
 		}
 
 		// Validate Bounty
+
+// TODO: FIX
+		uint32_t bounty_found, pow_found;
+
 		if (req->req_type == 4) {
-			rc = inst->execute(req->work_id);
+			rc = inst->execute(req->work_id, &bounty_found, 0, &pow_found, NULL);
 			if (rc == 1) {
 				success = 1;
 				sprintf(err_msg, "");
@@ -611,7 +613,7 @@ extern void *ve_validate_result_thread(void *userdata) {
 
 		// Validate POW
 		else {
-			rc = inst->execute(req->work_id);
+			rc = inst->execute(req->work_id, &bounty_found, 0, &pow_found, NULL);
 
 // TODO - Need New Logic For vm_state
 

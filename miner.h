@@ -2,7 +2,8 @@
 #define __MINER_H__
 
 #define PACKAGE_NAME "xel_miner"
-#define PACKAGE_VERSION "0.10"
+#define MINER_VERSION "0.9.1"
+#define VALIDATION_ENGINE_VERSION "0.1"
 
 #define USER_AGENT PACKAGE_NAME "/" PACKAGE_VERSION
 #define MAX_CPUS 16
@@ -208,13 +209,13 @@ struct instance {
 #ifdef WIN32
 	HINSTANCE hndl;
 	int32_t(__cdecl* initialize)(uint32_t *, int32_t *, uint32_t *, int64_t *, uint64_t *, float *, double *, uint32_t **);
-	int32_t(__cdecl* execute)(uint64_t);
-	int32_t(__cdecl* verify)(uint64_t);
+	int32_t(__cdecl* execute)(uint64_t, uint32_t *, uint32_t, uint32_t *, uint32_t *);
+	int32_t(__cdecl* verify)(uint64_t, uint32_t *, uint32_t, uint32_t *, uint32_t *);
 #else
 	void *hndl;
 	int32_t(*initialize)(uint32_t *, int32_t *, uint32_t *, int64_t *, uint64_t *, float *, double *, uint32_t **);
-	int32_t(*execute)(uint64_t);
-	int32_t(*verify)(uint64_t);
+	int32_t(*execute)(uint64_t, uint32_t *, uint32_t, uint32_t *, uint32_t *);
+	int32_t(*verify)(uint64_t, uint32_t *, uint32_t, uint32_t *, uint32_t *);
 #endif
 
 };

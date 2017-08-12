@@ -317,10 +317,10 @@ void parse_arg(int key, char *arg)
 		// Do "donna"
 		curve25519_donna(publickey, hash_sha256, basepoint);
 
-		printf("Public Key: ");
-		for (i = 0; i < 32; i++)
-			printf("%02X", publickey[i]);
-		printf("\n");
+		//printf("Public Key: ");
+		//for (i = 0; i < 32; i++)
+		//	printf("%02X", publickey[i]);
+		//printf("\n");
 
 		free(hash_sha256);
 
@@ -525,7 +525,7 @@ static void *test_vm_thread(void *userdata) {
 	char test_code[MAX_SOURCE_SIZE];
 	struct work_package work_package;
 	struct instance *inst = NULL;
-	uint32_t i;
+	uint32_t i, bounty_found, pow_found, verify_pow;
 	int package_idx, rc;
 
 	// Create Up To 3 Packages (1 For Miner Test, 3 For SN Test)
@@ -632,7 +632,13 @@ static void *test_vm_thread(void *userdata) {
 		inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d, vm_s);
 
 		// Execute The VM Logic
-		rc = inst->execute(g_work_package[package_idx].work_id);
+		uint32_t target[4];
+		target[0] = 0x2EFFFFFF;
+		target[1] = 0xFFFFFFFF;
+		target[2] = 0xFFFFFFFF;
+		target[3] = 0xFFFFFFFF;
+//		rc = inst->execute(g_work_package[package_idx].work_id, &bounty_found, 0, &pow_found, NULL);
+		rc = inst->execute(g_work_package[package_idx].work_id, &bounty_found, 1, &pow_found, target);
 
 		//for (i = 0; i < 0xFFFFFFFF; i++) {
 		//	vm_m[1] = i;
@@ -645,12 +651,13 @@ static void *test_vm_thread(void *userdata) {
 			free_library(inst);
 	}
 
-	if (rc < 0) {
-		applog(LOG_ERR, "ERROR: An error was encountered while running job #%s (rc = %d)", g_work_package[g_work_package_idx].work_str, rc);
-		exit(EXIT_FAILURE);
-	}
+	//if (rc < 0) {
+	//	applog(LOG_ERR, "ERROR: An error was encountered while running job #%s (rc = %d)", g_work_package[g_work_package_idx].work_str, rc);
+	//	exit(EXIT_FAILURE);
+	//}
 
-	applog(LOG_DEBUG, "DEBUG: Bounty Found: %s", (rc == 1) ? "true" : "false");
+	applog(LOG_DEBUG, "DEBUG: Bounty Found: %s", (bounty_found == 1) ? "true" : "false");
+	applog(LOG_DEBUG, "DEBUG: POW Found: %s", (pow_found == 1) ? "true" : "false");
 
 	dump_vm(package_idx);
 
@@ -746,6 +753,7 @@ static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work
 	int i, rc;
 	time_t t_start = time(NULL);
 	char msg[64];
+	uint32_t bounty_found, pow_found;
 
 	uint32_t *msg32 = (uint32_t *)msg;
 	uint32_t *mult32 = (uint32_t *)work->multiplicator;
@@ -770,7 +778,8 @@ static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work
 		memset(vm_state, 0, 4 * sizeof(int));
 
 		// Execute The VM Logic
-		rc = inst->execute(work->work_id);
+//		rc = inst->execute(work->work_id);
+		rc = inst->execute(work->work_id, &bounty_found, 1, &pow_found, work->pow_target);
 
 		if (opt_test_miner) {
 			dump_vm(work->package_id);
@@ -778,32 +787,37 @@ static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work
 		}
 
 		// Bounty Found, Exit Immediately
-		if (rc == 1) {
-			return rc;
-		}
+		//if (rc == 1) {
+		//	return rc;
+		//}
+		if (bounty_found)
+			return 1;
 
 		// Check For POW Result
-		memcpy(&msg[0], &vm_state[0], 16);
-		msg32[0] = swap32(msg32[0]);
-		msg32[1] = swap32(msg32[1]);
-		msg32[2] = swap32(msg32[2]);
-		msg32[3] = swap32(msg32[3]);
+		//memcpy(&msg[0], &vm_state[0], 16);
+		//msg32[0] = swap32(msg32[0]);
+		//msg32[1] = swap32(msg32[1]);
+		//msg32[2] = swap32(msg32[2]);
+		//msg32[3] = swap32(msg32[3]);
 
-		for (i = 0; i < VM_M_ARRAY_SIZE; i++)
-			msg32[i + 4] = swap32(work->vm_input[i]);
+		//for (i = 0; i < VM_M_ARRAY_SIZE; i++)
+		//	msg32[i + 4] = swap32(work->vm_input[i]);
 
-		MD5(msg, 64, hash);
+		//MD5(msg, 64, hash);
 
-		// Check For POW Solution
-		for (i = 0; i < 4; i++) {
+		//// Check For POW Solution
+		//for (i = 0; i < 4; i++) {
 
-			hash32[i] = swap32(hash32[i]);
+		//	hash32[i] = swap32(hash32[i]);
 
-			if (hash32[i] > work->pow_target[i])
-				break;
-			else if (hash32[i] < work->pow_target[i])
-				return 2;	// POW Solution Found
-		}
+		//	if (hash32[i] > work->pow_target[i])
+		//		break;
+		//	else if (hash32[i] < work->pow_target[i])
+		//		return 2;	// POW Solution Found
+		//}
+
+		if (pow_found)
+			return 2;
 
 		(*hashes_done)++;
 
@@ -2247,7 +2261,10 @@ int main(int argc, char **argv) {
 	struct thr_info *thr;
 	int i, err, thr_idx, num_gpus = 0;
 
-	fprintf(stdout, "** " PACKAGE_NAME " " PACKAGE_VERSION " **\n");
+	fprintf(stdout, "** Elastic Compute Engine **\n");
+	fprintf(stdout, "   Miner Version: " MINER_VERSION"\n");
+	fprintf(stdout, "   ElasticPL Version: " ELASTICPL_VERSION"\n");
+	fprintf(stdout, "   Validation Engine Version: " VALIDATION_ENGINE_VERSION"\n\n");
 
 	pthread_mutex_init(&applog_lock, NULL);
 
