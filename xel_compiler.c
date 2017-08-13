@@ -114,8 +114,8 @@ bool create_c_source(char *work_str) {
 	fprintf(f, "\tMD5(msg, 16, hash);\n\n");
 
 
-	fprintf(f, "printf(\"Hash: %%08X%%8X%%08X%%08X\\n\", hash32[0], hash32[1], hash32[2], hash32[3]);\n");
-	fprintf(f, "printf(\"Trgt: %%08X%%8X%%08X%%08X\\n\", target[0], target[1], target[2], target[3]);\n");
+//	fprintf(f, "printf(\"Hash: %%08X%%8X%%08X%%08X\\n\", hash32[0], hash32[1], hash32[2], hash32[3]);\n");
+//	fprintf(f, "printf(\"Trgt: %%08X%%8X%%08X%%08X\\n\", target[0], target[1], target[2], target[3]);\n");
 
 
 	fprintf(f, "\tfor (i = 0; i < 4; i++) {\n");
@@ -125,6 +125,7 @@ bool create_c_source(char *work_str) {
 	fprintf(f, "\t\telse if (hash32[i] < target[i])\n");
 	fprintf(f, "\t\t\treturn 1;    // POW Solution Found\n");
 	fprintf(f, "\t}\n");
+	fprintf(f, "\treturn 0;\n");
 	fprintf(f, "}\n\n");
 
 #ifdef WIN32
