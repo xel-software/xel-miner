@@ -1,0 +1,259 @@
+/******************************************************************************
+ *
+ * Travelling Salesman Problem - Demo 1
+ *
+ * Name:		TSP_ATT48_BF
+ * Desc:		48 Captitals of the US
+ * Diminsions:	48
+ * Weight Type:	ATT - Pseudo-Euclidean distance
+ * Algorithm:	Brute Force
+ *
+ * Memory Map:
+ *   Round Number:          m[  1]
+ *   Random Input:          m[  4]
+ *   Cost Matrix Vars:		u[ 20] - u[ 29]
+ *   Randomize Path Vars:	u[ 30] - u[ 39]
+ *   Algorithm Variables:	u[ 40] - u[100]
+ *   Calculated Distance:	u[ 99]
+ *   Point Data:   			u[100] - u[195]
+ *   Path Data:   			u[200] - u[247]
+ *   Cost Matrix:         	u[500] - u[600]
+ *
+ *****************************************************************************/
+
+array_uint	1000;
+array_float	1;
+
+storage_sz  48;
+storage_idx 200;
+
+
+// Initialize VM Memory With TSP Point Data
+function init_point_data {
+
+	// Each TSP Point Has An X & Y Value
+	// For Example, Point 1 Has X = u[100] & Y = u[101]
+	u[100] = 6734;
+	u[101] = 1453;
+	u[102] = 2233;
+	u[103] = 10;
+	u[104] = 5530;
+	u[105] = 1424;
+	u[106] = 401;
+	u[107] = 841;
+	u[108] = 3082;
+	u[109] = 1644;
+	u[110] = 7608;
+	u[111] = 4458;
+	u[112] = 7573;
+	u[113] = 3716;
+	u[114] = 7265;
+	u[115] = 1268;
+	u[116] = 6898;
+	u[117] = 1885;
+	u[118] = 1112;
+	u[119] = 2049;
+	u[120] = 5468;
+	u[121] = 2606;
+	u[122] = 5989;
+	u[123] = 2873;
+	u[124] = 4706;
+	u[125] = 2674;
+	u[126] = 4612;
+	u[127] = 2035;
+	u[128] = 6347;
+	u[129] = 2683;
+	u[130] = 6107;
+	u[131] = 669;
+	u[132] = 7611;
+	u[133] = 5184;
+	u[134] = 7462;
+	u[135] = 3590;
+	u[136] = 7732;
+	u[137] = 4723;
+	u[138] = 5900;
+	u[139] = 3561;
+	u[140] = 4483;
+	u[141] = 3369;
+	u[142] = 6101;
+	u[143] = 1110;
+	u[144] = 5199;
+	u[145] = 2182;
+	u[146] = 1633;
+	u[147] = 2809;
+	u[148] = 4307;
+	u[149] = 2322;
+	u[150] = 675;
+	u[151] = 1006;
+	u[152] = 7555;
+	u[153] = 4819;
+	u[154] = 7541;
+	u[155] = 3981;
+	u[156] = 3177;
+	u[157] = 756;
+	u[158] = 7352;
+	u[159] = 4506;
+	u[160] = 7545;
+	u[161] = 2801;
+	u[162] = 3245;
+	u[163] = 3305;
+	u[164] = 6426;
+	u[165] = 3173;
+	u[166] = 4608;
+	u[167] = 1198;
+	u[168] = 23;
+	u[169] = 2216;
+	u[170] = 7248;
+	u[171] = 3779;
+	u[172] = 7762;
+	u[173] = 4595;
+	u[174] = 7392;
+	u[175] = 2244;
+	u[176] = 3484;
+	u[177] = 2829;
+	u[178] = 6271;
+	u[179] = 2135;
+	u[180] = 4985;
+	u[181] = 140;
+	u[182] = 1916;
+	u[183] = 1569;
+	u[184] = 7280;
+	u[185] = 4899;
+	u[186] = 7509;
+	u[187] = 3239;
+	u[188] = 10;
+	u[189] = 2676;
+	u[190] = 6807;
+	u[191] = 2993;
+	u[192] = 5185;
+	u[193] = 3258;
+	u[194] = 3023;
+	u[195] = 1942;
+
+}
+
+// Initialize Cost Matrix
+function init_cost_matrix {
+
+	u[20] = 48;		// Number of TSP Points
+	u[21] = 100;	// Starting index of Point Data
+	u[22] = 500;	// Starting index of Cost Matrix
+	u[23] = u[21];	// Index of x[i] - Point A
+	u[24] = u[21];	// Index of y[i] - Point B
+	u[25] = u[22];	// Index of dij - Cost Matrix Element
+	u[26] = 0;		// xd - X Distance
+	u[27] = 0;		// yd - Y Distance
+	u[28] = 0;		// tij - Rounded Distance Between A & B
+	f[0]  = 0;		// rij - Pseudo-Euclidean Distance Between A & B
+
+}	
+
+// Create TSP Cost Matrix
+function create_cost_matrix {
+
+	// u[20] = # Of Iterations
+	// u[40] & u[41] = Loop Counters
+	// 48 = # Of Iterations For WCET Calc
+	repeat(u[40], u[20], 48) {
+
+		repeat(u[41], u[20], 48) {
+
+			if(u[24] == u[23]) {
+				u[24] += 2;   // Move To Next Point B
+				u[u[25]] = 0; // Distance To Self Is Zero
+				u[25]++;      // Move To Next Matrix Element
+				continue;
+			}
+				
+			u[26] = u[u[24]] - u[u[23]];							// xd
+			u[27] = u[u[24] + 1] - u[u[23] + 1];					// yd
+			f[0] = sqrt(((u[26]*u[26]) + (u[27]*u[27])) / 10.0);	// rij
+			u[28] = (f[0] + 0.5);									// tij - equivalent of nint function
+			if (u[28] < f[0])
+				u[u[25]] = u[28] + 1;								// dij
+			else
+				u[u[25]] = u[28];									// dij
+			
+			u[24] += 2;		// Move To Next Point B
+			u[25]++;		// Move To Next Matrix Element
+		}
+		
+		u[23] += 2;			// Increment Point A
+		u[24] = u[21];		// Reset Point B
+	}
+}
+
+function main {
+
+	// Only Initialize Point Data & Cost Matrix Values Once
+	if (m[1] == 0) {
+		init_point_data();
+		init_cost_matrix();
+		create_cost_matrix();
+	}
+
+	// Initialize The Path
+	u[30] = 200;	// Index of Path
+	u[31] = 0;		// Counter
+	repeat(u[40], u[20], 48) {
+		u[u[30] + u[31]] = u[31]++;
+	}
+
+	// Randomize The Path
+	u[u[30]] = 0;							// Start At Point Zero
+	u[u[30] + u[20]] = 0;					// End At Point Zero
+	u[31] = u[20] - 1;						// Counter - Start At Final Point In Path
+//	repeat(u[40], u[20] - 1, 48) {
+	repeat(u[40], 47, 48) {
+		u[32] = (abs(m[4]) % u[31]) + 1;	// Use m[4] for random input
+		u[33] = u[u[30] + u[32]];
+		u[u[30] + u[32]] = u[u[30] + u[31]];
+		u[u[30] + u[31]] = u[33];
+		u[31]--;
+	}
+
+	// Brute Force Logic
+	u[99] = 0;	// Total Distance
+	repeat(u[31], u[20], 48) {
+		u[34] = u[u[30] + u[31]];     // Matrix Row
+		u[35] = u[u[30] + u[31] + 1]; // Matrix Column
+		u[99] += u[(u[22] + (u[34] * u[20]) + u[35])];
+	}
+
+	// Bounty Is Rewarded When Total Distance < 11,000
+	verify_bty (u[99] < 11000)
+	
+	// POW Is Rewarded When The MD5 Hash Of Summed Path Is Less Than Target
+	u[50] = u[200] + u[201] + u[202] + u[203] + u[204] + u[205] + u[206] + u[207] + u[208] + u[209] + u[210] + u[211];
+	u[51] = u[212] + u[213] + u[214] + u[215] + u[216] + u[217] + u[218] + u[219] + u[220] + u[221] + u[222] + u[223];
+	u[52] = u[224] + u[225] + u[226] + u[227] + u[228] + u[229] + u[230] + u[231] + u[232] + u[233] + u[234] + u[235];
+	u[53] = u[236] + u[237] + u[238] + u[239] + u[240] + u[241] + u[242] + u[243] + u[244] + u[245] + u[246] + u[247];
+	verify_pow (u[50], u[51], u[52], u[53])
+
+}
+
+function verify {
+
+	init_point_data();
+	init_cost_matrix();
+	create_cost_matrix();
+
+	// Calculate Total Distance For Stored Path
+	u[99] = 0;	// Total Distance
+	repeat(u[31], u[20], 48) {
+		u[34] = s[u[31]];     // Matrix Row
+		u[35] = s[u[31] + 1]; // Matrix Column
+		u[99] += u[(u[22] + (u[34] * u[20]) + u[35])];
+	}
+
+	// Bounty Is Rewarded When Total Distance < 11,000
+	verify_bty (u[99] < 11000)
+	
+	// POW Is Rewarded When The MD5 Hash Of Summed Path Is Less Than Target
+	u[50] = u[200] + u[201] + u[202] + u[203] + u[204] + u[205] + u[206] + u[207] + u[208] + u[209] + u[210] + u[211];
+	u[51] = u[212] + u[213] + u[214] + u[215] + u[216] + u[217] + u[218] + u[219] + u[220] + u[221] + u[222] + u[223];
+	u[52] = u[224] + u[225] + u[226] + u[227] + u[228] + u[229] + u[230] + u[231] + u[232] + u[233] + u[234] + u[235];
+	u[53] = u[236] + u[237] + u[238] + u[239] + u[240] + u[241] + u[242] + u[243] + u[244] + u[245] + u[246] + u[247];
+	verify_pow (u[50], u[51], u[52], u[53])
+
+}
