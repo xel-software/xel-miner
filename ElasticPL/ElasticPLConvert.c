@@ -188,19 +188,14 @@ static bool convert_node(ast* node) {
 	case NODE_FUNCTION:
 		str = malloc(256);
 		if ((!strcmp(node->svalue, "main")) || (!strcmp(node->svalue, "verify")))
-//			sprintf(str, "uint32_t %s_%s() {\n", node->svalue, job_suffix);
 			sprintf(str, "void %s_%s(uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target) {\n", node->svalue, job_suffix);
 		else
 			sprintf(str, "void %s_%s() {\n", node->svalue, job_suffix);
 		break;
 	case NODE_CALL_FUNCTION:
-
-
-// TODO: Fix This
 		str = malloc(256);
-
 		if (!strcmp(node->svalue, "verify"))
-			sprintf(str, "%s_%s(uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target) {\n", node->svalue, job_suffix);
+			sprintf(str, "%s_%s(bounty_found, verify_pow, pow_found, target)", node->svalue, job_suffix);
 		else
 			sprintf(str, "%s_%s()", node->svalue, job_suffix);
 		break;
@@ -348,16 +343,8 @@ static bool convert_node(ast* node) {
 		break;
 	case NODE_BLOCK:
 		str = malloc(100);
-
-		// TODO: Fix This
-
-		if (node->parent->type == NODE_FUNCTION) {
-			// Call Verify Function At End Of Main Function
-//			if (!strcmp(node->parent->svalue, "main"))
-//				sprintf(str, "\n\tverify_%s(bounty_found, verify_pow, pow_found, target);\n}\n", job_suffix);
-//			else
-				sprintf(str, "}\n");
-		}
+		if (node->parent->type == NODE_FUNCTION)
+			sprintf(str, "}\n");
 		else
 			sprintf(str, "%s}\n", tab[tabs]);
 		break;

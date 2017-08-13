@@ -1368,18 +1368,14 @@ static bool validate_functions() {
 		}
 
 		// Validate Function Only Contains Valid Statements
-
-		// TODO: FIX
-
-
-	//	exp = stack_exp[i];
-	//	while (exp->right) {
-	//		if (exp->right->left && !exp->right->left->end_stmnt) {
-	//			applog(LOG_ERR, "Syntax Error: Line: %d - Invalid Statement", exp->line_num);
-	//			return false;
-	//		}
-	//		exp = exp->right;
-	//	}
+		exp = stack_exp[i];
+		while (exp->right) {
+			if (exp->right->left && !exp->right->left->end_stmnt) {
+				applog(LOG_ERR, "Syntax Error: Line: %d - Invalid Statement", exp->line_num);
+				return false;
+			}
+			exp = exp->right;
+		}
 	}
 
 	// Validate That "Main" Function Exists
@@ -1395,13 +1391,23 @@ static bool validate_functions() {
 	}
 
 	// Check For Recursive Calls To Functions
-	if (!validate_function_calls(ast_main_idx, ast_verify_idx))
-		return false;
+	if (!validate_function_calls(ast_main_idx))
+			return false;
+
+//	if (!validate_function_calls(ast_verify_idx))
+//		return false;
+
+// FIX
+// TODO: Create A Second Call Stack So That Verify Can Be Checked
+//		Independently of main
+//
+// TODO: Make sure either 'verify' is called from 'main' OR verify_bty / verify_pow...but not both.
+// FIX
 
 	return true;
 }
 
-static bool validate_function_calls() {
+static bool validate_function_calls(int function_idx) {
 	int i, call_idx, rpt_idx;
 	bool downward = true;
 	ast *root = NULL;
@@ -1416,8 +1422,8 @@ static bool validate_function_calls() {
 		fprintf(stdout, "Call Function: 'main()'\n");
 	}
 
-	// Set Root To Main Function
-	root = stack_exp[ast_main_idx];
+	// Set Root To Main / Verify Function
+	root = stack_exp[function_idx];
 
 	rpt_idx = 0;
 	call_idx = 0;
@@ -1480,14 +1486,18 @@ static bool validate_function_calls() {
 					return false;
 				}
 
-				// Validate That "main" & "verify" Functions Are Not Called
-				if ((ast_ptr->uvalue == ast_main_idx) || (ast_ptr->uvalue == ast_verify_idx)) {
-						applog(LOG_ERR, "Syntax Error: Line: %d - Illegal function call", ast_ptr->line_num);
-//					return false;
+				// Validate That "main" Function Is Not Called
+				if (ast_ptr->uvalue == ast_main_idx) {
+					applog(LOG_ERR, "Syntax Error: Line: %d - Illegal 'main' function call", ast_ptr->line_num);
+					return false;
+				}
 
-
-// TODO: Fix This
-
+				// Validate That "verify" Function Is Only Called From "main"
+				if (ast_ptr->uvalue == ast_verify_idx) {
+					if (!ast_ptr->parent || !ast_ptr->parent->parent || !ast_ptr->parent->parent->svalue || strcmp(ast_ptr->parent->parent->svalue, "main")) {
+						applog(LOG_ERR, "Syntax Error: Line: %d - Illegal 'verify' function call", ast_ptr->line_num);
+						return false;
+					}
 				}
 
 				// Validate That Functions Is Not Recursively Called
