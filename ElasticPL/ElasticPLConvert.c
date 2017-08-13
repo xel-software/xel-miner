@@ -197,12 +197,12 @@ static bool convert_node(ast* node) {
 
 
 // TODO: Fix This
+		str = malloc(256);
 
 		if (!strcmp(node->svalue, "verify"))
-			return true;
-
-		str = malloc(256);
-		sprintf(str, "%s_%s()", node->svalue, job_suffix);
+			sprintf(str, "%s_%s(uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target) {\n", node->svalue, job_suffix);
+		else
+			sprintf(str, "%s_%s()", node->svalue, job_suffix);
 		break;
 	case NODE_VERIFY_BTY:
 		str = malloc(strlen(lstr) + 50);
@@ -348,11 +348,14 @@ static bool convert_node(ast* node) {
 		break;
 	case NODE_BLOCK:
 		str = malloc(100);
+
+		// TODO: Fix This
+
 		if (node->parent->type == NODE_FUNCTION) {
 			// Call Verify Function At End Of Main Function
-			if (!strcmp(node->parent->svalue, "main"))
-				sprintf(str, "\n\tverify_%s(bounty_found, verify_pow, pow_found, target);\n}\n", job_suffix);
-			else
+//			if (!strcmp(node->parent->svalue, "main"))
+//				sprintf(str, "\n\tverify_%s(bounty_found, verify_pow, pow_found, target);\n}\n", job_suffix);
+//			else
 				sprintf(str, "}\n");
 		}
 		else
