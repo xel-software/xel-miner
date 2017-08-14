@@ -440,8 +440,7 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 
 	// Function Declarations (1 Constant & 1 Block)
 	case NODE_FUNCTION:
-//		if ((stack_exp[stack_exp_idx - 1]->type == NODE_CONSTANT) && (stack_exp[stack_exp_idx]->type == NODE_BLOCK))
-		if (((stack_exp[stack_exp_idx - 1]->type == NODE_CONSTANT) || (stack_exp[stack_exp_idx - 1]->type == NODE_FUNCTION) )&& (stack_exp[stack_exp_idx]->type == NODE_BLOCK))
+		if ((stack_exp[stack_exp_idx - 1]->type == NODE_CONSTANT) && (stack_exp[stack_exp_idx]->type == NODE_BLOCK))
 				return true;
 		break;
 
@@ -492,7 +491,6 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 		break;
 
 	// Expressions w/ 1 Number (Right Operand)
-	case NODE_VERIFY_BTY:
 	case NODE_NOT:
 		if ((stack_exp[stack_exp_idx]->token_num > token_num) && (stack_exp[stack_exp_idx]->data_type != DT_NONE))
 			return true;
@@ -616,13 +614,19 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 			return true;
 		break;
 
-	// Expressions w/ 4 Uints
+	// Verify POW Call
 	case NODE_VERIFY_POW:
 		if (((stack_exp[stack_exp_idx - 3]->token_num > token_num) && (stack_exp[stack_exp_idx]->token_num > token_num)) &&
 			(stack_exp[stack_exp_idx - 3]->data_type == DT_UINT) &&
 			(stack_exp[stack_exp_idx - 2]->data_type == DT_UINT) &&
 			(stack_exp[stack_exp_idx - 1]->data_type == DT_UINT) &&
 			(stack_exp[stack_exp_idx]->data_type == DT_UINT))
+			return true;
+		break;
+
+	// Verify Bounty Call
+	case NODE_VERIFY_BTY:
+		if ((stack_exp[stack_exp_idx]->token_num > token_num) && (stack_exp[stack_exp_idx]->data_type != DT_NONE))
 			return true;
 		break;
 
@@ -1326,6 +1330,7 @@ static bool validate_ast() {
 static bool validate_functions() {
 	int i;
 	ast *exp;
+	bool m_bty_flg = false, m_pow_flg = false, v_bty_flg = false, v_pow_flg = false, m_ver_flg = false;
 
 	ast_main_idx = 0;
 	ast_verify_idx = 0;
@@ -1370,6 +1375,60 @@ static bool validate_functions() {
 		// Validate Function Only Contains Valid Statements
 		exp = stack_exp[i];
 		while (exp->right) {
+
+			// Validate That 'verify_' Calls Are Only In 'main' & 'verify' Functions & Only Declared Once
+			if (exp->right->left) {
+				if (exp->right->left->type == NODE_VERIFY_BTY) {
+					if (i == ast_main_idx) {
+						if (m_bty_flg) {
+							applog(LOG_ERR, "Syntax Error: Line: %d - 'verify_bty' statement can only be called once from 'main' function.\n", exp->right->left->line_num);
+							return false;
+						}
+						m_bty_flg = true;
+					}
+					else if (i == ast_verify_idx) {
+						if (v_bty_flg) {
+							applog(LOG_ERR, "Syntax Error: Line: %d - 'verify_bty' statement can only be called once from 'verify' function.\n", exp->right->left->line_num);
+							return false;
+						}
+						v_bty_flg = true;
+					}
+					else {
+						applog(LOG_ERR, "Syntax Error: Line: %d - 'verify_bty' statement can only be called from 'main' & 'verify' functions.\n", exp->right->left->line_num);
+						return false;
+					}
+				}
+				else if (exp->right->left->type == NODE_VERIFY_POW) {
+					if (i == ast_main_idx) {
+						if (m_pow_flg) {
+							applog(LOG_ERR, "Syntax Error: Line: %d - 'verify_pow' statement can only be called once from 'main' function.\n", exp->right->left->line_num);
+							return false;
+						}
+						m_pow_flg = true;
+					}
+					else if (i == ast_verify_idx) {
+						if (v_pow_flg) {
+							applog(LOG_ERR, "Syntax Error: Line: %d - 'verify_pow' statement can only be called once from 'verify' function.\n", exp->right->left->line_num);
+							return false;
+						}
+						v_pow_flg = true;
+					}
+					else {
+						applog(LOG_ERR, "Syntax Error: Line: %d - 'verify_pow' statement can only be called from 'main' & 'verify' functions.\n", exp->right->left->line_num);
+						return false;
+					}
+				}
+				else if ((exp->right->left->type == NODE_CALL_FUNCTION) && exp->right->left->svalue && !strcmp(exp->right->left->svalue, "verify")) {
+					m_ver_flg = true;
+				}
+
+				if (m_ver_flg && (m_bty_flg || m_pow_flg)) {
+					applog(LOG_ERR, "Syntax Error: Line: %d - Both 'verify' function and 'verify_bty' / 'verify_pow' statements cannot be use in 'main'.\n", exp->right->left->line_num);
+					return false;
+				}
+			}
+
+			// Make Sure End Statement Flag Is Set
 			if (exp->right->left && !exp->right->left->end_stmnt) {
 				applog(LOG_ERR, "Syntax Error: Line: %d - Invalid Statement", exp->line_num);
 				return false;
@@ -1392,17 +1451,10 @@ static bool validate_functions() {
 
 	// Check For Recursive Calls To Functions
 	if (!validate_function_calls(ast_main_idx))
-			return false;
+		return false;
 
-//	if (!validate_function_calls(ast_verify_idx))
-//		return false;
-
-// FIX
-// TODO: Create A Second Call Stack So That Verify Can Be Checked
-//		Independently of main
-//
-// TODO: Make sure either 'verify' is called from 'main' OR verify_bty / verify_pow...but not both.
-// FIX
+	if (!validate_function_calls(ast_verify_idx))
+		return false;
 
 	return true;
 }
@@ -1502,8 +1554,9 @@ static bool validate_function_calls(int function_idx) {
 
 				// Validate That Functions Is Not Recursively Called
 				for (i = 0; i < call_idx; i++) {
-					if (ast_ptr->uvalue == call_stack[i]->uvalue) {
-						applog(LOG_ERR, "Syntax Error: Line: %d - Illegal recursive function call", ast_ptr->line_num);
+//					if (ast_ptr->uvalue == call_stack[i]->uvalue) {
+					if (ast_ptr->svalue && call_stack[i]->svalue && !strcmp(ast_ptr->svalue, call_stack[i]->svalue)) {
+							applog(LOG_ERR, "Syntax Error: Line: %d - Illegal recursive function call", ast_ptr->line_num);
 						return false;
 					}
 				}

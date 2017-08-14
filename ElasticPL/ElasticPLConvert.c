@@ -704,7 +704,6 @@ static void get_cast(char *lcast, char *rcast, DATA_TYPE ldata_type, DATA_TYPE r
 }
 
 static bool get_node_inputs(ast* node, char **lstr, char **rstr) {
-	size_t i;
 	char *tmp[4];
 
 	// Get Left & Right Values From Code Stack

@@ -49,7 +49,7 @@ struct EXP_TOKEN_LIST epl_token[] = {
 	{ "break",						5,	TOKEN_BREAK,		EXP_STATEMENT,	0,	2,	DT_NONE },
 	{ "continue",					8,	TOKEN_CONTINUE,		EXP_STATEMENT,	0,	2,	DT_NONE },
 	{ "function",					8,	TOKEN_FUNCTION,		EXP_STATEMENT,	2,	2,	DT_NONE },
-	{ "verify_bty",					10,	TOKEN_VERIFY_BTY,	EXP_STATEMENT,	1,	2,	DT_NONE },
+	{ "verify_bty",					10,	TOKEN_VERIFY_BTY,	EXP_FUNCTION,	1,	2,	DT_NONE },
 	{ "verify_pow",					10,	TOKEN_VERIFY_POW,	EXP_FUNCTION,	4,	2,	DT_NONE },
 
 	{ "i[",							2,	TOKEN_VAR_BEGIN,	EXP_EXPRESSION,	1,	4,	DT_INT },
