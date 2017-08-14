@@ -525,7 +525,7 @@ static void *test_vm_thread(void *userdata) {
 	char test_code[MAX_SOURCE_SIZE];
 	struct work_package work_package;
 	struct instance *inst = NULL;
-	uint32_t i, bounty_found, pow_found, verify_pow;
+	uint32_t i, bounty_found, pow_found;
 	int package_idx, rc;
 
 	// Create Up To 3 Packages (1 For Miner Test, 3 For SN Test)
@@ -750,7 +750,7 @@ static bool get_opencl_base_data(struct work *work, uint32_t *vm_input) {
 }
 
 static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work *work, struct instance *inst, long *hashes_done, char* hash, bool new_work) {
-	int i, rc;
+	int rc;
 	time_t t_start = time(NULL);
 	char msg[64];
 	uint32_t bounty_found, pow_found;
@@ -778,7 +778,6 @@ static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work
 		memset(vm_state, 0, 4 * sizeof(int));
 
 		// Execute The VM Logic
-//		rc = inst->execute(work->work_id);
 		rc = inst->execute(work->work_id, &bounty_found, 1, &pow_found, work->pow_target);
 
 		if (opt_test_miner) {
@@ -786,37 +785,10 @@ static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work
 			exit(EXIT_SUCCESS);
 		}
 
-		// Bounty Found, Exit Immediately
-		//if (rc == 1) {
-		//	return rc;
-		//}
+		// Bounty or POW Found, Exit Immediately
 		if (bounty_found)
 			return 1;
-
-		// Check For POW Result
-		//memcpy(&msg[0], &vm_state[0], 16);
-		//msg32[0] = swap32(msg32[0]);
-		//msg32[1] = swap32(msg32[1]);
-		//msg32[2] = swap32(msg32[2]);
-		//msg32[3] = swap32(msg32[3]);
-
-		//for (i = 0; i < VM_M_ARRAY_SIZE; i++)
-		//	msg32[i + 4] = swap32(work->vm_input[i]);
-
-		//MD5(msg, 64, hash);
-
-		//// Check For POW Solution
-		//for (i = 0; i < 4; i++) {
-
-		//	hash32[i] = swap32(hash32[i]);
-
-		//	if (hash32[i] > work->pow_target[i])
-		//		break;
-		//	else if (hash32[i] < work->pow_target[i])
-		//		return 2;	// POW Solution Found
-		//}
-
-		if (pow_found)
+		else if (pow_found)
 			return 2;
 
 		(*hashes_done)++;
@@ -2459,7 +2431,7 @@ int main(int argc, char **argv) {
 	// Validation Engine Threads
 	else {
 
-		pthread_mutex_init(&response_lock, NULL);
+/*		pthread_mutex_init(&response_lock, NULL);
 
 		// Start Validation Engine WebSocket Interface
 		thr = &thr_info[0];
@@ -2506,7 +2478,7 @@ int main(int argc, char **argv) {
 		}
 
 		// Main Loop - Wait for Validation Engine thread to exit
-		pthread_join(thr_info[0].pth, NULL);
+		pthread_join(thr_info[0].pth, NULL);*/
 	}
 
 	applog(LOG_WARNING, "Exiting " PACKAGE_NAME);

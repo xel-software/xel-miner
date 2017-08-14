@@ -131,7 +131,7 @@ bool create_c_source(char *work_str) {
 #ifdef WIN32
 	fprintf(f, "__declspec(dllexport) void initialize(uint32_t *vm_m, int32_t *vm_i, uint32_t *vm_u, int64_t *vm_l, uint64_t *vm_ul, float *vm_f, double *vm_d, uint32_t **vm_s) {\n");
 #else
-	fprintf(f, "void initialize(uint32_t *vm_m, int32_t *vm_i, uint32_t *vm_u, int64_t *vm_l, uint64_t *vm_ul, float *vm_f, double *vm_d) {\n");
+	fprintf(f, "void initialize(uint32_t *vm_m, int32_t *vm_i, uint32_t *vm_u, int64_t *vm_l, uint64_t *vm_ul, float *vm_f, double *vm_d, uint32_t **vm_s) {\n");
 #endif
 	fprintf(f, "\tm = vm_m;\n");
 	fprintf(f, "\ti = vm_i;\n");
@@ -147,7 +147,7 @@ bool create_c_source(char *work_str) {
 #ifdef WIN32
 	fprintf(f, "__declspec(dllexport) void execute( uint64_t work_id, uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target ) {\n\n");
 #else
-	fprintf(f, "int32_t execute( uint64_t work_id ) {\n\n");
+	fprintf(f, "int32_t execute( uint64_t work_id, uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target ) {\n\n");
 #endif
 	fprintf(f, "\ts = (uint32_t *)(*s_ptr);\n\n");
 
@@ -176,7 +176,7 @@ bool create_c_source(char *work_str) {
 #ifdef WIN32
 	fprintf(f, "__declspec(dllexport) void verify( uint64_t work_id, uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target ) {\n\n");
 #else
-	fprintf(f, "int32_t verify( uint64_t work_id ) {\n\n");
+	fprintf(f, "int32_t verify( uint64_t work_id, uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target ) {\n\n");
 #endif
 
 	// Call The Verify Function For The Current Job
