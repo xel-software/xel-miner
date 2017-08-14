@@ -342,7 +342,7 @@ extern void dump_vm_ast(ast* root);
 static void print_node(ast* node);
 static bool validate_ast();
 static bool validate_functions();
-static bool validate_function_calls(int function_idx);
+static bool validate_function_calls();
 
 extern bool convert_ast_to_c(char *work_str);
 static bool convert_function(ast* root);

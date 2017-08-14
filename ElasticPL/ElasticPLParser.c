@@ -1419,6 +1419,14 @@ static bool validate_functions() {
 					}
 				}
 				else if ((exp->right->left->type == NODE_CALL_FUNCTION) && exp->right->left->svalue && !strcmp(exp->right->left->svalue, "verify")) {
+					if (i != ast_main_idx) {
+						applog(LOG_ERR, "Syntax Error: Line: %d - 'verify()' function can only be called from 'main' function.\n", exp->right->left->line_num);
+						return false;
+					}
+					else if (m_ver_flg) {
+						applog(LOG_ERR, "Syntax Error: Line: %d - 'verify()' function can only be called once from 'main' function.\n", exp->right->left->line_num);
+						return false;
+					}
 					m_ver_flg = true;
 				}
 
@@ -1450,17 +1458,14 @@ static bool validate_functions() {
 	}
 
 	// Check For Recursive Calls To Functions
-	if (!validate_function_calls(ast_main_idx))
-		return false;
-
-	if (!validate_function_calls(ast_verify_idx))
+	if (!validate_function_calls())
 		return false;
 
 	return true;
 }
 
-static bool validate_function_calls(int function_idx) {
-	int i, call_idx, rpt_idx;
+static bool validate_function_calls() {
+	int i, j, call_idx, rpt_idx;
 	bool downward = true;
 	ast *root = NULL;
 	ast *ast_ptr = NULL;
@@ -1474,169 +1479,173 @@ static bool validate_function_calls(int function_idx) {
 		fprintf(stdout, "Call Function: 'main()'\n");
 	}
 
-	// Set Root To Main / Verify Function
-	root = stack_exp[function_idx];
+	// First Validate 'main' Then 'verify'
+	for (j = 0; j < 2; j++) {
 
-	rpt_idx = 0;
-	call_idx = 0;
-	call_stack[call_idx++] = root;
+		if (j == 0) {
+			// Set Root To 'main' Function
+			root = stack_exp[ast_main_idx];
+		}
+		else {
+			// Set Root To 'verify' Function
+			root = stack_exp[ast_verify_idx];
 
-	ast_ptr = root;
-
-	while (ast_ptr) {
-
-		// Navigate Down The Tree
-		if (downward) {
-
-			// Navigate To Lowest Left Parent Node
-			while (ast_ptr->left) {
-				ast_ptr = ast_ptr->left;
-
-				// Validate Repeat Node
-				if (ast_ptr->type == NODE_REPEAT) {
-
-					// Validate That Repeat Counter Has Not Been Used
-					for (i = 0; i < rpt_idx; i++) {
-						if (ast_ptr->uvalue == rpt_stack[i]->uvalue) {
-							applog(LOG_ERR, "Syntax Error: Line: %d - Repeat loop counter already used", ast_ptr->line_num);
-							return false;
-						}
-					}
-
-					rpt_stack[rpt_idx++] = ast_ptr;
-
-					if (rpt_idx >= REPEAT_STACK_SIZE) {
-						applog(LOG_ERR, "Syntax Error: Line: %d - Repeat statements can only be nested up to %d levels", ast_ptr->line_num, REPEAT_STACK_SIZE - 1);
-						return false;
-					}
-
-					if (opt_debug_epl)
-						fprintf(stdout, "\tBegin Repeat (Line #%d)\t- Depth: %d\n", ast_ptr->line_num, rpt_idx);
-				}
-			}
-
-			// Switch To Root Of Called Function
-			if (ast_ptr->type == NODE_CALL_FUNCTION) {
-				if (ast_ptr->left)
-					ast_ptr = ast_ptr->left;
-
-				if (opt_debug_epl)
-					fprintf(stdout, "Call Function: '%s()'\n", ast_ptr->svalue);
-
-				// Get AST Index For The Function
-				if (!ast_ptr->uvalue) {
-
-					for (i = 0; i <= stack_exp_idx; i++) {
-						if ((stack_exp[i]->type == NODE_FUNCTION) && !strcmp(stack_exp[i]->svalue, ast_ptr->svalue))
-							ast_ptr->uvalue = i;
-					}
-				}
-
-				// Validate Function Exists
-				if (!ast_ptr->uvalue) {
-					applog(LOG_ERR, "Syntax Error: Line: %d - Function '%s' not found", ast_ptr->line_num, ast_ptr->svalue);
-					return false;
-				}
-
-				// Validate That "main" Function Is Not Called
-				if (ast_ptr->uvalue == ast_main_idx) {
-					applog(LOG_ERR, "Syntax Error: Line: %d - Illegal 'main' function call", ast_ptr->line_num);
-					return false;
-				}
-
-				// Validate That "verify" Function Is Only Called From "main"
-				if (ast_ptr->uvalue == ast_verify_idx) {
-					if (!ast_ptr->parent || !ast_ptr->parent->parent || !ast_ptr->parent->parent->svalue || strcmp(ast_ptr->parent->parent->svalue, "main")) {
-						applog(LOG_ERR, "Syntax Error: Line: %d - Illegal 'verify' function call", ast_ptr->line_num);
-						return false;
-					}
-				}
-
-				// Validate That Functions Is Not Recursively Called
-				for (i = 0; i < call_idx; i++) {
-//					if (ast_ptr->uvalue == call_stack[i]->uvalue) {
-					if (ast_ptr->svalue && call_stack[i]->svalue && !strcmp(ast_ptr->svalue, call_stack[i]->svalue)) {
-							applog(LOG_ERR, "Syntax Error: Line: %d - Illegal recursive function call", ast_ptr->line_num);
-						return false;
-					}
-				}
-
-				// Store The Lowest Level In Call Stack For The Function
-				// Needed To Determine Order Of Processing Functions During WCET Calc
-				if (call_idx > stack_exp[ast_ptr->uvalue]->uvalue)
-					stack_exp[ast_ptr->uvalue]->uvalue = call_idx;
-
-				call_stack[call_idx++] = ast_ptr;
-				ast_ptr = stack_exp[ast_ptr->uvalue];
-
-				if (call_idx >= CALL_STACK_SIZE) {
-					applog(LOG_ERR, "Syntax Error: Line: %d - Functions can only be nested up to %d levels", ast_ptr->line_num, CALL_STACK_SIZE - 1);
-					return false;
-				}
-
-			}
-
-			// If There Is A Right Node, Switch To It
-			if (ast_ptr->right) {
-				ast_ptr = ast_ptr->right;
-
-				// Validate Repeat Node
-				if (ast_ptr->type == NODE_REPEAT) {
-
-					// Validate That Repeat Counter Has Not Been Used
-					for (i = 0; i < rpt_idx; i++) {
-						if (ast_ptr->uvalue == rpt_stack[i]->uvalue) {
-							applog(LOG_ERR, "Syntax Error: Line: %d - Repeat loop counter already used", ast_ptr->line_num);
-							return false;
-						}
-					}
-
-					rpt_stack[rpt_idx++] = ast_ptr;
-
-					if (rpt_idx >= REPEAT_STACK_SIZE) {
-						applog(LOG_ERR, "Syntax Error: Line: %d - Repeat statements can only be nested up to %d levels", ast_ptr->line_num, REPEAT_STACK_SIZE - 1);
-						return false;
-					}
-
-					if (opt_debug_epl)
-						fprintf(stdout, "\tBegin Repeat (Line #%d)\t- Depth: %d\n", ast_ptr->line_num, rpt_idx);
-				}
-			}
-			// Otherwise, Print Current Node & Navigate Back Up The Tree
-			else {
-				downward = false;
-			}
+			// Reset To Navigate Downward
+			downward = true;
 		}
 
-		// Navigate Back Up The Tree
-		else {
+		rpt_idx = 0;
+		call_idx = 0;
+		call_stack[call_idx++] = root;
 
-			// Quit When We Reach The Root Of Main Function
-			if (ast_ptr == root)
-				break;
+		ast_ptr = root;
 
-			// Remove 'Repeat' From Stack
-			if (ast_ptr->type == NODE_REPEAT) {
-				if (opt_debug_epl)
-					fprintf(stdout, "\t  End Repeat (Line #%d)\n", ast_ptr->line_num);
-				rpt_stack[rpt_idx--] = 0;
+		while (ast_ptr) {
+
+			// Navigate Down The Tree
+			if (downward) {
+
+				// Navigate To Lowest Left Parent Node
+				while (ast_ptr->left) {
+					ast_ptr = ast_ptr->left;
+
+					// Validate Repeat Node
+					if (ast_ptr->type == NODE_REPEAT) {
+
+						// Validate That Repeat Counter Has Not Been Used
+						for (i = 0; i < rpt_idx; i++) {
+							if (ast_ptr->uvalue == rpt_stack[i]->uvalue) {
+								applog(LOG_ERR, "Syntax Error: Line: %d - Repeat loop counter already used", ast_ptr->line_num);
+								return false;
+							}
+						}
+
+						rpt_stack[rpt_idx++] = ast_ptr;
+
+						if (rpt_idx >= REPEAT_STACK_SIZE) {
+							applog(LOG_ERR, "Syntax Error: Line: %d - Repeat statements can only be nested up to %d levels", ast_ptr->line_num, REPEAT_STACK_SIZE - 1);
+							return false;
+						}
+
+						if (opt_debug_epl)
+							fprintf(stdout, "\tBegin Repeat (Line #%d)\t- Depth: %d\n", ast_ptr->line_num, rpt_idx);
+					}
+				}
+
+				// Switch To Root Of Called Function
+				if (ast_ptr->type == NODE_CALL_FUNCTION) {
+					if (ast_ptr->left)
+						ast_ptr = ast_ptr->left;
+
+					if (opt_debug_epl)
+						fprintf(stdout, "Call Function: '%s()'\n", ast_ptr->svalue);
+
+					// Get AST Index For The Function
+					if (!ast_ptr->uvalue) {
+
+						for (i = 0; i <= stack_exp_idx; i++) {
+							if ((stack_exp[i]->type == NODE_FUNCTION) && !strcmp(stack_exp[i]->svalue, ast_ptr->svalue))
+								ast_ptr->uvalue = i;
+						}
+					}
+
+					// Validate Function Exists
+					if (!ast_ptr->uvalue) {
+						applog(LOG_ERR, "Syntax Error: Line: %d - Function '%s' not found", ast_ptr->line_num, ast_ptr->svalue);
+						return false;
+					}
+
+					// Validate That "main" Function Is Not Called
+					if (ast_ptr->uvalue == ast_main_idx) {
+						applog(LOG_ERR, "Syntax Error: Line: %d - Illegal 'main' function call", ast_ptr->line_num);
+						return false;
+					}
+
+					// Validate That Functions Is Not Recursively Called
+					for (i = 0; i < call_idx; i++) {
+						if (ast_ptr->svalue && call_stack[i]->svalue && !strcmp(ast_ptr->svalue, call_stack[i]->svalue)) {
+								applog(LOG_ERR, "Syntax Error: Line: %d - Illegal recursive function call", ast_ptr->line_num);
+							return false;
+						}
+					}
+
+					// Store The Lowest Level In Call Stack For The Function
+					// Needed To Determine Order Of Processing Functions During WCET Calc
+					if (call_idx > stack_exp[ast_ptr->uvalue]->uvalue)
+						stack_exp[ast_ptr->uvalue]->uvalue = call_idx;
+
+					call_stack[call_idx++] = ast_ptr;
+					ast_ptr = stack_exp[ast_ptr->uvalue];
+
+					if (call_idx >= CALL_STACK_SIZE) {
+						applog(LOG_ERR, "Syntax Error: Line: %d - Functions can only be nested up to %d levels", ast_ptr->line_num, CALL_STACK_SIZE - 1);
+						return false;
+					}
+
+				}
+
+				// If There Is A Right Node, Switch To It
+				if (ast_ptr->right) {
+					ast_ptr = ast_ptr->right;
+
+					// Validate Repeat Node
+					if (ast_ptr->type == NODE_REPEAT) {
+
+						// Validate That Repeat Counter Has Not Been Used
+						for (i = 0; i < rpt_idx; i++) {
+							if (ast_ptr->uvalue == rpt_stack[i]->uvalue) {
+								applog(LOG_ERR, "Syntax Error: Line: %d - Repeat loop counter already used", ast_ptr->line_num);
+								return false;
+							}
+						}
+
+						rpt_stack[rpt_idx++] = ast_ptr;
+
+						if (rpt_idx >= REPEAT_STACK_SIZE) {
+							applog(LOG_ERR, "Syntax Error: Line: %d - Repeat statements can only be nested up to %d levels", ast_ptr->line_num, REPEAT_STACK_SIZE - 1);
+							return false;
+						}
+
+						if (opt_debug_epl)
+							fprintf(stdout, "\tBegin Repeat (Line #%d)\t- Depth: %d\n", ast_ptr->line_num, rpt_idx);
+					}
+				}
+				// Otherwise, Print Current Node & Navigate Back Up The Tree
+				else {
+					downward = false;
+				}
 			}
 
-			// Return To Calling Function When We Reach The Root Of Called Function
-			if (ast_ptr->parent->type == NODE_FUNCTION) {
-				call_stack[call_idx--] = 0;
-				ast_ptr = call_stack[call_idx];
-				if (opt_debug_epl)
-					fprintf(stdout, "Return From:   '%s()'\n", call_stack[call_idx]->svalue);
-			}
+			// Navigate Back Up The Tree
 			else {
-				// Check If We Need To Navigate Back Down A Right Branch
-				if ((ast_ptr == ast_ptr->parent->left) && (ast_ptr->parent->right)) {
-					ast_ptr = ast_ptr->parent->right;
-					downward = true;
+
+				// Quit When We Reach The Root Of Main Function
+				if (ast_ptr == root)
+					break;
+
+				// Remove 'Repeat' From Stack
+				if (ast_ptr->type == NODE_REPEAT) {
+					if (opt_debug_epl)
+						fprintf(stdout, "\t  End Repeat (Line #%d)\n", ast_ptr->line_num);
+					rpt_stack[rpt_idx--] = 0;
+				}
+
+				// Return To Calling Function When We Reach The Root Of Called Function
+				if (ast_ptr->parent->type == NODE_FUNCTION) {
+					call_stack[call_idx--] = 0;
+					ast_ptr = call_stack[call_idx];
+					if (opt_debug_epl)
+						fprintf(stdout, "Return From:   '%s()'\n", call_stack[call_idx]->svalue);
 				}
 				else {
-					ast_ptr = ast_ptr->parent;
+					// Check If We Need To Navigate Back Down A Right Branch
+					if ((ast_ptr == ast_ptr->parent->left) && (ast_ptr->parent->right)) {
+						ast_ptr = ast_ptr->parent->right;
+						downward = true;
+					}
+					else {
+						ast_ptr = ast_ptr->parent;
+					}
 				}
 			}
 		}
