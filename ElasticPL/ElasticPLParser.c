@@ -1371,6 +1371,21 @@ static bool validate_functions() {
 			applog(LOG_ERR, "Syntax Error: Line: %d - Functions must have at least one statement", stack_exp[i]->line_num);
 			return false;
 		}
+	}
+
+	// Validate That "Main" Function Exists
+	if (ast_main_idx == 0) {
+		applog(LOG_ERR, "Syntax Error: \"main\" function not declared");
+		return false;
+	}
+
+	// Validate That "Verify" Function Exists
+	if (ast_verify_idx == 0) {
+		applog(LOG_ERR, "Syntax Error: \"verify\" function not declared");
+		return false;
+	}
+
+	for (i = ast_func_idx; i <= stack_exp_idx; i++) {
 
 		// Validate Function Only Contains Valid Statements
 		exp = stack_exp[i];
@@ -1429,11 +1444,6 @@ static bool validate_functions() {
 					}
 					m_ver_flg = true;
 				}
-
-				if (m_ver_flg && (m_bty_flg || m_pow_flg)) {
-					applog(LOG_ERR, "Syntax Error: Line: %d - Both 'verify' function and 'verify_bty' / 'verify_pow' statements cannot be use in 'main'.\n", exp->right->left->line_num);
-					return false;
-				}
 			}
 
 			// Make Sure End Statement Flag Is Set
@@ -1445,15 +1455,19 @@ static bool validate_functions() {
 		}
 	}
 
-	// Validate That "Main" Function Exists
-	if (ast_main_idx == 0) {
-		applog(LOG_ERR, "Syntax Error: \"main\" function not declared");
+	// Validate That "Main" Function Uses One Of The Verify Methods
+	if (!m_ver_flg && (!m_bty_flg || !m_pow_flg)) {
+		applog(LOG_ERR, "Syntax Error: \"main\" function must call \"verify\" function or use both 'verify_bty' / 'verify_pow' statements.\n");
+		return false;
+	}
+	else if (m_ver_flg && (m_bty_flg || m_pow_flg)) {
+		applog(LOG_ERR, "Syntax Error: \"main\" function cannot call both \"verify\" function and 'verify_bty' / 'verify_pow' statements.\n");
 		return false;
 	}
 
-	// Validate That "Verify" Function Exists
-	if (ast_verify_idx == 0) {
-		applog(LOG_ERR, "Syntax Error: \"verify\" function not declared");
+	// Validate That "Verify" Function Uses Both Verify BTY & POW
+	if (!v_bty_flg || !v_pow_flg) {
+		applog(LOG_ERR, "Syntax Error: \"verify\" function must include both 'verify_bty' / 'verify_pow' statements.\n");
 		return false;
 	}
 
