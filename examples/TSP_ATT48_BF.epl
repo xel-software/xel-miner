@@ -11,17 +11,20 @@
  * Memory Map:
  *   Round Number:          m[  1]
  *   Random Input:          m[  4]
- *   Cost Matrix Vars:		u[ 20] - u[ 25] & f[0]
+ *   Cost Matrix Vars:		u[ 20] - u[ 23]
+ *   X Dist & Y Dist:		i[  0] - i[  1]
+ *   Distance Point A to B	f[  0]
  *   Algorithm Variables:	u[ 30] - u[ 34]
  *   Calculated Distance:	u[ 40]
  *   Loop Counters:			u[ 90] - u[ 91]
  *   Point Data:   			u[100] - u[195]
  *   Path Data:   			u[200] - u[248]
- *   Cost Matrix:         	u[300] - u[2604]
+ *   Cost Matrix:         	u[300] - u[2602]
  *
  *****************************************************************************/
 
-array_uint	3000;
+array_int	2;
+array_uint	2700;
 array_float	1;
 
 storage_sz  49;
@@ -139,9 +142,9 @@ function create_cost_matrix {
 	u[20] = 100;	// Index of x[i] - Point A (Start At Point 0) 
 	u[21] = 100;	// Index of y[i] - Point B (Start At Point 0) 
 	u[22] = 300;	// Index of dij - Cost Matrix Element
-	u[23] = 0;		// xd - X Distance
-	u[24] = 0;		// yd - Y Distance
-	u[25] = 0;		// tij - Rounded Distance Between A & B
+	u[23] = 0;		// tij - Rounded Distance Between A & B
+	i[0] = 0;		// xd - X Distance
+	i[1] = 0;		// yd - Y Distance
 	f[0]  = 0;		// rij - Pseudo-Euclidean Distance Between A & B
 
 	// Outer Loop - Point A = 0 to 48
@@ -163,14 +166,16 @@ function create_cost_matrix {
 			}
 			
 			// Calculate Distance From Point A To Point B
-			u[23] = u[u[21]] - u[u[20]];							// xd
-			u[24] = u[u[21] + 1] - u[u[20] + 1];					// yd
-			f[0] = sqrt(((u[23]*u[23]) + (u[24]*u[24])) / 10.0);	// rij
-			u[25] = (f[0] + 0.5);									// tij - equivalent of nint function
-			if (u[25] < f[0])
-				u[u[22]] = u[25] + 1;								// dij
-			else
-				u[u[22]] = u[25];									// dij
+			i[0] = u[u[21]] - u[u[20]];								// xd
+			i[1] = u[u[21] + 1] - u[u[20] + 1];						// yd
+			f[0] = sqrt(((i[0]*i[0]) + (i[1]*i[1])) / 10.0);		// rij
+			u[23] = (f[0] + 0.5);									// tij - equivalent of nint function
+			if (u[23] < f[0]) {
+				u[u[22]] = u[23] + 1;								// dij
+			}
+			else {
+				u[u[22]] = u[23];									// dij
+			}
 			
 			u[21] += 2;		// Move To Next Point B
 			u[22]++;		// Move To Next Matrix Element
@@ -179,6 +184,7 @@ function create_cost_matrix {
 		u[20] += 2;			// Increment Point A
 		u[21] = 100;		// Reset Point B
 	}
+
 }
 
 function main {
@@ -248,15 +254,17 @@ function verify {
 		u[21] = u[201 + u[90]];			// Set Point B		
 
 		// Calculate Distance From Point A To Point B
-		u[23] = u[100 + (u[21] * 2)] - u[100 + (u[20] * 2)];	// xd
-		u[24] = u[101 + (u[21] * 2)] - u[101 + (u[20] * 2)];	// yd
-		f[0] = sqrt(((u[23]*u[23]) + (u[24]*u[24])) / 10.0);	// rij
-		u[25] = (f[0] + 0.5);									// tij - equivalent of nint function
-		if (u[25] < f[0])
-			u[40] += u[25] + 1;									// dij
-		else
-			u[40] += u[25];										// dij
-		
+		i[0] = u[100 + (u[21] * 2)] - u[100 + (u[20] * 2)];		// xd
+		i[1] = u[101 + (u[21] * 2)] - u[101 + (u[20] * 2)];		// yd
+		f[0] = sqrt(((i[0]*i[0]) + (i[1]*i[1])) / 10.0);		// rij
+		u[23] = (f[0] + 0.5);									// tij - equivalent of nint function
+		if (u[23] < f[0]) {
+			u[40] += u[23] + 1;									// dij
+		}
+		else {
+			u[40] += u[23];										// dij
+		}
+				
 	}
 
 	// Bounty Is Rewarded When Total Distance < 11,000
