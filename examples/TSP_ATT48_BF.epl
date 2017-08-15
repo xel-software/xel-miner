@@ -24,7 +24,7 @@
 array_uint	3000;
 array_float	1;
 
-storage_sz  48;
+storage_sz  49;
 storage_idx 200;
 
 
@@ -234,19 +234,33 @@ function main {
 // u[200]-u[248] is updates with the submitted path and the solution is validated by the node.
 function verify {
 
+	// No need to create a cost matrix for the verify function
+	// As we only need the distances for the submitted path
 	init_point_data();
-	create_cost_matrix();
 
-	// Calculate Total Distance For Sumitted Path
-	u[40] = 0;	// Total Distance
+	// Total Distance
+	u[40] = 0;
+
+	// Loop through submited path to calculate total distance
 	repeat(u[90], 48, 48) {
-		u[33] = u[200 + u[90]];     				// Cost Matrix Row
-		u[34] = u[200 + u[90] + 1]; 				// Cost Matrix Column
-		u[40] += u[(300 + (u[33] * 48) + u[34])];	// Lookup Point A to Point B distance in Cost Matrix and add to total distance
+		
+		u[20] = u[200 + u[90]];			// Set Point A
+		u[21] = u[201 + u[90]];			// Set Point B		
+
+		// Calculate Distance From Point A To Point B
+		u[23] = u[100 + (u[21] * 2)] - u[100 + (u[20] * 2)];	// xd
+		u[24] = u[101 + (u[21] * 2)] - u[101 + (u[20] * 2)];	// yd
+		f[0] = sqrt(((u[23]*u[23]) + (u[24]*u[24])) / 10.0);	// rij
+		u[25] = (f[0] + 0.5);									// tij - equivalent of nint function
+		if (u[25] < f[0])
+			u[40] += u[25] + 1;									// dij
+		else
+			u[40] += u[25];										// dij
+		
 	}
 
 	// Bounty Is Rewarded When Total Distance < 11,000
-	verify_bty (u[99] < 11000);
+	verify_bty (u[40] < 11000);
 	
 	// POW Is Rewarded When The MD5 Hash Of Summed Path Is Less Than Target
 	u[50] = u[200] + u[201] + u[202] + u[203] + u[204] + u[205] + u[206] + u[207] + u[208] + u[209] + u[210] + u[211];
