@@ -323,15 +323,20 @@ static bool convert_node(ast* node) {
 	case NODE_IF:
 		if (tabs < 1) tabs = 1;
 		str = malloc(strlen(lstr) + 25);
-		if ((node->right->type == NODE_BLOCK) || ((node->right->type == NODE_ELSE) && (node->right->left->type == NODE_BLOCK)))
-			sprintf(str, "%sif (%s) {\n", tab[tabs - 1], lstr);
-		else
-			sprintf(str, "%sif (%s)\n", tab[tabs - 1], lstr);
+		// Always Wrap "IF" In Brackets
+		sprintf(str, "%sif (%s) {\n", tab[tabs - 1], lstr);
 		break;
 	case NODE_ELSE:
 		if (tabs < 1) tabs = 1;
 		str = malloc(25);
-		if (node->right->type == NODE_BLOCK)
+		// Check If "IF" Has Closing Bracket - If Not, Add Closing Bracket
+		if (node->left->type != NODE_BLOCK) {
+			if (node->right->type == NODE_BLOCK)
+				sprintf(str, "%s}\n%selse {\n", tab[tabs - 1], tab[tabs - 1]);
+			else
+				sprintf(str, "%s}\n%selse\n", tab[tabs - 1], tab[tabs - 1]);
+		}
+		else if (node->right->type == NODE_BLOCK)
 			sprintf(str, "%selse {\n", tab[tabs - 1]);
 		else
 			sprintf(str, "%selse\n", tab[tabs - 1]);
