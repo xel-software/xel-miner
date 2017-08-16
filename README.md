@@ -1,7 +1,6 @@
 <h1><b>Only Use For Standalone ElasticPL Testing!</b></h1>
 
-# xel_miner 	0.9.1
-# xel_validate	0.1
+# xel_miner 	0.9.2
 
 <i>This code is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 See the GNU General Public License for more details.</i>
@@ -33,17 +32,12 @@ To run the Miner using GPU:
 
     sudo ./xel_miner -t <num_threads> -P <secret_phrase> -D --opencl
 
-To run the Validation Engine backend:
-
-    sudo ./xel_miner -V -D
-
 Use "sudo ./xel_miner -h" to see a full list of options.
 
 ________________________________________________________________________________________________
 
 <b>Donations are welcome to support my work on this project:</b>
 
-	BTC: 1N9dkpttDi7HncRd1q4t8MfFxCLvmLxAGU
 	XEL: XEL-AZJK-TAVH-3KN3-9EZSH
 ________________________________________________________________________________________________
 

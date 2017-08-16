@@ -15,8 +15,6 @@
 #endif
 
 bool create_c_source(char *work_str) {
-	int i, job_cnt;
-
 	FILE* f = fopen("./work/work_lib.c", "w");
 	if (!f)
 		return false;
@@ -43,8 +41,7 @@ bool create_c_source(char *work_str) {
 	fprintf(f, "__declspec(thread) uint64_t *ul = NULL;\n");
 	fprintf(f, "__declspec(thread) float *f = NULL;\n");
 	fprintf(f, "__declspec(thread) double *d = NULL;\n");
-	fprintf(f, "__declspec(thread) uint32_t *s = NULL;\n");
-	fprintf(f, "__declspec(thread) uint32_t **s_ptr = NULL;\n\n");
+	fprintf(f, "__declspec(thread) uint32_t *s = NULL;\n\n");
 #else
 	fprintf(f, "__thread uint32_t *m = NULL;\n");
 	fprintf(f, "__thread int32_t *i = NULL;\n");
@@ -53,8 +50,7 @@ bool create_c_source(char *work_str) {
 	fprintf(f, "__thread uint64_t *ul = NULL;\n");
 	fprintf(f, "__thread float *f = NULL;\n");
 	fprintf(f, "__thread double *d = NULL;\n");
-	fprintf(f, "__thread uint32_t *s = NULL;\n");
-	fprintf(f, "__thread uint32_t **s_ptr = NULL;\n\n");
+	fprintf(f, "__thread uint32_t *s = NULL;\n\n");
 #endif
 
 	fprintf(f, "static uint32_t rotl32(uint32_t x, uint32_t n);\n");
@@ -64,17 +60,7 @@ bool create_c_source(char *work_str) {
 	fprintf(f, "static uint32_t check_pow(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t *);\n\n");
 
 	// Include C Source Code For ElasticPL Jobs
-	if (!opt_validate) {
-		fprintf(f, "#include \"job_%s.h\"\n", work_str);
-	}
-	else {
-		for (i = 0; i < g_work_package_cnt; i++) {
-			if (g_work_package[g_work_package_idx].active)
-				fprintf(f, "#include \"job_%s.h\"\n", g_work_package[i].work_str);
-		}
-
-	}
-	fprintf(f, "\n");
+	fprintf(f, "#include \"job_%s.h\"\n\n", work_str);
 
 	fprintf(f, "static const uint32_t mask32 = (CHAR_BIT*sizeof(uint32_t)-1);\n");
 	fprintf(f, "static const uint64_t mask64 = (CHAR_BIT*sizeof(uint64_t)-1);\n\n");
@@ -130,9 +116,9 @@ bool create_c_source(char *work_str) {
 	fprintf(f, "}\n\n");
 
 #ifdef WIN32
-	fprintf(f, "__declspec(dllexport) void initialize(uint32_t *vm_m, int32_t *vm_i, uint32_t *vm_u, int64_t *vm_l, uint64_t *vm_ul, float *vm_f, double *vm_d, uint32_t **vm_s) {\n");
+	fprintf(f, "__declspec(dllexport) int32_t initialize(uint32_t *vm_m, int32_t *vm_i, uint32_t *vm_u, int64_t *vm_l, uint64_t *vm_ul, float *vm_f, double *vm_d, uint32_t *vm_s) {\n");
 #else
-	fprintf(f, "void initialize(uint32_t *vm_m, int32_t *vm_i, uint32_t *vm_u, int64_t *vm_l, uint64_t *vm_ul, float *vm_f, double *vm_d, uint32_t **vm_s) {\n");
+	fprintf(f, "int32_t initialize(uint32_t *vm_m, int32_t *vm_i, uint32_t *vm_u, int64_t *vm_l, uint64_t *vm_ul, float *vm_f, double *vm_d, uint32_t **vm_s) {\n");
 #endif
 	fprintf(f, "\tm = vm_m;\n");
 	fprintf(f, "\ti = vm_i;\n");
@@ -141,65 +127,31 @@ bool create_c_source(char *work_str) {
 	fprintf(f, "\tul = vm_ul;\n");
 	fprintf(f, "\tf = vm_f;\n");
 	fprintf(f, "\td = vm_d;\n");
-	fprintf(f, "\ts_ptr = vm_s;\n");
+	fprintf(f, "\ts = vm_s;\n\n");
+	fprintf(f, "\treturn 0;\n");
 
 	fprintf(f, "}\n\n");
 
 #ifdef WIN32
-	fprintf(f, "__declspec(dllexport) void execute( uint64_t work_id, uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target ) {\n\n");
+	fprintf(f, "__declspec(dllexport) int32_t execute( uint64_t work_id, uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target ) {\n\n");
 #else
 	fprintf(f, "int32_t execute( uint64_t work_id, uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target ) {\n\n");
 #endif
-	fprintf(f, "\ts = (uint32_t *)(*s_ptr);\n\n");
 
 	// Call The Main Function For The Current Job
-	if (!opt_validate) {
-		fprintf(f, "\tmain_%s(bounty_found, verify_pow, pow_found, target);\n\n", work_str);
-	}
-	else {
-		job_cnt = 0;
-		for (i = 0; i < g_work_package_cnt; i++) {
-			if (g_work_package[g_work_package_idx].active) {
-				if (job_cnt == 0)
-					fprintf(f, "\tif (work_id == %s)\n", g_work_package[i].work_str);
-				else
-					fprintf(f, "\telse if (work_id == %s)\n", g_work_package[i].work_str);
-				fprintf(f, "\t\tmain_%s(bounty_found, verify_pow, pow_found, target);\n", g_work_package[i].work_str);
-				job_cnt++;
-			}
-		}
-		if (job_cnt > 0)
-			fprintf(f, "\telse\n");
-		fprintf(f, "\t\treturn -1;\n\n");
-	}
+	fprintf(f, "\tmain_%s(bounty_found, verify_pow, pow_found, target);\n\n", work_str);
+	fprintf(f, "\treturn 0;\n");
 	fprintf(f, "}\n\n");
 
 #ifdef WIN32
-	fprintf(f, "__declspec(dllexport) void verify( uint64_t work_id, uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target ) {\n\n");
+	fprintf(f, "__declspec(dllexport) int32_t verify( uint64_t work_id, uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target ) {\n\n");
 #else
 	fprintf(f, "int32_t verify( uint64_t work_id, uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target ) {\n\n");
 #endif
 
 	// Call The Verify Function For The Current Job
-	if (!opt_validate) {
-		fprintf(f, "\tverify_%s(bounty_found, verify_pow, pow_found, target);\n\n", work_str);
-	}
-	else {
-		job_cnt = 0;
-		for (i = 0; i < g_work_package_cnt; i++) {
-			if (!g_work_package[g_work_package_idx].blacklisted) {
-				if (job_cnt == 0)
-					fprintf(f, "\tif (work_id == %s)\n", g_work_package[i].work_str);
-				else
-					fprintf(f, "\telse if (work_id == %s)\n", g_work_package[i].work_str);
-				fprintf(f, "\t\tverify_%s(bounty_found, verify_pow, pow_found, target);\n", g_work_package[i].work_str);
-				job_cnt++;
-			}
-		}
-		if (job_cnt > 0)
-			fprintf(f, "\telse\n");
-		fprintf(f, "\t\treturn -1;\n\n");
-	}
+	fprintf(f, "\tverify_%s(bounty_found, verify_pow, pow_found, target);\n\n", work_str);
+	fprintf(f, "\treturn 0;\n");
 	fprintf(f, "}\n\n");
 
 	fclose(f);
@@ -217,11 +169,7 @@ bool compile_library(char *work_str) {
 		return false;
 	}
 
-	if (opt_validate)
-		sprintf(lib_name, "_validate");
-	else
-		sprintf(lib_name, "job_%s", work_str);
-
+	sprintf(lib_name, "job_%s", work_str);
 	applog(LOG_DEBUG, "DEBUG: Compiling C Library: %s", lib_name);
 
 #ifdef _MSC_VER
@@ -251,10 +199,7 @@ bool compile_library(char *work_str) {
 void create_instance(struct instance* inst, char *work_str) {
 	char lib_name[50], file_name[100];
 
-	if (opt_validate)
-		sprintf(lib_name, "job_validate");
-	else
-		sprintf(lib_name, "job_%s", work_str);
+	sprintf(lib_name, "job_%s", work_str);
 
 #ifdef WIN32
 	sprintf(file_name, "./work/%s.dll", lib_name);
@@ -263,7 +208,7 @@ void create_instance(struct instance* inst, char *work_str) {
 		fprintf(stderr, "Unable to load library: '%s' (Error - %d)", file_name, GetLastError());
 		exit(EXIT_FAILURE);
 	}
-	inst->initialize = (int32_t(__cdecl *)(uint32_t *, int32_t *, uint32_t *, int64_t *, uint64_t *, float *, double *, uint32_t **))GetProcAddress((HMODULE)inst->hndl, "initialize");
+	inst->initialize = (int32_t(__cdecl *)(uint32_t *, int32_t *, uint32_t *, int64_t *, uint64_t *, float *, double *, uint32_t *))GetProcAddress((HMODULE)inst->hndl, "initialize");
 	inst->execute = (int32_t(__cdecl *)(uint64_t, uint32_t *, uint32_t, uint32_t *, uint32_t *))GetProcAddress((HMODULE)inst->hndl, "execute");
 	inst->verify = (int32_t(__cdecl *)(uint64_t, uint32_t *, uint32_t, uint32_t *, uint32_t *))GetProcAddress((HMODULE)inst->hndl, "verify");
 	if (!inst->initialize || !inst->execute || !inst->verify) {

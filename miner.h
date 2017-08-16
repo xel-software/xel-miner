@@ -2,8 +2,7 @@
 #define __MINER_H__
 
 #define PACKAGE_NAME "xel_miner"
-#define MINER_VERSION "0.9.1"
-#define VALIDATION_ENGINE_VERSION "0.1"
+#define MINER_VERSION "0.9.2"
 
 #define USER_AGENT PACKAGE_NAME "/" PACKAGE_VERSION
 #define MAX_CPUS 16
@@ -54,8 +53,7 @@ extern __thread _ALIGN(64) int64_t *vm_l;
 extern __thread _ALIGN(64) uint64_t *vm_ul;
 extern __thread _ALIGN(64) float *vm_f;
 extern __thread _ALIGN(64) double *vm_d;
-extern __thread _ALIGN(64) uint32_t **vm_s;
-extern __thread _ALIGN(64) uint32_t *vm_state;
+extern __thread _ALIGN(64) uint32_t *vm_s;
 
 extern bool use_elasticpl_math;
 
@@ -70,7 +68,6 @@ extern bool opt_test_vm;
 extern bool opt_opencl;
 extern int opt_opencl_gthreads;
 extern int opt_opencl_vwidth;
-extern bool opt_validate;
 
 extern struct work_package *g_work_package;
 extern int g_work_package_cnt;
@@ -208,12 +205,12 @@ struct instance {
 
 #ifdef WIN32
 	HINSTANCE hndl;
-	int32_t(__cdecl* initialize)(uint32_t *, int32_t *, uint32_t *, int64_t *, uint64_t *, float *, double *, uint32_t **);
+	int32_t(__cdecl* initialize)(uint32_t *, int32_t *, uint32_t *, int64_t *, uint64_t *, float *, double *, uint32_t *);
 	int32_t(__cdecl* execute)(uint64_t, uint32_t *, uint32_t, uint32_t *, uint32_t *);
 	int32_t(__cdecl* verify)(uint64_t, uint32_t *, uint32_t, uint32_t *, uint32_t *);
 #else
 	void *hndl;
-	int32_t(*initialize)(uint32_t *, int32_t *, uint32_t *, int64_t *, uint64_t *, float *, double *, uint32_t **);
+	int32_t(*initialize)(uint32_t *, int32_t *, uint32_t *, int64_t *, uint64_t *, float *, double *, uint32_t *);
 	int32_t(*execute)(uint64_t, uint32_t *, uint32_t, uint32_t *, uint32_t *);
 	int32_t(*verify)(uint64_t, uint32_t *, uint32_t, uint32_t *, uint32_t *);
 #endif
@@ -369,14 +366,5 @@ extern bool create_opencl_source(char *work_str);
 //static char* convert_opencl(ast* exp);
 
 int curve25519_donna(uint8_t *mypublic, const uint8_t *secret, const uint8_t *basepoint);
-
-// Validate Engine Function Declarations
-extern void *validation_engine_thread(void *userdata);
-extern void *ve_validate_package_thread(void *userdata);
-extern void *ve_validate_result_thread(void *userdata);
-extern void *ve_update_storage_thread(void *userdata);
-
-static bool ve_validate_package(const json_t *pkg, char *elastic_src, char *verify_src, char *err_msg);
-static bool ve_update_storage(uint64_t work_id, uint32_t iteration_id, uint32_t storage_id, uint32_t *storage, uint32_t storage_sz, char *err_msg);
 
 #endif /* __MINER_H__ */

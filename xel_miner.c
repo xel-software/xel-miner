@@ -65,7 +65,6 @@ static int opt_fail_pause = 10;
 static int opt_scantime = 60;  // Get New Work From Server At Least Every 60s
 bool opt_test_miner = false;
 bool opt_test_vm = false;
-bool opt_validate = false;
 bool opt_opencl = false;
 int opt_opencl_gthreads = 0;
 int opt_opencl_vwidth = 0;
@@ -89,8 +88,7 @@ __thread _ALIGN(64) int64_t *vm_l = NULL;
 __thread _ALIGN(64) uint64_t *vm_ul = NULL;
 __thread _ALIGN(64) float *vm_f = NULL;
 __thread _ALIGN(64) double *vm_d = NULL;
-__thread _ALIGN(64) uint32_t **vm_s = NULL;
-__thread _ALIGN(64) uint32_t *vm_state = NULL;
+__thread _ALIGN(64) uint32_t *vm_s = NULL;
 
 bool use_elasticpl_math;
 
@@ -170,7 +168,6 @@ Options:\n\
   -u, --user <username>       Username for mining server\n\
   -T, --timeout <n>           Timeout for rpc calls (Default: 30 sec)\n\
   -v, --version               Display version information and exit\n\
-  -V, --validate              Enable Validation Engine\n\
   -X  --no-renice             Do not lower the priority of miner threads\n\
 Options while mining ----------------------------------------------------------\n\n\
    s + <enter>                Display mining summary\n\
@@ -206,7 +203,6 @@ static struct option const options[] = {
 	{ "url",			1, NULL, 'o' },
 	{ "user",			1, NULL, 'u' },
 	{ "version",		0, NULL, 'v' },
-	{ "validate",		0, NULL, 'V' },
 	{ 0, 0, 0, 0 }
 };
 
@@ -364,9 +360,6 @@ void parse_arg(int key, char *arg)
 		break;
 	case 'v':
 		show_version_and_exit();
-	case 'V':
-		opt_validate = true;
-		break;
 	case 'X':
 		opt_norenice = true;
 		break;
@@ -521,86 +514,72 @@ static bool load_test_file(char *file_name, char *buf) {
 static void *test_vm_thread(void *userdata) {
 	struct thr_info *mythr = (struct thr_info *) userdata;
 	int thr_id = mythr->id;
-	char file_name[100];
 	char test_code[MAX_SOURCE_SIZE];
 	struct work_package work_package;
 	struct instance *inst = NULL;
-	uint32_t i, bounty_found, pow_found;
-	int package_idx, rc;
+	uint32_t bounty_found, pow_found, target[4];
+	int rc;
 
-	// Create Up To 3 Packages (1 For Miner Test, 3 For SN Test)
+	// Create A Test Work Package
 	memset(&work_package, 0, sizeof(struct work_package));
-	for (i = 0; i < 3; i++) {
 
-		// Create A Test Package
-		work_package.work_id = i;
-		sprintf(work_package.work_str, "%llu", work_package.work_id);
+	work_package.work_id = 12345;
+	sprintf(work_package.work_str, "%llu", work_package.work_id);
 
-		if (opt_validate)
-			sprintf(file_name, "sn%d.epl", i);
-		else
-			sprintf(file_name, "%s", test_filename);
+	applog(LOG_DEBUG, "DEBUG: Loading Test File '%s'", test_filename);
+	if (!load_test_file(test_filename, test_code))
+		exit(EXIT_FAILURE);
 
-		applog(LOG_DEBUG, "DEBUG: Loading Test File '%s'", file_name);
-		if (!load_test_file(file_name, test_code))
-			exit(EXIT_FAILURE);
-
-		// Convert The Source Code Into ElasticPL AST
-		if (!create_epl_ast(test_code)) {
-			applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
-			exit(EXIT_FAILURE);
-		}
-
-		// Copy Global Array Sizes Into Work Package
-		work_package.vm_ints = ast_vm_ints;
-		work_package.vm_uints = ast_vm_uints;
-		work_package.vm_longs = ast_vm_longs;
-		work_package.vm_ulongs = ast_vm_ulongs;
-		work_package.vm_floats = ast_vm_floats;
-		work_package.vm_doubles = ast_vm_doubles;
-		work_package.storage_sz = ast_storage_sz;
-		work_package.storage_idx = ast_storage_idx;
-
-		// Calculate WCET
-		if (!calc_wcet()) {
-			applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
-			exit(EXIT_FAILURE);
-		}
-
-		// Convert The ElasticPL Source Into A C Program
-		use_elasticpl_math = false;
-		if (!convert_ast_to_c(work_package.work_str)) {
-			applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
-			exit(EXIT_FAILURE);
-		}
-
-		// Add Work Package To Global List
-		work_package.active = true;
-		add_work_package(&work_package);
-		package_idx = i;
-
-		if (!opt_validate)
-			break;
+	// Convert The Source Code Into ElasticPL AST
+	if (!create_epl_ast(test_code)) {
+		applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
+		exit(EXIT_FAILURE);
 	}
+
+	// Copy Global Array Sizes Into Work Package
+	work_package.vm_ints = ast_vm_ints;
+	work_package.vm_uints = ast_vm_uints;
+	work_package.vm_longs = ast_vm_longs;
+	work_package.vm_ulongs = ast_vm_ulongs;
+	work_package.vm_floats = ast_vm_floats;
+	work_package.vm_doubles = ast_vm_doubles;
+	work_package.storage_sz = ast_storage_sz;
+	work_package.storage_idx = ast_storage_idx;
+
+	// Calculate WCET
+	if (!calc_wcet()) {
+		applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
+		exit(EXIT_FAILURE);
+	}
+
+	// Convert The ElasticPL Source Into A C Program
+	use_elasticpl_math = false;
+	if (!convert_ast_to_c(work_package.work_str)) {
+		applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
+		exit(EXIT_FAILURE);
+	}
+
+	// Add Work Package To Global List
+	work_package.active = true;
+	add_work_package(&work_package);
 
 	// Initialize Global Variables
 	vm_m = calloc(VM_M_ARRAY_SIZE, sizeof(uint32_t));
-	vm_s = calloc(1, sizeof(uint32_t **));
-	if (g_work_package[package_idx].vm_ints) vm_i = calloc(g_work_package[package_idx].vm_ints, sizeof(int32_t));
-	if (g_work_package[package_idx].vm_uints) vm_u = calloc(g_work_package[package_idx].vm_uints, sizeof(uint32_t));
-	if (g_work_package[package_idx].vm_longs) vm_l = calloc(g_work_package[package_idx].vm_longs, sizeof(int64_t));
-	if (g_work_package[package_idx].vm_ulongs) vm_ul = calloc(g_work_package[package_idx].vm_ulongs, sizeof(uint64_t));
-	if (g_work_package[package_idx].vm_floats) vm_f = calloc(g_work_package[package_idx].vm_floats, sizeof(float));
-	if (g_work_package[package_idx].vm_doubles) vm_d = calloc(g_work_package[package_idx].vm_doubles, sizeof(double));
-	if (g_work_package[package_idx].storage_sz) *vm_s = calloc(g_work_package[package_idx].storage_sz, sizeof(int32_t));
+	if (g_work_package[0].vm_ints) vm_i = calloc(g_work_package[0].vm_ints, sizeof(int32_t));
+	if (g_work_package[0].vm_uints) vm_u = calloc(g_work_package[0].vm_uints, sizeof(uint32_t));
+	if (g_work_package[0].vm_longs) vm_l = calloc(g_work_package[0].vm_longs, sizeof(int64_t));
+	if (g_work_package[0].vm_ulongs) vm_ul = calloc(g_work_package[0].vm_ulongs, sizeof(uint64_t));
+	if (g_work_package[0].vm_floats) vm_f = calloc(g_work_package[0].vm_floats, sizeof(float));
+	if (g_work_package[0].vm_doubles) vm_d = calloc(g_work_package[0].vm_doubles, sizeof(double));
+	if (g_work_package[0].storage_sz) vm_s = calloc(g_work_package[0].storage_sz, sizeof(int32_t));
 
-	if ((g_work_package[package_idx].vm_ints && !vm_i) ||
-		(g_work_package[package_idx].vm_uints && !vm_u) ||
-		(g_work_package[package_idx].vm_longs && !vm_l) ||
-		(g_work_package[package_idx].vm_ulongs && !vm_ul) ||
-		(g_work_package[package_idx].vm_floats && !vm_f) ||
-		(g_work_package[package_idx].vm_doubles && !vm_d) ||
-		(g_work_package[package_idx].storage_sz && !*vm_s)) {
+	if ((g_work_package[0].vm_ints && !vm_i) ||
+		(g_work_package[0].vm_uints && !vm_u) ||
+		(g_work_package[0].vm_longs && !vm_l) ||
+		(g_work_package[0].vm_ulongs && !vm_ul) ||
+		(g_work_package[0].vm_floats && !vm_f) ||
+		(g_work_package[0].vm_doubles && !vm_d) ||
+		(g_work_package[0].storage_sz && !vm_s)) {
 
 		applog(LOG_ERR, "%s: Unable to allocate VM memory", "'test-vm'");
 		exit(EXIT_FAILURE);
@@ -619,7 +598,7 @@ static void *test_vm_thread(void *userdata) {
 	else {
 
 		// Compile The C Program Library
-		if (!compile_library(g_work_package[package_idx].work_str)) {
+		if (!compile_library(g_work_package[0].work_str)) {
 			applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
 			exit(EXIT_FAILURE);
 		}
@@ -628,21 +607,20 @@ static void *test_vm_thread(void *userdata) {
 		if (inst)
 			free_library(inst);
 		inst = calloc(1, sizeof(struct instance));
-		create_instance(inst, g_work_package[package_idx].work_str);
+		create_instance(inst, g_work_package[0].work_str);
 		inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d, vm_s);
 
 		// Execute The VM Logic
-		uint32_t target[4];
 		target[0] = 0x2EFFFFFF;
 		target[1] = 0xFFFFFFFF;
 		target[2] = 0xFFFFFFFF;
 		target[3] = 0xFFFFFFFF;
-//		rc = inst->execute(g_work_package[package_idx].work_id, &bounty_found, 0, &pow_found, NULL);
-		rc = inst->execute(g_work_package[package_idx].work_id, &bounty_found, 1, &pow_found, target);
+//		rc = inst->verify(g_work_package[0].work_id, &bounty_found, 1, &pow_found, target);
+		rc = inst->execute(g_work_package[0].work_id, &bounty_found, 1, &pow_found, target);
 
 		//for (i = 0; i < 0xFFFFFFFF; i++) {
 		//	vm_m[1] = i;
-		//	rc = inst->execute(g_work_package[package_idx].work_id);
+		//	rc = inst->execute(g_work_package[0].work_id);
 		//	if (rc == 1)
 		//		break;
 		//}
@@ -659,7 +637,7 @@ static void *test_vm_thread(void *userdata) {
 	applog(LOG_DEBUG, "DEBUG: Bounty Found: %s", (bounty_found == 1) ? "true" : "false");
 	applog(LOG_DEBUG, "DEBUG: POW Found: %s", (pow_found == 1) ? "true" : "false");
 
-	dump_vm(package_idx);
+	dump_vm(0);
 
 	applog(LOG_NOTICE, "DEBUG: Compiler Test Complete");
 	applog(LOG_WARNING, "Exiting " PACKAGE_NAME);
@@ -672,9 +650,7 @@ static void *test_vm_thread(void *userdata) {
 	if (vm_ul) free(vm_ul);
 	if (vm_f) free(vm_f);
 	if (vm_d) free(vm_d);
-	if (*vm_s) free(*vm_s);
 	if (vm_s) free(vm_s);
-	//	if (vm_state) free(vm_state);
 
 	tq_freeze(mythr->q);
 
@@ -773,9 +749,8 @@ static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work
 		// Get Values For VM Inputs
 		get_vm_input(work);
 
-		// Reset VM Memory / State
+		// Reset VM Memory
 		memcpy(vm_m, work->vm_input, VM_M_ARRAY_SIZE * sizeof(uint32_t));
-		memset(vm_state, 0, 4 * sizeof(int));
 
 		// Execute The VM Logic
 		rc = inst->execute(work->work_id, &bounty_found, 1, &pow_found, work->pow_target);
@@ -1419,10 +1394,8 @@ static void *cpu_miner_thread(void *userdata) {
 
 	// Initialize Global Variables
 	vm_m = calloc(VM_M_ARRAY_SIZE, sizeof(uint32_t));
-	vm_s = calloc(1, sizeof(uint32_t **));
-	vm_state = calloc(4, sizeof(uint32_t));
 
-	if (!vm_m || !vm_s || !vm_state) {
+	if (!vm_m ) {
 		applog(LOG_ERR, "CPU%d: Unable to allocate VM memory", thr_id);
 		goto out;
 	}
@@ -1482,8 +1455,8 @@ static void *cpu_miner_thread(void *userdata) {
 			}
 			if (g_work_package[work.package_id].storage_sz > vm_storage) {
 				vm_storage = g_work_package[work.package_id].storage_sz;
-				*vm_s = realloc(*vm_s, vm_storage * sizeof(uint32_t));
-				memset(*vm_s, 0, vm_storage * sizeof(uint32_t));
+				vm_s = realloc(vm_s, vm_storage * sizeof(uint32_t));
+				memset(vm_s, 0, vm_storage * sizeof(uint32_t));
 			}
 
 			if ((vm_ints && !vm_i) ||
@@ -1492,7 +1465,7 @@ static void *cpu_miner_thread(void *userdata) {
 				(vm_ulongs && !vm_ul) ||
 				(vm_floats && !vm_f) ||
 				(vm_doubles && !vm_d) ||
-				(vm_storage && !*vm_s)) {
+				(vm_storage && !vm_s)) {
 
 				applog(LOG_ERR, "CPU%d: Unable to allocate VM memory", thr_id);
 				goto out;
@@ -1511,9 +1484,9 @@ static void *cpu_miner_thread(void *userdata) {
 
 			// Copy New Storage Values To VM
 			if (iteration && g_work_package[work.package_id].storage_sz)
-				memcpy(*vm_s, g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
+				memcpy(vm_s, g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
 			else
-				memset(*vm_s, 0, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
+				memset(vm_s, 0, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
 
 		}
 		// Otherwise, Just Update POW Target / Iteration / Storage
@@ -1528,7 +1501,7 @@ static void *cpu_miner_thread(void *userdata) {
 
 				// Copy New Storage Values To VM
 				if (g_work_package[work.package_id].storage_sz)
-					memcpy(*vm_s, g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
+					memcpy(vm_s, g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
 
 			}
 		}
@@ -1626,9 +1599,7 @@ out:
 	if (vm_ul) free(vm_ul);
 	if (vm_f) free(vm_f);
 	if (vm_d) free(vm_d);
-	if (*vm_s) free(*vm_s);
 	if (vm_s) free(vm_s);
-	if (vm_state) free(vm_state);
 
 	tq_freeze(mythr->q);
 
@@ -2236,7 +2207,6 @@ int main(int argc, char **argv) {
 	fprintf(stdout, "** Elastic Compute Engine **\n");
 	fprintf(stdout, "   Miner Version: " MINER_VERSION"\n");
 	fprintf(stdout, "   ElasticPL Version: " ELASTICPL_VERSION"\n");
-	fprintf(stdout, "   Validation Engine Version: " VALIDATION_ENGINE_VERSION"\n\n");
 
 	pthread_mutex_init(&applog_lock, NULL);
 
@@ -2324,11 +2294,7 @@ int main(int argc, char **argv) {
 	if (!work_restart)
 		return 1;
 
-	if (opt_validate)
-		thr_info = (struct thr_info*) calloc(4, sizeof(*thr));
-	else
-		thr_info = (struct thr_info*) calloc(opt_n_threads + 3, sizeof(*thr));
-
+	thr_info = (struct thr_info*) calloc(opt_n_threads + 3, sizeof(*thr));
 	if (!thr_info)
 		return 1;
 
@@ -2350,136 +2316,80 @@ int main(int argc, char **argv) {
 	}
 
 	// Miner Threads
-	if (!opt_validate) {
+	pthread_mutex_init(&work_lock, NULL);
+	pthread_mutex_init(&submit_lock, NULL);
+	pthread_mutex_init(&longpoll_lock, NULL);
 
-		pthread_mutex_init(&work_lock, NULL);
-		pthread_mutex_init(&submit_lock, NULL);
-		pthread_mutex_init(&longpoll_lock, NULL);
+	// Init workio Thread Info
+	work_thr_id = opt_n_threads;
+	thr = &thr_info[work_thr_id];
+	thr->id = work_thr_id;
+	thr->q = tq_new();
+	if (!thr->q)
+		return 1;
 
-		// Init workio Thread Info
-		work_thr_id = opt_n_threads;
-		thr = &thr_info[work_thr_id];
-		thr->id = work_thr_id;
+	// Start workio Thread
+	if (thread_create(thr, workio_thread)) {
+		applog(LOG_ERR, "work thread create failed");
+		return 1;
+	}
+
+	applog(LOG_INFO, "Attempting to start %d miner threads", opt_n_threads);
+
+	thr_idx = 0;
+
+	// Start Mining Threads
+	for (i = 0; i < opt_n_threads; i++) {
+		thr = &thr_info[thr_idx];
+
+		thr->id = thr_idx++;
 		thr->q = tq_new();
 		if (!thr->q)
 			return 1;
-
-		// Start workio Thread
-		if (thread_create(thr, workio_thread)) {
-			applog(LOG_ERR, "work thread create failed");
-			return 1;
-		}
-
-		applog(LOG_INFO, "Attempting to start %d miner threads", opt_n_threads);
-
-		thr_idx = 0;
-
-		// Start Mining Threads
-		for (i = 0; i < opt_n_threads; i++) {
-			thr = &thr_info[thr_idx];
-
-			thr->id = thr_idx++;
-			thr->q = tq_new();
-			if (!thr->q)
-				return 1;
-			if (opt_opencl) {
+		if (opt_opencl) {
 #ifdef USE_OPENCL
-				err = thread_create(thr, gpu_miner_thread);
+			err = thread_create(thr, gpu_miner_thread);
 #endif
-				sprintf(thr->name, "GPU%d", i);
-			}
-			else {
-				err = thread_create(thr, cpu_miner_thread);
-				sprintf(thr->name, "CPU%d", i);
-			}
-			if (err) {
-				applog(LOG_ERR, "%s mining thread create failed!", thr->name);
-				return 1;
-			}
+			sprintf(thr->name, "GPU%d", i);
 		}
-
-		applog(LOG_INFO, "%d mining threads started", opt_n_threads);
-
-		gettimeofday(&g_miner_start_time, NULL);
-
-		// Start Longpoll Thread
-		thr = &thr_info[opt_n_threads + 1];
-		thr->id = opt_n_threads + 1;
-		thr->q = tq_new();
-		if (!thr->q)
-			return 1;
-		if (thread_create(thr, longpoll_thread)) {
-			applog(LOG_ERR, "Longpoll thread create failed");
+		else {
+			err = thread_create(thr, cpu_miner_thread);
+			sprintf(thr->name, "CPU%d", i);
+		}
+		if (err) {
+			applog(LOG_ERR, "%s mining thread create failed!", thr->name);
 			return 1;
 		}
-
-		// Start Key Monitor Thread
-		thr = &thr_info[opt_n_threads + 2];
-		thr->id = opt_n_threads + 2;
-		thr->q = tq_new();
-		if (!thr->q)
-			return 1;
-		if (thread_create(thr, key_monitor_thread)) {
-			applog(LOG_ERR, "Key monitor thread create failed");
-			return 1;
-		}
-
-		// Main Loop - Wait for workio thread to exit
-		pthread_join(thr_info[work_thr_id].pth, NULL);
 	}
 
-	// Validation Engine Threads
-	else {
+	applog(LOG_INFO, "%d mining threads started", opt_n_threads);
 
-/*		pthread_mutex_init(&response_lock, NULL);
+	gettimeofday(&g_miner_start_time, NULL);
 
-		// Start Validation Engine WebSocket Interface
-		thr = &thr_info[0];
-		thr->id = 0;
-		thr->q = tq_new();
-		if (!thr->q)
-			return 1;
-		if (thread_create(thr, validation_engine_thread)) {
-			applog(LOG_ERR, "Validation Engine WebSocket thread create failed");
-			return 1;
-		}
-
-		// Start Thread For Validating Packages
-		thr = &thr_info[1];
-		thr->id = 1;
-		thr->q = tq_new();
-		if (!thr->q)
-			return 1;
-		if (thread_create(thr, ve_validate_package_thread)) {
-			applog(LOG_ERR, "Validation Engine 'validate package' thread create failed");
-			return 1;
-		}
-
-		// Start Thread For Validating Miner Results
-		thr = &thr_info[2];
-		thr->id = 2;
-		thr->q = tq_new();
-		if (!thr->q)
-			return 1;
-		if (thread_create(thr, ve_validate_result_thread)) {
-			applog(LOG_ERR, "Validation Engine 'validate result' thread create failed");
-			return 1;
-		}
-
-		// Start Thread For Updating Storage
-		thr = &thr_info[3];
-		thr->id = 3;
-		thr->q = tq_new();
-		if (!thr->q)
-			return 1;
-		if (thread_create(thr, ve_update_storage_thread)) {
-			applog(LOG_ERR, "Validation Engine 'update storage' thread create failed");
-			return 1;
-		}
-
-		// Main Loop - Wait for Validation Engine thread to exit
-		pthread_join(thr_info[0].pth, NULL);*/
+	// Start Longpoll Thread
+	thr = &thr_info[opt_n_threads + 1];
+	thr->id = opt_n_threads + 1;
+	thr->q = tq_new();
+	if (!thr->q)
+		return 1;
+	if (thread_create(thr, longpoll_thread)) {
+		applog(LOG_ERR, "Longpoll thread create failed");
+		return 1;
 	}
+
+	// Start Key Monitor Thread
+	thr = &thr_info[opt_n_threads + 2];
+	thr->id = opt_n_threads + 2;
+	thr->q = tq_new();
+	if (!thr->q)
+		return 1;
+	if (thread_create(thr, key_monitor_thread)) {
+		applog(LOG_ERR, "Key monitor thread create failed");
+		return 1;
+	}
+
+	// Main Loop - Wait for workio thread to exit
+	pthread_join(thr_info[work_thr_id].pth, NULL);
 
 	applog(LOG_WARNING, "Exiting " PACKAGE_NAME);
 
