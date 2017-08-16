@@ -118,7 +118,7 @@ bool create_c_source(char *work_str) {
 #ifdef WIN32
 	fprintf(f, "__declspec(dllexport) int32_t initialize(uint32_t *vm_m, int32_t *vm_i, uint32_t *vm_u, int64_t *vm_l, uint64_t *vm_ul, float *vm_f, double *vm_d, uint32_t *vm_s) {\n");
 #else
-	fprintf(f, "int32_t initialize(uint32_t *vm_m, int32_t *vm_i, uint32_t *vm_u, int64_t *vm_l, uint64_t *vm_ul, float *vm_f, double *vm_d, uint32_t **vm_s) {\n");
+	fprintf(f, "int32_t initialize(uint32_t *vm_m, int32_t *vm_i, uint32_t *vm_u, int64_t *vm_l, uint64_t *vm_ul, float *vm_f, double *vm_d, uint32_t *vm_s) {\n");
 #endif
 	fprintf(f, "\tm = vm_m;\n");
 	fprintf(f, "\ti = vm_i;\n");
