@@ -61,6 +61,7 @@ bool create_c_source(char *work_str) {
 	fprintf(f, "static uint32_t rotr32(uint32_t x, uint32_t n);\n");
 	fprintf(f, "static uint64_t rotl64(uint64_t x, uint64_t n);\n");
 	fprintf(f, "static uint64_t rotr64(uint64_t x, uint64_t n);\n\n");
+	fprintf(f, "static uint32_t check_pow(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t *);\n\n");
 
 	// Include C Source Code For ElasticPL Jobs
 	if (!opt_validate) {
