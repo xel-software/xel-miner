@@ -908,7 +908,7 @@ static bool get_work(CURL *curl) {
 		applog(LOG_DEBUG, "DEBUG: Time to get work: %.2f ms", (1000.0 * diff.tv_sec) + (0.001 * diff.tv_usec));
 	}
 
-	rc = work_decode(val, &work);
+	rc = decode_work(curl, val, &work);
 	json_decref(val);
 
 	gettimeofday(&tv_start, NULL);
@@ -968,7 +968,75 @@ static double calc_diff(uint32_t *target) {
 	return (double)(diff_1 / diff);
 }
 
-static int work_decode(const json_t *val, struct work *work) {
+static bool get_work_source(CURL *curl, char *work_str, char *elastic_src) {
+	int err, rc;
+	char req[100], *str = NULL;
+	json_t *val;
+	struct timeval tv_start, tv_end, diff;
+
+	sprintf(req, "requestType=getWork&work_id=%s&with_source=1&with_finished=0", work_str);
+
+	gettimeofday(&tv_start, NULL);
+	val = json_rpc_call(curl, rpc_url, rpc_userpass, req, &err);
+	if (!val) {
+		applog(LOG_ERR, "ERROR: 'json_rpc_call' failed...retrying in %d seconds", opt_fail_pause);
+		sleep(opt_fail_pause);
+		return false;
+	}
+
+	gettimeofday(&tv_end, NULL);
+	if (opt_protocol) {
+		timeval_subtract(&diff, &tv_end, &tv_start);
+		applog(LOG_DEBUG, "DEBUG: Time to get source: %.2f ms", (1000.0 * diff.tv_sec) + (0.001 * diff.tv_usec));
+	}
+
+	// Get Encrypted Source From JSON Message
+	str = (char *)json_string_value(json_object_get(val, "source_code"));
+
+	// Extract The ElasticPL Source Code
+	if (!str || strlen(str) > MAX_SOURCE_SIZE || strlen(str) == 0) {
+		applog(LOG_ERR, "ERROR: Invalid 'source' for work_id: %s", work_str);
+		return false;
+	}
+
+	elastic_src = malloc(MAX_SOURCE_SIZE);
+	if (!elastic_src) {
+		applog(LOG_ERR, "ERROR: Unable to allocate memory for ElasticPL Source");
+		return false;
+	}
+
+	rc = ascii85dec(elastic_src, MAX_SOURCE_SIZE, str);
+	if (!rc) {
+		applog(LOG_ERR, "ERROR: Unable to decode 'source' for work_id: %s\n\n%s\n", work_str, str);
+		free(elastic_src);
+		return false;
+	}
+
+	applog(LOG_DEBUG, "DEBUG: Running ElasticPL Parser");
+
+	if (opt_debug_epl)
+		applog(LOG_DEBUG, "DEBUG: ElasticPL Source Code -\n%s", elastic_src);
+
+	// Convert ElasticPL Into AST
+	if (!create_epl_ast(elastic_src)) {
+		applog(LOG_ERR, "ERROR: Unable to convert 'source' to AST for work_id: %s\n\n%s\n", work_str, str);
+		free(elastic_src);
+		return false;
+	}
+
+	gettimeofday(&tv_start, NULL);
+	if (opt_protocol) {
+		timeval_subtract(&diff, &tv_start, &tv_end);
+		applog(LOG_DEBUG, "DEBUG: Time to parse source: %.2f ms", (1000.0 * diff.tv_sec) + (0.001 * diff.tv_usec));
+	}
+
+	free(elastic_src);
+	json_decref(val);
+
+	return true;
+}
+
+static int decode_work(CURL *curl, const json_t *val, struct work *work) {
 	int i, j, rc, num_pkg, best_pkg, bty_rcvd, work_pkg_id, iteration_id;
 	uint64_t work_id;
 	uint32_t best_wcet = 0xFFFFFFFF, pow_tgt[4];
@@ -1055,43 +1123,12 @@ static int work_decode(const json_t *val, struct work *work) {
 			work_package.pending_bty_cnt = 0;
 			work_package.blacklisted = false;
 
-			str = (char *)json_string_value(json_object_get(pkg, "source"));
-
-			// Extract The ElasticPL Source Code
-			if (!str || strlen(str) > MAX_SOURCE_SIZE || strlen(str) == 0) {
+			// Get Source From Node
+			if (!get_work_source(curl, work_package.work_str, elastic_src)) {
 				work_package.blacklisted = true;
-				applog(LOG_ERR, "ERROR: Invalid 'source' for work_id: %s", work_package.work_str);
+				applog(LOG_ERR, "ERROR: Unable to get 'source' for work_id: %s", work_package.work_str);
 				continue;
 			}
-
-			elastic_src = malloc(MAX_SOURCE_SIZE);
-			if (!elastic_src) {
-				applog(LOG_ERR, "ERROR: Unable to allocate memory for ElasticPL Source");
-				return 0;
-			}
-
-			rc = ascii85dec(elastic_src, MAX_SOURCE_SIZE, str);
-			if (!rc) {
-				work_package.blacklisted = true;
-				applog(LOG_ERR, "ERROR: Unable to decode 'source' for work_id: %s\n\n%s\n", work_package.work_str, str);
-				free(elastic_src);
-				return 0;
-			}
-
-			applog(LOG_DEBUG, "DEBUG: Running ElasticPL Parser");
-
-			if (opt_debug_epl)
-				applog(LOG_DEBUG, "DEBUG: ElasticPL Source Code -\n%s", elastic_src);
-
-			// Convert ElasticPL Into AST
-			if (!create_epl_ast(elastic_src)) {
-				work_package.blacklisted = true;
-				applog(LOG_ERR, "ERROR: Unable to convert 'source' to AST for work_id: %s\n\n%s\n", work_package.work_str, str);
-				free(elastic_src);
-				return 0;
-			}
-
-			free(elastic_src);
 
 			// Copy Global Array Sizes Into Work Package
 			work_package.vm_ints = ast_vm_ints;

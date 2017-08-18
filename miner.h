@@ -332,7 +332,8 @@ static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work
 static void dump_vm(int idx);
 
 static bool get_work(CURL *curl);
-static int work_decode(const json_t *val, struct work *work);
+static int decode_work(CURL *curl, const json_t *val, struct work *work);
+static bool get_work_source(CURL *curl, char *work_str, char *elastic_src);
 static double calc_diff(uint32_t *target);
 extern bool add_work_package(struct work_package *work_package);
 static void update_pending_cnt(uint64_t work_id, bool add);
