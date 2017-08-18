@@ -10,6 +10,10 @@ OVERVIEW
 	There are no FOR, WHILE, or DO loops in ElasticPL in order to ensure that
 	programs will not run indefinitely.  Instead, job authors will use the 
 	ElasticPL REPEAT function.
+	
+	Job authors will be responsible for defining specific verification logic
+	that is below a certain WCET to ensure the Bounty and POW solutions
+	submitted by miners can be validated by all nodes on a distributed network.
 
 	
 PROGRAM LAYOUT
@@ -131,15 +135,18 @@ ITERATION DATA STORAGE
 	
 	The data will only be stored for accepted Bounty solutions.
 	
-	
+
 FUNCTIONS
 ---------
 
 	All ElasticPL statements (except declaring global variable arrays and storage)
 	must be contained within functions.
 	
-	No functions within ElasticPL are allowed to call "main" or "verify".
-	
+	No functions within ElasticPL are allowed to call the "main" function.
+
+	The "main" function is the only function within ElasticPL that is allowed to
+	call the "verify" function.
+
 	Recursive function calls are not allowed.
 	
 	Functions can only be nested 256 levels deep.
@@ -164,30 +171,109 @@ FUNCTIONS
 	
 	Functions can appear in any order within the program.
 	
-	All programs must have a "main" and "verify" function; however, these
-	functions can only be called by external programs.
+	All ElasticPL programs must have a "main" function.
 	
-	The "main" function is called by the Elastic miner to search for
-	solutions to the algorithm.
+	All ElasticPL programs must have a "verify" function.
+
+
+"main" Function
+---------------
+
+	All programs must have a "main" function.
+
+	This function should include the full algorithm that the Job Author wants
+	solved.
+
+	The "main" function can call any other function in the ElasticPL program
+	including the "verify" function.
 	
-	The "verify" function is called by both the Elastic miner as well as 
-	SuperNodes to validate that the solution meets the criteria established
-	by the job author.
+	The "main" function is called by the mining software to search for Bounty
+	and POW solutions that meet the criteria established by the Job Author.
 	
-	The last statement in a "verify" function must be the "result" statement
-	which evalutes an expression as True or False.  For example:
+	Ultimately, the "main" function needs to determine if a Bounty and/or POW
+	solution was found.  There are 2 ways to make this determination:
 	
-		function verify {
-			<statement1>;
-			<statement2>;
-			etc...
-			
-			result (i[0] == 0)
-		}
+		Option 1:
 		
-		The result of this function is True if i[0] == 0; otherwise, it's False
+			The "main" function can call the "verify" function which will contain
+			specific logic to check if Bounty / POW solution are valid.
+		
+		Option 2:
+		
+			The "main" function can include all the logic to check for valid
+			Bounty / POW solutions by using the verify_bty and verify_pow
+			statements.
+			
+			See the "verify" Function details for additional details on how these
+			two statement work.
+		
+		Note: The "main" function can only use Option 1 or Option 2, not both.		
 
+		
+"verify" Function
+-----------------
 
+	All programs must have a "verify" function.
+
+	This function should include the the minimal amount of logic required to
+	ensure that the submitted solution meets the Bounty and/or POW requirements.
+	
+	The logic included in the "verify" function must be less than WCET = TBD
+
+	VERIFY_BTY Statement
+	----------------
+
+		All ElasticPL programs must have a 'verify_bty' statement that includes
+		an expression that can be evaluated to True or False.  The format of the 
+		'verify_bty' statment is as follows:
+		
+			verify_bty( <Expression that evaluates to True or False> )
+	
+		This expression is used to indicate whether or not a given solution
+		satisfies the Bounty requirements.  For Example:
+	
+			verify_bty (u[1000] == 0)
+	
+		The above statement indicates that a bounty will be rewarded for solutions
+		where there value stored in u[1000] equals zero.  Otherwise, the
+		solution does not qualify for a bounty.
+	
+		Only one 'verify_bty' statement per "verify" (and "main" if applicable)
+		is allowed.
+		
+		The Job Author must ensure there is sufficient logic in the "verify"
+		function to validate that the submitted data is in fact a valid solution.
+		
+		
+	VERIFY_POW Statement
+	----------------
+
+		All ElasticPL programs must have a 'verify_pow' statement that checks
+		if four Unsigned Ints determined by the Job Author produce an MD5 hash
+		less than the current POW target.    The format of the 'verify_pow' 
+		statment is as follows:
+		
+			verify_pow( <UINT1>, <UINT2>, <UINT3>, <UINT4> )
+		
+		The Job Author should choose four Unsigned Int values that will likely
+		vary from miner to miner.  This help the author to ensure that miners
+		are actually running the full logic to determine Bounty solutions.
+
+		For Example:
+	
+			verify_pow (u[25], u[1001], u[823], u[123])
+	
+		The above statement indicates that a pow reward will be granted for
+		solutions where the MD5 hash of u[25], u[1001], u[823], u[123] is less
+		than the current target value.
+	
+		Only one 'verify_pow' statement per "verify" (and "main" if applicable)
+		is allowed.
+		
+		The Job Author must ensure there is sufficient logic in the "verify"
+		function to validate that the submitted data is in fact a valid solution.
+	
+	
 ELASTICPL STATEMENTS
 --------------------
 	
@@ -228,25 +314,6 @@ ELASTICPL STATEMENTS
 		
 		Note:  'repeat' statements can only be nested up to 32 Levels.
 			
-	
-	RESULT Statement
-	----------------
-
-		All ElasticPL programs must have a 'result' statement that includes an
-		expression that can be evaluated to True or False.
-	
-		This result is used to indicate whether or not a given solution
-		satisfies the Bounty requirements.  For Example:
-	
-			result (u[1000] == 0)
-	
-		The above statement indicates that a bounty will be rewarded for solutions
-		where there value stored in u[1000] equals zero.  Otherwise, the solution
-		does not qualify for a bounty.
-	
-		Only one 'result' statement per program is allowed, and it must be the
-		last statement in the 'verify' function.
-
 	
 ELASTICPL OPERATORS
 -------------------
