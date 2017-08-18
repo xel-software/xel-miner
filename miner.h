@@ -116,7 +116,7 @@ struct work_package {
 	uint32_t storage_sz;	// Number Of Unsigned Ints In Storage
 	uint32_t storage_idx;	// Index In u[] To Extract Storage From
 	uint32_t storage_cnt;	// Number Of Storage Solutions For Iteration
-	uint32_t **storage;
+	uint32_t *storage;
 
 };
 
@@ -334,6 +334,7 @@ static void dump_vm(int idx);
 static bool get_work(CURL *curl);
 static int decode_work(CURL *curl, const json_t *val, struct work *work);
 static bool get_work_source(CURL *curl, char *work_str, char *elastic_src);
+static bool get_work_storage(CURL *curl, char *work_str, uint32_t *storage);
 static double calc_diff(uint32_t *target);
 extern bool add_work_package(struct work_package *work_package);
 static void update_pending_cnt(uint64_t work_id, bool add);
