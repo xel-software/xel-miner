@@ -91,20 +91,20 @@ bool create_c_source(char *work_str) {
 
 	fprintf(f, "static uint32_t check_pow(uint32_t msg_0, uint32_t msg_1, uint32_t msg_2, uint32_t msg_3, uint32_t *m, uint32_t *target) {\n");
 	fprintf(f, "\tint i;\n");
-	fprintf(f, "\tchar msg[56], hash[20];\n");
+	fprintf(f, "\tchar msg[48], hash[20];\n");
 	fprintf(f, "\tuint32_t *msg32 = (uint32_t *)(msg);\n");
 	fprintf(f, "\tuint32_t *hash32 = (uint32_t *)(hash);\n\n");
 	fprintf(f, "\tmsg32[0] = msg_0;\n");
 	fprintf(f, "\tmsg32[1] = msg_1;\n");
 	fprintf(f, "\tmsg32[2] = msg_2;\n");
 	fprintf(f, "\tmsg32[3] = msg_3;\n\n");
-	fprintf(f, "\tfor (i = 0; i < 10; i++)\n");
-	fprintf(f, "\t\tmsg32[4 + i] = m[i + 2];\n\n");
-	fprintf(f, "\tMD5(msg, 16, hash);\n\n");
+	fprintf(f, "\tfor (i = 4; i < 12; i++)\n");  // Only using m[4]-m[11] as that is what's created by multiplicator
+	fprintf(f, "\t\tmsg32[i] = m[i];\n\n");
+	fprintf(f, "\tMD5(msg, 48, hash);\n\n");
 
 
-//	fprintf(f, "printf(\"Hash: %%08X%%8X%%08X%%08X\\n\", hash32[0], hash32[1], hash32[2], hash32[3]);\n");
-//	fprintf(f, "printf(\"Trgt: %%08X%%8X%%08X%%08X\\n\", target[0], target[1], target[2], target[3]);\n");
+	fprintf(f, "printf(\"Hash: %%08X%%8X%%08X%%08X\\n\", hash32[0], hash32[1], hash32[2], hash32[3]);\n");
+	fprintf(f, "printf(\"Trgt: %%08X%%8X%%08X%%08X\\n\", target[0], target[1], target[2], target[3]);\n");
 
 
 	fprintf(f, "\tfor (i = 0; i < 4; i++) {\n");
