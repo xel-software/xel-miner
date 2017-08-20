@@ -159,15 +159,15 @@ struct submit_req {
 	uint64_t work_id;
 	unsigned char work_str[22];
 	uint32_t iteration_id;
-	uint32_t storage_sz;
-	uint32_t *storage;
+	uint32_t submit_data_sz;
+	uint32_t *submit_data;
 };
 
 struct workio_cmd {
 	enum submit_commands cmd;
 	struct thr_info *thr;
 	struct work work;
-	uint32_t *storage;
+	uint32_t *submit_data;
 };
 
 struct header_info {
@@ -341,7 +341,7 @@ static void update_pending_cnt(uint64_t work_id, bool add);
 
 static bool submit_work(CURL *curl, struct submit_req *req);
 static bool delete_submit_req(int idx);
-static bool add_submit_req(struct work *work, uint32_t *storage, enum submit_commands req_type);
+static bool add_submit_req(struct work *work, uint32_t *data, enum submit_commands req_type);
 
 static bool get_opencl_base_data(struct work *work, uint32_t *vm_input);
 

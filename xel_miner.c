@@ -543,8 +543,8 @@ static void *test_vm_thread(void *userdata) {
 	work_package.vm_ulongs = ast_vm_ulongs;
 	work_package.vm_floats = ast_vm_floats;
 	work_package.vm_doubles = ast_vm_doubles;
-	work_package.storage_sz = ast_storage_sz;
-	work_package.storage_idx = ast_storage_idx;
+	work_package.storage_sz = ast_submit_sz;
+	work_package.storage_idx = ast_submit_idx;
 
 	// Calculate WCET
 	if (!calc_wcet()) {
@@ -1073,8 +1073,8 @@ static int decode_work(CURL *curl, const json_t *val, struct work *work) {
 			// Copy Storage Variables Into Work Package
 			work_package.iteration_id = iteration_id;
 			work_package.storage_id = 0;
-			work_package.storage_sz = ast_storage_sz;
-			work_package.storage_idx = ast_storage_idx;
+			work_package.storage_sz = ast_submit_sz;	// Currently, Storage Size = Submit Size
+			work_package.storage_idx = ast_submit_idx;	// Currently, Storage Index = Submti Index
 
 			// Calculate WCET
 			work_package.WCET = calc_wcet();
@@ -1328,10 +1328,10 @@ static bool get_work_storage(CURL *curl, char *work_str, uint32_t *storage) {
 }
 
 static bool submit_work(CURL *curl, struct submit_req *req) {
-	int err, storage_sz;
+	int err, submit_data_sz;
 	json_t *val = NULL;
 	struct timeval tv_start, tv_end, diff;
-	char *url = NULL, *data = NULL, *storage_hex = NULL, *err_desc = NULL;
+	char *url = NULL, *data = NULL, *submit_data_hex = NULL, *err_desc = NULL;
 
 	url = calloc(1, strlen(rpc_url) + 50);
 	if (!url) {
@@ -1343,36 +1343,34 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 //        Hardcoded for now until it is determined if it's needed
 	uint32_t rand_id = 0;
 
-	if (req->req_type == SUBMIT_BOUNTY) {
+	if ((req->req_type == SUBMIT_BOUNTY) || (req->req_type == SUBMIT_POW)) {
 
-		// Allocate Memory For Data Buffer
-		storage_sz = (req->storage_sz * 8) + 1;
-		data = calloc(1, 512 + storage_sz);
-		if (req->storage_sz)
-			storage_hex = calloc(1, storage_sz);
-		if (!data || !storage_hex) {
-			applog(LOG_ERR, "ERROR: Unable to allocate memory for submit work data");
-			return false;
-		}
-
-		if (!ints2hex(req->storage, req->storage_sz, storage_hex, storage_sz))
-			return false;
-
-// TODO - The following value need to be redone once the new storage model is determined
-//        It is just hardcoded for now so the interface doesn't fail
-		char storage_height[] = "00000000000000000000000000000000";	// 32 Byte Value
-
-		sprintf(url, "%s?requestType=createPoX&random=%u", rpc_url, rand_id);
-		sprintf(data, "deadline=3&feeNQT=0&amountNQT=0&referenced_storage_height=%s&work_id=%s&storage=%s&multiplicator=%s&is_pow=false&secretPhrase=%s", storage_height, req->work_str, storage_hex, req->mult, passphrase);
-	}
-	else if (req->req_type == SUBMIT_POW) {
-		data = calloc(1, 512);
+		// Allocate Memory For Data Buffers
+		submit_data_sz = (req->submit_data_sz * 8) + 1;
+		data = calloc(1, 512 + submit_data_sz);
 		if (!data) {
-			applog(LOG_ERR, "ERROR: Unable to allocate memory for submit work url");
+			applog(LOG_ERR, "ERROR: Unable to allocate memory to submit work data");
 			return false;
 		}
-		sprintf(url, "%s?requestType=createPoX&random=%u", rpc_url, rand_id);
-		sprintf(data, "deadline=3&feeNQT=0&amountNQT=0&work_id=%s&multiplicator=%s&is_pow=true&secretPhrase=%s", req->work_str, req->mult, passphrase);
+		if (req->submit_data_sz) {
+			submit_data_hex = calloc(1, submit_data_sz);
+			if (!submit_data_hex) {
+				applog(LOG_ERR, "ERROR: Unable to allocate memory for submit data");
+				return false;
+			}
+		}
+
+		if (!ints2hex(req->submit_data, req->submit_data_sz, submit_data_hex, submit_data_sz))
+			return false;
+		
+		if (req->req_type == SUBMIT_BOUNTY) {
+			sprintf(url, "%s?requestType=createPoX&random=%u", rpc_url, rand_id);
+			sprintf(data, "deadline=3&feeNQT=0&amountNQT=0&work_id=%s&data=%s&multiplicator=%s&is_pow=false&secretPhrase=%s", req->work_str, submit_data_hex, req->mult, passphrase);
+		}
+		else {
+			sprintf(url, "%s?requestType=createPoX&random=%u", rpc_url, rand_id);
+			sprintf(data, "deadline=3&feeNQT=0&amountNQT=0&work_id=%s&data=%s&multiplicator=%s&is_pow=true&secretPhrase=%s", req->work_str, submit_data_hex, req->mult, passphrase);
+		}
 	}
 	else {
 		applog(LOG_ERR, "ERROR: Unknown request type");
@@ -1443,7 +1441,7 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 	json_decref(val);
 	free(url);
 	if (data) free(data);
-	if (storage_hex) free(storage_hex);
+	if (submit_data_hex) free(submit_data_hex);
 
 	return true;
 }
@@ -1639,16 +1637,16 @@ static void *cpu_miner_thread(void *userdata) {
 			wc->thr = mythr;
 			memcpy(&wc->work, &work, sizeof(struct work));
 
-			// Save Storage Data
+			// Save Values To Be Submitted To Node
 			if (g_work_package[work.package_id].storage_sz) {
-				wc->storage = malloc(g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
-				memcpy(wc->storage, &vm_u[g_work_package[work.package_id].storage_idx], g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
+				wc->submit_data = malloc(g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
+				memcpy(wc->submit_data, &vm_u[g_work_package[work.package_id].storage_idx], g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
 			}
 
 			// Add Solution To Queue
 			if (!tq_push(thr_info[work_thr_id].q, wc)) {
 				applog(LOG_ERR, "ERROR: Unable to add solution to queue.  Shutting down thread for CPU%d", thr_id);
-				if (wc->storage) free(wc->storage);
+				if (wc->submit_data) free(wc->submit_data);
 				free(wc);
 				goto out;
 			}
@@ -1668,9 +1666,16 @@ static void *cpu_miner_thread(void *userdata) {
 			wc->thr = mythr;
 			memcpy(&wc->work, &work, sizeof(struct work));
 
+			// Save Values To Be Submitted To Node
+			if (g_work_package[work.package_id].storage_sz) {
+				wc->submit_data = malloc(g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
+				memcpy(wc->submit_data, &vm_u[g_work_package[work.package_id].storage_idx], g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
+			}
+
 			// Add Solution To Queue
 			if (!tq_push(thr_info[work_thr_id].q, wc)) {
 				applog(LOG_ERR, "ERROR: Unable to add solution to queue.  Shutting down thread for CPU%d", thr_id);
+				if (wc->submit_data) free(wc->submit_data);
 				free(wc);
 				goto out;
 			}
@@ -1820,7 +1825,7 @@ static void *gpu_miner_thread(void *userdata) {
 				// Add Solution To Queue
 				if (!tq_push(thr_info[work_thr_id].q, wc)) {
 					applog(LOG_ERR, "ERROR: Unable to add solution to queue.  Shutting down thread for %s", mythr->name);
-					if (wc->storage) free(wc->storage);
+					if (wc->submit_data) free(wc->submit_data);
 					free(wc);
 					goto out;
 				}
@@ -2045,7 +2050,7 @@ static void *workio_thread(void *userdata)
 		// Check For New Solutions On Queue
 		wc = (struct workio_cmd *) tq_pop_nowait(mythr->q);
 		while (wc) {
-			add_submit_req(&wc->work, wc->storage, wc->cmd);
+			add_submit_req(&wc->work, wc->submit_data, wc->cmd);
 			free(wc);  // Storage Will Be Cleaned Up After Submit
 			wc = (struct workio_cmd *) tq_pop_nowait(mythr->q);
 		}
@@ -2101,7 +2106,7 @@ static void *workio_thread(void *userdata)
 	return NULL;
 }
 
-static bool add_submit_req(struct work *work, uint32_t *storage, enum submit_commands req_type) {
+static bool add_submit_req(struct work *work, uint32_t *data, enum submit_commands req_type) {
 
 	pthread_mutex_lock(&submit_lock);
 
@@ -2122,8 +2127,8 @@ static bool add_submit_req(struct work *work, uint32_t *storage, enum submit_com
 	bin2hex(work->announcement_hash, 32, g_submit_req[g_submit_req_cnt].hash, 65);
 	bin2hex(work->multiplicator, 32, g_submit_req[g_submit_req_cnt].mult, 65);
 	g_submit_req[g_submit_req_cnt].iteration_id = work->iteration_id;
-	g_submit_req[g_submit_req_cnt].storage_sz = g_work_package[work->package_id].storage_sz;
-	g_submit_req[g_submit_req_cnt].storage = storage;
+	g_submit_req[g_submit_req_cnt].submit_data_sz = g_work_package[work->package_id].storage_sz;
+	g_submit_req[g_submit_req_cnt].submit_data = data;
 	if (req_type != SUBMIT_POW) {
 		g_submit_req[g_submit_req_cnt].bounty = true;
 		update_pending_cnt(work->work_id, true);
@@ -2141,8 +2146,8 @@ static bool delete_submit_req(int idx) {
 	pthread_mutex_lock(&submit_lock);
 
 	// Clear Storage Buffer
-	if (g_submit_req[idx].storage)
-		free(g_submit_req[idx].storage);
+	if (g_submit_req[idx].submit_data)
+		free(g_submit_req[idx].submit_data);
 
 	if (g_submit_req[idx].bounty)
 		update_pending_cnt(g_submit_req[idx].work_id, false);
