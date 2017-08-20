@@ -205,7 +205,7 @@ static bool convert_node(ast* node) {
 		break;
 	case NODE_VERIFY_POW:
 		str = malloc(strlen(lstr) + 100);
-		sprintf(str, "if (verify_pow == 1)\n\t\t*pow_found = check_pow(%s, target);\n\telse\n\t\t*pow_found = 0", lstr);
+		sprintf(str, "if (verify_pow == 1)\n\t\t*pow_found = check_pow(%s, &m[0], target);\n\telse\n\t\t*pow_found = 0", lstr);
 		break;
 	case NODE_CONSTANT:
 		str = malloc(25);
