@@ -107,6 +107,38 @@ VM INITIALIZED VARIABLES
 	'init' function only on run/iteration 0)
 	
 
+SUBMIT DATA FOR VALIDATION
+-----------------------------
+
+	Many smaller, less complex algorithms can be verified by running the full
+	logic using the randomized variables in the m[] array.  However, more
+	complex algorithms must provide simplified logic to perform the validation.
+	This simplified logic usually needs some of the variable arrays to be
+	pre-populated before running the verification.  These values will need to be
+	passed from the miner to the Elastic Node for verification.
+	
+	For example, in a TSP algo, the path found by the miner would be sent to the
+	node to seed the verifiction logic prior to the node determining if the path
+	meets the Bounty / POW requirements.
+	
+	The use of submitted data is optional; however, it is usually required when
+	"verify" function does not contain the complete algorithm.
+	
+	Currently, all submitted data must be Unsigned Ints from the u[] array.
+	Job Authors will provide the number of values to submit and the starting u[]
+	index to extract the data from.
+
+	There are two declarations required to submit data to the node:
+		
+		submit_sz   XXXX  // Identifies # of Unsigned Ints to submit to the node
+		submit_idx  XXXX  // Identifies starting index in u[] array to extract submitted data from
+		
+		Note: submit_sz is currently limited to a max size of (TBD - Need To Determine)
+
+	The values submitted to the node will be used to update the corresponding
+	u[] values prior to executing the verify logic.
+	
+
 ITERATION DATA STORAGE
 ----------------------
 
@@ -115,25 +147,25 @@ ITERATION DATA STORAGE
 	to create algorithms that build off the accepted Bounty Solutions from prior
 	iterations in the same work package.
 	
-	The use of stored data is optional.
+	The use of iterations and stored data is optional.
 	
-	Currently, all stored data must be Unsigned Ints from the u[] array.  Authors
-	will provide the number of storage items and the u[] index to export the data
-	from.
+	Currently, the data to be stored is the same as the data submitted for
+	verification of a Bounty solution (See the SUBMIT DATA FOR VALIDATION
+	section for details on how to submit verification data).
 
-	There are two declarations required to use the storage feature:
-		
-		storage_sz   XXXX  // Identifies # of Unsigned Ints to store
-		storage_idx  XXXX  // Identifies starting index in u[] array to export stored data from
-		
-		Note: storage_cnt is currently limited to a max size of (TBD - Need To Determine)
-
-	Stored data will be available to the ElasticPL job by accessing the s[] array.
-	For Iteration 0, the s[] array will be initializized to zeros.  For all other
-	iterations, s[0] - s[storage_cnt] will be prefilled with the stored Unsigned
-	Int values.
-	
 	The data will only be stored for accepted Bounty solutions.
+
+	If the ElasticPL job uses iterations:
+
+		Stored data is available to the ElasticPL job by accessing the s[] array.
+		
+		For Iteration 0, the s[] array will be initializized to zeros.
+
+		For all	other iterations, s[0] - s[storage_sz - 1] will be prefilled with
+		the stored Unsigned	Int values for Boutny solutions for the prior iteration.
+
+
+	If the ElasticPL job does not use iterations, the s[] array should not be used.
 	
 
 FUNCTIONS
