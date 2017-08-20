@@ -20,20 +20,20 @@ array_uint   1000;
 
 /******************************************************************************
  *
- * Storage Declarations
+ * Submit Data For Verification Declarations
  *
- *  - Storage declarations are optional
- *  - The Unsigned Int array must be declared before declaring storage
- *  - If used, both storage_cnt & storage_idx are required and must fit
+ *  - Submit data declarations are optional
+ *  - The Unsigned Int array must be declared before declaring 'submit'
+ *  - If used, both submit_sz & submit_idx are required and must fit
  *    within the u[] size.
  *
- *  storage_sz  <number of unsigned ints to store>;
- *  storage_idx <starting index of u[] to extract storage from>;
+ *  submit_sz  <number of unsigned ints to send to node for validation>;
+ *  submit_idx <starting index of u[] array to extract submitted data from>;
  *
  *****************************************************************************/
 
-storage_sz  32;
-storage_idx 0;
+submit_sz  32;	// Tells miner to sumbit 32 uints for Bounty / POW validation
+submit_idx 0;	// Tells miner to extract this data from u[0] - u[31]
 
 
 /******************************************************************************
@@ -69,6 +69,12 @@ function example_function_2 {
  *
  *  - Main Function is required
  *  - This is the entry point for the ElasticPL job
+ *  - Main Function cannot be called by any other function
+ *  - Must perform one of the following verification steps (not both)
+ *    - Call verify() function
+ *        or
+ *    - Use 'verify_bty(<expression>)' and
+ *    - Use 'verify_pow(uint1, uint2, uint3, uint4)'
  *
  *  function main { }
  *
@@ -89,7 +95,14 @@ function main {
 
   // Call an example function
   example_function_2();
-
+  
+  // Call the Verify Function
+  verify();
+  
+  // Or use the 'verify_' statements
+//  u[200] = u[0] + u[1];
+//  verify_bty(u[200] < 1000)
+//  verify_pow(u[10], u[20], u[100], u[200])
 }
 
 
@@ -98,9 +111,11 @@ function main {
  * Verify Function
  *
  *  - Verify Function is required
- *  - This is the logic to determine if a Bounty Solution has been found
+ *  - This is the logic to determine if a Bounty or POW Solution has been found
+ *  - Must verify the Bounty solution by using 'verify_bty(<expression>)'
+ *  - Must verify the POW solution by using 'verify_pow(uint1, uint2, uint3, uint4)'
  *
- *  function main { }
+ *  function verify { }
  *
  *****************************************************************************/
 
@@ -108,6 +123,12 @@ function verify {
 
   u[200] = u[0] + u[1];
 
-  result (u[200] < 1000);
+  // The Expression used by 'verify_bty' must evaluate to True or False
+  verify_bty(u[200] < 1000)
+  
+  // The 'verify_pow' statement can use any 4 uints in the program.
+  // The Author should attempt to pick 4 uints that will differ between
+  // runs to help ensure that miners are actually searching for solutions.
+  verify_pow(u[10], u[20], u[100], u[200])
 
 }
