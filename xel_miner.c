@@ -543,8 +543,10 @@ static void *test_vm_thread(void *userdata) {
 	work_package.vm_ulongs = ast_vm_ulongs;
 	work_package.vm_floats = ast_vm_floats;
 	work_package.vm_doubles = ast_vm_doubles;
-	work_package.storage_sz = ast_submit_sz;
-	work_package.storage_idx = ast_submit_idx;
+	work_package.submit_sz = ast_submit_sz;
+	work_package.submit_idx = ast_submit_idx;
+	work_package.storage_sz = ast_submit_sz;	// Currently Storage Uses Same Size As Submit
+	work_package.storage_idx = ast_submit_idx;	// Currently Storage Uses Same Index As Submit
 
 	// Calculate WCET
 	if (!calc_wcet()) {
@@ -1069,6 +1071,10 @@ static int decode_work(CURL *curl, const json_t *val, struct work *work) {
 			work_package.vm_ulongs = ast_vm_ulongs;
 			work_package.vm_floats = ast_vm_floats;
 			work_package.vm_doubles = ast_vm_doubles;
+
+			// Copy Submit Variables Into Work Package
+			work_package.submit_sz = ast_submit_sz;
+			work_package.submit_idx = ast_submit_idx;
 
 			// Copy Storage Variables Into Work Package
 			work_package.iteration_id = iteration_id;
@@ -1638,9 +1644,9 @@ static void *cpu_miner_thread(void *userdata) {
 			memcpy(&wc->work, &work, sizeof(struct work));
 
 			// Save Values To Be Submitted To Node
-			if (g_work_package[work.package_id].storage_sz) {
-				wc->submit_data = malloc(g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
-				memcpy(wc->submit_data, &vm_u[g_work_package[work.package_id].storage_idx], g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
+			if (g_work_package[work.package_id].submit_sz) {
+				wc->submit_data = malloc(g_work_package[work.package_id].submit_sz * sizeof(uint32_t));
+				memcpy(wc->submit_data, &vm_u[g_work_package[work.package_id].storage_idx], g_work_package[work.package_id].submit_sz * sizeof(uint32_t));
 			}
 
 			// Add Solution To Queue
@@ -1667,9 +1673,9 @@ static void *cpu_miner_thread(void *userdata) {
 			memcpy(&wc->work, &work, sizeof(struct work));
 
 			// Save Values To Be Submitted To Node
-			if (g_work_package[work.package_id].storage_sz) {
-				wc->submit_data = malloc(g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
-				memcpy(wc->submit_data, &vm_u[g_work_package[work.package_id].storage_idx], g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
+			if (g_work_package[work.package_id].submit_sz) {
+				wc->submit_data = malloc(g_work_package[work.package_id].submit_sz * sizeof(uint32_t));
+				memcpy(wc->submit_data, &vm_u[g_work_package[work.package_id].storage_idx], g_work_package[work.package_id].submit_sz * sizeof(uint32_t));
 			}
 
 			// Add Solution To Queue
@@ -2127,7 +2133,7 @@ static bool add_submit_req(struct work *work, uint32_t *data, enum submit_comman
 	bin2hex(work->announcement_hash, 32, g_submit_req[g_submit_req_cnt].hash, 65);
 	bin2hex(work->multiplicator, 32, g_submit_req[g_submit_req_cnt].mult, 65);
 	g_submit_req[g_submit_req_cnt].iteration_id = work->iteration_id;
-	g_submit_req[g_submit_req_cnt].submit_data_sz = g_work_package[work->package_id].storage_sz;
+	g_submit_req[g_submit_req_cnt].submit_data_sz = g_work_package[work->package_id].submit_sz;
 	g_submit_req[g_submit_req_cnt].submit_data = data;
 	if (req_type != SUBMIT_POW) {
 		g_submit_req[g_submit_req_cnt].bounty = true;

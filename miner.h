@@ -110,6 +110,10 @@ struct work_package {
 	uint32_t vm_floats;
 	uint32_t vm_doubles;
 
+	// Data Submissions
+	uint32_t submit_sz;		// Number Of Unsigned Ints To Submit To Node For Validation
+	uint32_t submit_idx;	// Index In u[] To Extract Submitted Values From
+
 	// Data Storage
 	uint32_t iteration_id;
 	uint32_t storage_id;	// Current Storage ID Used By Miner
