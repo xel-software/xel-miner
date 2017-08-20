@@ -89,15 +89,17 @@ bool create_c_source(char *work_str) {
 	//fprintf(f, "\treturn ((a << 24) | ((a << 8) & 0x00FF0000) | ((a >> 8) & 0x0000FF00) | ((a >> 24) & 0x000000FF));\n");
 	//fprintf(f, "}\n\n");
 
-	fprintf(f, "static uint32_t check_pow(uint32_t msg_0, uint32_t msg_1, uint32_t msg_2, uint32_t msg_3, uint32_t *target) {\n");
+	fprintf(f, "static uint32_t check_pow(uint32_t msg_0, uint32_t msg_1, uint32_t msg_2, uint32_t msg_3, uint32_t *m, uint32_t *target) {\n");
 	fprintf(f, "\tint i;\n");
-	fprintf(f, "\tchar msg[16], hash[20];\n");
+	fprintf(f, "\tchar msg[56], hash[20];\n");
 	fprintf(f, "\tuint32_t *msg32 = (uint32_t *)(msg);\n");
 	fprintf(f, "\tuint32_t *hash32 = (uint32_t *)(hash);\n\n");
 	fprintf(f, "\tmsg32[0] = msg_0;\n");
 	fprintf(f, "\tmsg32[1] = msg_1;\n");
 	fprintf(f, "\tmsg32[2] = msg_2;\n");
 	fprintf(f, "\tmsg32[3] = msg_3;\n\n");
+	fprintf(f, "\tfor (i = 0; i < 10; i++)\n");
+	fprintf(f, "\t\tmsg32[4 + i] = m[i + 2];\n\n");
 	fprintf(f, "\tMD5(msg, 16, hash);\n\n");
 
 
