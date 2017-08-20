@@ -27,8 +27,8 @@ array_int	2;
 array_uint	2700;
 array_float	1;
 
-storage_sz  49;
-storage_idx 200;
+submit_sz  49;
+submit_idx 200;
 
 
 // Initialize VM Memory With TSP Point Data
@@ -170,12 +170,10 @@ function create_cost_matrix {
 			i[1] = u[u[21] + 1] - u[u[20] + 1];						// yd
 			f[0] = sqrt(((i[0]*i[0]) + (i[1]*i[1])) / 10.0);		// rij
 			u[23] = (f[0] + 0.5);									// tij - equivalent of nint function
-			if (u[23] < f[0]) {
+			if (u[23] < f[0])
 				u[u[22]] = u[23] + 1;								// dij
-			}
-			else {
+			else
 				u[u[22]] = u[23];									// dij
-			}
 			
 			u[21] += 2;		// Move To Next Point B
 			u[22]++;		// Move To Next Matrix Element
@@ -258,12 +256,10 @@ function verify {
 		i[1] = u[101 + (u[21] * 2)] - u[101 + (u[20] * 2)];		// yd
 		f[0] = sqrt(((i[0]*i[0]) + (i[1]*i[1])) / 10.0);		// rij
 		u[23] = (f[0] + 0.5);									// tij - equivalent of nint function
-		if (u[23] < f[0]) {
+		if (u[23] < f[0])
 			u[40] += u[23] + 1;									// dij
-		}
-		else {
+		else
 			u[40] += u[23];										// dij
-		}
 				
 	}
 
