@@ -319,8 +319,8 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 		break;
 
 	// VM Storage Declarations
-	case NODE_STORAGE_SZ:
-	case NODE_STORAGE_IDX:
+	case NODE_SUBMIT_SZ:
+	case NODE_SUBMIT_IDX:
 		if ((stack_exp_idx > 0) &&
 			(stack_exp[stack_exp_idx]->token_num > token_num) &&
 			(stack_exp[stack_exp_idx]->type == NODE_CONSTANT) &&
@@ -328,19 +328,19 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 
 			// Check That Global Unsigned Int Array Has Been Declared
 			if (!ast_vm_uints) {
-				applog(LOG_ERR, "Syntax Error: Line: %d - Unsigned Int array must be declared before 'storage' statements", token->line_num);
+				applog(LOG_ERR, "Syntax Error: Line: %d - Unsigned Int array must be declared before 'submit' statements", token->line_num);
 				return false;
 			}
 
-			// Save Storage Value
-			if (node_type == NODE_STORAGE_SZ)
-				ast_storage_sz = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
-			else if (node_type == NODE_STORAGE_IDX)
-				ast_storage_idx = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
+			// Save Submit Values
+			if (node_type == NODE_SUBMIT_SZ)
+				ast_submit_sz = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
+			else if (node_type == NODE_SUBMIT_IDX)
+				ast_submit_idx = (uint32_t)stack_exp[stack_exp_idx]->uvalue;
 
-			// Check That Storage Indexes Are Within Unsigned Int Array
-			if (ast_vm_uints < (ast_storage_sz + ast_storage_idx)) {
-				applog(LOG_ERR, "Syntax Error: Line: %d - 'storage_sz' + 'storage_idx' must be within Unsigned Int array range", token->line_num);
+			// Check That Submit Indexes Are Within Unsigned Int Array
+			if (ast_vm_uints < (ast_submit_sz + ast_submit_idx)) {
+				applog(LOG_ERR, "Syntax Error: Line: %d - 'submit_sz' + 'submit_idx' must be within Unsigned Int array range", token->line_num);
 				return false;
 			}
 
@@ -428,7 +428,7 @@ static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_t
 				}
 				break;
 			case DT_UINT_S: // s[]
-				if ((node_type == NODE_VAR_CONST) && (stack_exp[stack_exp_idx]->uvalue >= ast_storage_sz)) {
+				if ((node_type == NODE_VAR_CONST) && (stack_exp[stack_exp_idx]->uvalue >= ast_submit_sz)) {
 					applog(LOG_ERR, "Syntax Error: Line: %d - Array index out of bounds", token->line_num);
 					return false;
 				}
@@ -765,8 +765,8 @@ static NODE_TYPE get_node_type(SOURCE_TOKEN *token, int token_num) {
 	case TOKEN_ARRAY_ULONG:		node_type = NODE_ARRAY_ULONG; 	break;
 	case TOKEN_ARRAY_FLOAT:		node_type = NODE_ARRAY_FLOAT; 	break;
 	case TOKEN_ARRAY_DOUBLE:	node_type = NODE_ARRAY_DOUBLE; 	break;
-	case TOKEN_STORAGE_SZ:		node_type = NODE_STORAGE_SZ; 	break;
-	case TOKEN_STORAGE_IDX:		node_type = NODE_STORAGE_IDX; 	break;
+	case TOKEN_SUBMIT_SZ:		node_type = NODE_SUBMIT_SZ; 	break;
+	case TOKEN_SUBMIT_IDX:		node_type = NODE_SUBMIT_IDX; 	break;
 	case TOKEN_FUNCTION:		node_type = NODE_FUNCTION;		break;
 	case TOKEN_CALL_FUNCTION:	node_type = NODE_CALL_FUNCTION;	break;
 	case TOKEN_VERIFY_BTY:		node_type = NODE_VERIFY_BTY;	break;
@@ -1269,7 +1269,7 @@ extern bool parse_token_list(SOURCE_TOKEN_LIST *token_list) {
 }
 
 static bool validate_ast() {
-	int i, storage_sz_idx = 0, storage_idx_idx = 0;
+	int i, submit_sz_idx = 0, submit_idx_idx = 0;
 	
 	ast_func_idx = 0;
 
@@ -1280,7 +1280,7 @@ static bool validate_ast() {
 
 	// Get Index Of First Function
 	for (i = 0; i < stack_exp_idx; i++) {
-		if ((stack_exp[i]->type != NODE_ARRAY_INT) && (stack_exp[i]->type != NODE_ARRAY_UINT) && (stack_exp[i]->type != NODE_ARRAY_LONG) && (stack_exp[i]->type != NODE_ARRAY_ULONG) && (stack_exp[i]->type != NODE_ARRAY_FLOAT) && (stack_exp[i]->type != NODE_ARRAY_DOUBLE) && (stack_exp[i]->type != NODE_STORAGE_SZ) && (stack_exp[i]->type != NODE_STORAGE_IDX)) {
+		if ((stack_exp[i]->type != NODE_ARRAY_INT) && (stack_exp[i]->type != NODE_ARRAY_UINT) && (stack_exp[i]->type != NODE_ARRAY_LONG) && (stack_exp[i]->type != NODE_ARRAY_ULONG) && (stack_exp[i]->type != NODE_ARRAY_FLOAT) && (stack_exp[i]->type != NODE_ARRAY_DOUBLE) && (stack_exp[i]->type != NODE_SUBMIT_SZ) && (stack_exp[i]->type != NODE_SUBMIT_IDX)) {
 			break;
 		}
 		ast_func_idx++;
@@ -1291,32 +1291,32 @@ static bool validate_ast() {
 		return false;
 	}
 
-	// Get Index Of Storage Declarations
+	// Get Index Of "Submit" Declarations
 	for (i = 0; i < stack_exp_idx; i++) {
-		if (stack_exp[i]->type == NODE_STORAGE_SZ) {
-			if (storage_sz_idx) {
-				applog(LOG_ERR, "Syntax Error: Line: %d - Storage declaration 'storage_sz' can only be declared once", stack_exp[i]->line_num);
+		if (stack_exp[i]->type == NODE_SUBMIT_SZ) {
+			if (submit_sz_idx) {
+				applog(LOG_ERR, "Syntax Error: Line: %d - Storage declaration 'submit_sz' can only be declared once", stack_exp[i]->line_num);
 				return false;
 			}
-			storage_sz_idx = i;
+			submit_sz_idx = i;
 		}
-		else if (stack_exp[i]->type == NODE_STORAGE_IDX) {
-			if (storage_idx_idx) {
-				applog(LOG_ERR, "Syntax Error: Line: %d - Storage declaration 'storage_import_idx' can only be declared once", stack_exp[i]->line_num);
+		else if (stack_exp[i]->type == NODE_SUBMIT_IDX) {
+			if (submit_idx_idx) {
+				applog(LOG_ERR, "Syntax Error: Line: %d - Storage declaration 'submit_idx' can only be declared once", stack_exp[i]->line_num);
 				return false;
 			}
-			storage_idx_idx = i;
+			submit_idx_idx = i;
 		}
 	}
 
-	// If Storage Is Declared, Ensure Both Count & Index Are There
-	if (storage_sz_idx || storage_idx_idx) {
-		if (!storage_sz_idx || !ast_storage_sz) {
-			applog(LOG_ERR, "Syntax Error: 'storage_sz' must be declared and greater than zero");
+	// If "Submit" Is Declared, Ensure Both Size & Index Are There
+	if (submit_sz_idx || submit_idx_idx) {
+		if (!submit_sz_idx || !ast_submit_sz) {
+			applog(LOG_ERR, "Syntax Error: 'submit_sz' must be declared and greater than zero");
 			return false;
 		}
-		else if (!storage_idx_idx) {
-			applog(LOG_ERR, "Syntax Error: Missing 'storage_idx' declaration");
+		else if (!submit_idx_idx) {
+			applog(LOG_ERR, "Syntax Error: Missing 'submit_idx' declaration");
 			return false;
 		}
 	}

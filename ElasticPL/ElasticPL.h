@@ -45,9 +45,9 @@ uint32_t ast_vm_ulongs;
 uint32_t ast_vm_floats;
 uint32_t ast_vm_doubles;
 
-// Number Of Unsigned Ints To Store Per Interation / Import & Export Index
-uint32_t ast_storage_sz;
-uint32_t ast_storage_idx;
+// Number / Location Of Unsigned Ints To Send To Elastic Node For Validation
+uint32_t ast_submit_sz;
+uint32_t ast_submit_idx;
 
 // Index Value Of Main & Verify Functions In AST Array
 int ast_func_idx;
@@ -137,8 +137,8 @@ typedef enum {
 	NODE_ARRAY_ULONG,
 	NODE_ARRAY_FLOAT,
 	NODE_ARRAY_DOUBLE,
-	NODE_STORAGE_SZ,
-	NODE_STORAGE_IDX,
+	NODE_SUBMIT_SZ,
+	NODE_SUBMIT_IDX,
 	NODE_FUNCTION,
 	NODE_CALL_FUNCTION,
 	NODE_VERIFY_BTY,
@@ -232,8 +232,8 @@ typedef enum {
 	TOKEN_ARRAY_ULONG,
 	TOKEN_ARRAY_FLOAT,
 	TOKEN_ARRAY_DOUBLE,
-	TOKEN_STORAGE_SZ,
-	TOKEN_STORAGE_IDX,
+	TOKEN_SUBMIT_SZ,
+	TOKEN_SUBMIT_IDX,
 	TOKEN_FUNCTION,
 	TOKEN_CALL_FUNCTION,
 	TOKEN_VERIFY_BTY,

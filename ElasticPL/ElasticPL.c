@@ -19,8 +19,8 @@ uint32_t ast_vm_ulongs = 0;
 uint32_t ast_vm_floats = 0;
 uint32_t ast_vm_doubles = 0;
 
-uint32_t ast_storage_sz = 0;
-uint32_t ast_storage_idx = 0;
+uint32_t ast_submit_sz = 0;
+uint32_t ast_submit_idx = 0;
 
 
 extern bool create_epl_ast(char *source) {
@@ -76,8 +76,8 @@ extern bool create_epl_ast(char *source) {
 	ast_vm_doubles = 0;
 
 	// Reset Storage Variables
-	ast_storage_sz = 0;
-	ast_storage_idx = 0;
+	ast_submit_sz = 0;
+	ast_submit_idx = 0;
 	
 	// Parse EPL Source Code Into Tokens
 	if (!get_token_list(source, &token_list)) {
@@ -303,8 +303,8 @@ extern char* get_node_str(NODE_TYPE node_type) {
 	case NODE_ARRAY_ULONG:	return "array_ulong";
 	case NODE_ARRAY_FLOAT:	return "array_float";
 	case NODE_ARRAY_DOUBLE:	return "array_double";
-	case NODE_STORAGE_SZ:	return "storage_sz";
-	case NODE_STORAGE_IDX:	return "storage_idx";
+	case NODE_SUBMIT_SZ:	return "submit_sz";
+	case NODE_SUBMIT_IDX:	return "submit_idx";
 	case NODE_CONSTANT:		return "";
 	case NODE_VAR_CONST:	return "array[]";
 	case NODE_VAR_EXP:		return "array[x]";

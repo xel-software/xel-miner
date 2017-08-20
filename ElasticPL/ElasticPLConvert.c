@@ -280,9 +280,9 @@ static bool convert_node(ast* node) {
 			}
 			else if (node->is_vm_storage) {
 				if (var_exp_flg)
-					sprintf(str, "if((%s) < %lu)\n\t%ss[%s]", lstr, ast_storage_sz, tab[tabs], lstr);
+					sprintf(str, "if((%s) < %lu)\n\t%ss[%s]", lstr, ast_submit_sz, tab[tabs], lstr);
 				else
-					sprintf(str, "s[(((%s) < %lu) ? %s : 0)]", lstr, ast_storage_sz, lstr);
+					sprintf(str, "s[(((%s) < %lu) ? %s : 0)]", lstr, ast_submit_sz, lstr);
 			}
 			else {
 				if (var_exp_flg)
