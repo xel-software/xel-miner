@@ -620,6 +620,7 @@ static void *test_vm_thread(void *userdata) {
 
 		// Load & Compile OpenCL Code
 		ocl_source = load_opencl_source(g_work_package[0].work_str);
+//		ocl_source = load_opencl_source("tmp");
 		if (!ocl_source)
 			exit(EXIT_FAILURE);
 
@@ -640,8 +641,6 @@ static void *test_vm_thread(void *userdata) {
 		//int j;
 		//uint32_t h[4];
 		//for (i = 0; i < 0xFFFFFFFF; i++) {
-		//	// Update Multiplicator
-		//	mult32[1]++;
 		//	// Get Values For VM Inputs
 		//	get_opencl_base_data(&work, vm_input);
 		//	// Execute The Code On The GPU
@@ -656,9 +655,23 @@ static void *test_vm_thread(void *userdata) {
 		//			applog(LOG_DEBUG, "DEBUG: Hashes = %lu", (i * 1024) + j);
 		//		}
 		//		else if ((vm_out[j] == 2) || (vm_out[j] == 3)) {
+		//			uint32_t dmp[256];
+		//			int k;
+		//			dump_opencl_kernel_data(&gpu[0], dmp, j, 0, 255);
 		//			applog(LOG_DEBUG, "DEBUG: Bounty Found");
+		//			for (k = 0; k < 256; k++) {
+		//				printf("dump[%d] = %d\n", k, dmp[k]);
+		//			}
+
+		//			applog(LOG_DEBUG, "");
+		//			dump_opencl_debug_data(&gpu[0], dmp, j, 0, 12);
+		//			for (k = 0; k < 12; k++) {
+		//				printf("m[%d] = %d\n", k, dmp[k]);
+		//			}
 		//		}
 		//	}
+		//	// Update Multiplicator
+		//	mult32[1]++;
 		//}
 
 		if (!execute_kernel(&gpu[0], vm_input, vm_s, vm_out))
