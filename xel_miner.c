@@ -518,10 +518,11 @@ static void *test_vm_thread(void *userdata) {
 	struct work work = { 0 };
 	struct work_package work_package = { 0 };
 	struct instance *inst = NULL;
-	uint32_t bounty_found, pow_found;
 	int i, rc;
+	uint32_t bounty_found, pow_found;
 	uint32_t *vm_out = NULL, *vm_input = NULL;
 	uint32_t *mult32 = (uint32_t *)work.multiplicator;
+	unsigned char *ocl_source;
 
 	// Create Test Work
 	work.package_id = 0;
@@ -617,74 +618,60 @@ static void *test_vm_thread(void *userdata) {
 		if (!create_opencl_buffers(&gpu[0]))
 			exit(EXIT_FAILURE);
 
-		unsigned char *ocl_source;
+		// Load & Compile OpenCL Code
 		ocl_source = load_opencl_source(g_work_package[0].work_str);
 		if (!ocl_source)
 			exit(EXIT_FAILURE);
 
+		// Initialize OpenCL Buffers
 		if (!init_opencl_kernel(&gpu[thr_id], ocl_source))
 			exit(EXIT_FAILURE);
 
 		free(ocl_source);
 
+		// Allocate Memory For OpenCL Inputs / Outputs
 		vm_input = (uint32_t *)calloc(24, sizeof(uint32_t));
 		vm_out = (uint32_t *)calloc(gpu[0].threads, sizeof(uint32_t));
 
-		// Get Values For VM Inputs
+		// Get Random Inputs For OpenCL Inputs
 		get_opencl_base_data(&work, vm_input);
 
-		//for (i = 0; i < 24; i++)
-		//	printf("\tvm_input[%d] = %08X\n", i, vm_input[i]);
-
-		//printf("\n");
-
-		// Execute The VM
-		int j;
-		uint32_t h[4];
-		for (i = 0; i < 0xFFFFFFFF; i++) {
-			// Update Multiplicator
-			mult32[1]++;
-			// Get Values For VM Inputs
-			get_opencl_base_data(&work, vm_input);
-			// Execute The Code On The GPU
-			if (!execute_kernel(&gpu[0], vm_input, vm_s, vm_out))
-				exit(EXIT_FAILURE);
-			for (j = 0; j < gpu[0].threads; j++) {
-				if (vm_out[j] == 1) {
-					dump_opencl_debug_data(&gpu[0], h, j, 4, 4);
-					applog(LOG_DEBUG, "DEBUG: Hash - %08X%08X%08X%08X  Tgt - %08X%08X%08X%08X", h[0], h[1], h[2], h[3], work.pow_target[0], work.pow_target[1], work.pow_target[2], work.pow_target[3]);
-					applog(LOG_DEBUG, "DEBUG: Hashes = %lu", (i * 1024) + j);
-				}
-				if (vm_out[j] == 2) {
-					applog(LOG_DEBUG, "DEBUG: BOUNT FOUND");
-				}
-			}
-		}
-
-		vm_s[0] = 123;
-		vm_s[1] = 124;
-		vm_s[2] = 125;
-		vm_s[3] = 126;
+		// Run A Continuous Test
+		//int j;
+		//uint32_t h[4];
+		//for (i = 0; i < 0xFFFFFFFF; i++) {
+		//	// Update Multiplicator
+		//	mult32[1]++;
+		//	// Get Values For VM Inputs
+		//	get_opencl_base_data(&work, vm_input);
+		//	// Execute The Code On The GPU
+		//	if (!execute_kernel(&gpu[0], vm_input, vm_s, vm_out))
+		//		exit(EXIT_FAILURE);
+		//	for (j = 0; j < gpu[0].threads; j++) {
+		//		if (!vm_out[j])
+		//			continue;
+		//		else if ((vm_out[j] == 1) || (vm_out[j] == 3)) {
+		//			dump_opencl_debug_data(&gpu[0], h, j, 4, 4);
+		//			applog(LOG_DEBUG, "DEBUG: Hash - %08X%08X%08X%08X  Tgt - %08X%08X%08X%08X", h[0], h[1], h[2], h[3], g_pow_target[0], g_pow_target[1], g_pow_target[2], g_pow_target[3]);
+		//			applog(LOG_DEBUG, "DEBUG: Hashes = %lu", (i * 1024) + j);
+		//		}
+		//		else if ((vm_out[j] == 2) || (vm_out[j] == 3)) {
+		//			applog(LOG_DEBUG, "DEBUG: Bounty Found");
+		//		}
+		//	}
+		//}
 
 		if (!execute_kernel(&gpu[0], vm_input, vm_s, vm_out))
 			exit(EXIT_FAILURE);
 
-		uint32_t dd[100];
-		dump_opencl_kernel_data(&gpu[0], dd, 0, 160, 24);
-
-		for (i = 0; i < 24; i++)
-			printf("\td[%d] = %08X\n", i, dd[i]);
-
-		printf("\n\tout = %d\n", vm_out[0]);
-
-		dump_opencl_debug_data(&gpu[0], dd, 0, 0, 12);
+		uint32_t dump[12];
+		dump_opencl_debug_data(&gpu[0], dump, 0, 0, 12);
 
 		for (i = 0; i < 12; i++)
-			printf("\tdebug[%d] = %08X\n", i, dd[i]);
+			printf("\tdump[%d] = %08X\n", i, dump[i]);
 
-
-
-		dump_opencl_kernel_data(&gpu[0], dd, 0, 100, 24);
+		printf("\n\tvm_out = %d\n", vm_out[0]);
+		printf("\n");
 
 
 	}

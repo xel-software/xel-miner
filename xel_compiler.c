@@ -460,26 +460,26 @@ extern bool create_opencl_source(char *work_str) {
 	//	fprintf(f, "printf(\"Hash: %%08X%%8X%%08X%%08X\\n\", hash32[0], hash32[1], hash32[2], hash32[3]);\n");
 	//	fprintf(f, "printf(\"Trgt: %%08X%%8X%%08X%%08X\\n\", target[0], target[1], target[2], target[3]);\n");
 
+	// Dump Some Data For Debugging
+	if (opt_debug) {
+		fprintf(f, "\tm[0] = msg_0;\n");
+		fprintf(f, "\tm[1] = msg_1;\n");
+		fprintf(f, "\tm[2] = msg_2;\n");
+		fprintf(f, "\tm[3] = msg_3;\n");
+		fprintf(f, "\tm[4] = hash32[0];\n");
+		fprintf(f, "\tm[5] = hash32[1];\n");
+		fprintf(f, "\tm[6] = hash32[2];\n");
+		fprintf(f, "\tm[7] = hash32[3];\n\n");
+	}
 
 	fprintf(f, "\tfor (i = 0; i < 4; i++) {\n");
 	//	fprintf(f, "\t\thash32[i] = swap32(hash32[i]);\n\n");
 	fprintf(f, "\t\tif (hash32[i] > target[i])\n");
 	fprintf(f, "\t\t\treturn 0;\n");
-	//fprintf(f, "\t\telse if (hash32[i] < target[i])\n");
-	//fprintf(f, "\t\t\treturn 1;    // POW Solution Found\n");
-	fprintf(f, "\t\telse if (hash32[i] < target[i]) {\n");
-	fprintf(f, "\t\tm[0] = msg_0;\n");
-	fprintf(f, "\t\tm[1] = msg_1;\n");
-	fprintf(f, "\t\tm[2] = msg_2;\n");
-	fprintf(f, "\t\tm[3] = msg_3;\n");
-	fprintf(f, "\t\tm[4] = hash32[0];\n");
-	fprintf(f, "\t\tm[5] = hash32[1];\n");
-	fprintf(f, "\t\tm[6] = hash32[2];\n");
-	fprintf(f, "\t\tm[7] = hash32[3];\n");
+	fprintf(f, "\t\telse if (hash32[i] < target[i])\n");
 	fprintf(f, "\t\t\treturn 1;    // POW Solution Found\n");
-	fprintf(f, "\t\t}\n");
 	fprintf(f, "\t}\n");
-	fprintf(f, "\treturn 0;\n");
+	fprintf(f, "\treturn 1;\n");
 	fprintf(f, "}\n\n");
 
 	// FIX

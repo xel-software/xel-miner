@@ -178,10 +178,10 @@ extern int init_opencl_devices() {
 				if (ret != CL_SUCCESS)
 					break;
 
-				//if (!strstr(buffer, "cl_khr_fp64")) {
-				//	applog(LOG_DEBUG, "        *Device does not support 64bit Floating Point math");
-				//	break;
-				//}
+				if (!strstr(buffer, "cl_khr_fp64")) {
+					applog(LOG_DEBUG, "        *Device does not support 64bit Floating Point math");
+					break;
+				}
 
 				memcpy(&gpu[gpu_cnt].platform_id, &platforms[i], sizeof(cl_platform_id));
 				memcpy(&gpu[gpu_cnt].device_id, &devices[j], sizeof(cl_device_id));
