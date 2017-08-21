@@ -806,7 +806,10 @@ static bool convert_node(ast* node) {
 		break;
 	case NODE_SQRT:
 		str = malloc(strlen(lstr) + strlen(lstr) + 50);
-		sprintf(str, "((%s > 0) ? sqrt( %s ) : 0.0)", lstr, lstr);
+		if (opt_opencl)
+			sprintf(str, "((%s > 0) ? sqrt( (float)%s ) : 0.0)", lstr, lstr);
+		else
+			sprintf(str, "((%s > 0) ? sqrt( %s ) : 0.0)", lstr, lstr);
 		use_elasticpl_math = true;
 		break;
 	case NODE_CEIL:
