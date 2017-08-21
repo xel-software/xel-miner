@@ -291,7 +291,13 @@ struct opencl_device {
 	size_t local_size[2];
 	cl_mem vm_input;
 	cl_mem vm_m;
+	cl_mem vm_i;
+	cl_mem vm_u;
+	cl_mem vm_l;
+	cl_mem vm_ul;
 	cl_mem vm_f;
+	cl_mem vm_d;
+	cl_mem vm_s;
 	cl_mem vm_out;
 };
 
@@ -302,8 +308,9 @@ extern unsigned char* load_opencl_source(char *work_str);
 extern bool init_opencl_kernel(struct opencl_device *gpu, char *ocl_source);
 extern bool create_opencl_buffers(struct opencl_device *gpu);
 extern bool calc_opencl_worksize(struct opencl_device *gpu);
-extern bool execute_kernel(struct opencl_device *gpu, const uint32_t *vm_input, uint32_t *vm_out);
-extern bool dump_opencl_kernel_data(struct opencl_device *gpu, int32_t *data, int idx, int offset, int len);
+extern bool execute_kernel(struct opencl_device *gpu, const uint32_t *vm_input, const uint32_t *vm_s, uint32_t *vm_out);
+extern bool dump_opencl_kernel_data(struct opencl_device *gpu, uint32_t *data, int idx, int offset, int len);
+extern bool dump_opencl_debug_data(struct opencl_device *gpu, uint32_t *data, int idx, int offset, int len);
 static void *gpu_miner_thread(void *userdata);
 #endif
 
@@ -369,7 +376,6 @@ extern bool compile_library(char *work_str);
 extern void create_instance(struct instance* inst, char *work_str);
 extern void free_library(struct instance* inst);
 extern bool create_opencl_source(char *work_str);
-//static char* convert_opencl(ast* exp);
 
 int curve25519_donna(uint8_t *mypublic, const uint8_t *secret, const uint8_t *basepoint);
 

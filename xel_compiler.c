@@ -103,8 +103,8 @@ bool create_c_source(char *work_str) {
 	fprintf(f, "\tMD5(msg, 48, hash);\n\n");
 
 
-	fprintf(f, "printf(\"Hash: %%08X%%8X%%08X%%08X\\n\", hash32[0], hash32[1], hash32[2], hash32[3]);\n");
-	fprintf(f, "printf(\"Trgt: %%08X%%8X%%08X%%08X\\n\", target[0], target[1], target[2], target[3]);\n");
+//	fprintf(f, "printf(\"Hash: %%08X%%8X%%08X%%08X\\n\", hash32[0], hash32[1], hash32[2], hash32[3]);\n");
+//	fprintf(f, "printf(\"Trgt: %%08X%%8X%%08X%%08X\\n\", target[0], target[1], target[2], target[3]);\n");
 
 
 	fprintf(f, "\tfor (i = 0; i < 4; i++) {\n");
@@ -271,19 +271,20 @@ extern bool create_opencl_source(char *work_str) {
 	char *code = NULL, filename[50];
 	FILE* f;
 
-	sprintf(filename, "./work/%s.cl", work_str);
+	sprintf(filename, "./work/job_%s.cl", work_str);
 
 	f = fopen(filename, "w");
 	if (!f)
 		return false;
 
-// FIX
-	if (!convert_ast_to_c(""))
-		return false;
-// FIX
-
 	fprintf(f, "#pragma OPENCL EXTENSION cl_khr_byte_addressable_store : enable\n");
 	fprintf(f, "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n\n");
+
+	fprintf(f, "#define int32_t int\n");
+	fprintf(f, "#define uint32_t uint\n");
+	fprintf(f, "#define int64_t long\n");
+	fprintf(f, "#define uint64_t ulong\n");
+
 
 	fprintf(f, "/* The basic MD5 functions */\n");
 	fprintf(f, "#define F(x, y, z)          ((z) ^ ((x) & ((y) ^ (z))))\n");
@@ -441,134 +442,158 @@ extern bool create_opencl_source(char *work_str) {
 	fprintf(f, "\treturn (x>>n) | (x<<( (-n) & 0x0000001f ));\n");
 	fprintf(f, "}\n\n");
 
-	fprintf(f, "static void mangle_state(int x, uint *vm_state) {\n");
-	fprintf(f, "\tint mod = x %% 32;\n");
-	fprintf(f, "\tint leaf = mod %% 4;\n");
-	fprintf(f, "\tif (leaf == 0) {\n");
-	fprintf(f, "\t\tvm_state[0] = rotl32(vm_state[0], mod);\n");
-	fprintf(f, "\t\tvm_state[0] = vm_state[0] ^ x;\n");
+	fprintf(f, "static uint check_pow(uint msg_0, uint msg_1, uint msg_2, uint msg_3, global uint *m, uint *target) {\n");
+	fprintf(f, "\tint i;\n");
+	fprintf(f, "\tchar msg[48], hash[20];\n");
+	fprintf(f, "\tuint32_t *msg32 = (uint32_t *)(msg);\n");
+	fprintf(f, "\tuint32_t *hash32 = (uint32_t *)(hash);\n\n");
+	fprintf(f, "\tmsg32[0] = msg_0;\n");
+	fprintf(f, "\tmsg32[1] = msg_1;\n");
+	fprintf(f, "\tmsg32[2] = msg_2;\n");
+	fprintf(f, "\tmsg32[3] = msg_3;\n\n");
+	fprintf(f, "\tfor (i = 4; i < 12; i++)\n");  // Only using m[4]-m[11] as that is what's created by multiplicator
+	fprintf(f, "\t\tmsg32[i] = m[i];\n\n");
+//	fprintf(f, "\tmd5(msg, 48, hash);\n\n");
+	fprintf(f, "\tmd5((char*)&msg[0], 48, &hash[0]);\n\n");
+
+
+	//	fprintf(f, "printf(\"Hash: %%08X%%8X%%08X%%08X\\n\", hash32[0], hash32[1], hash32[2], hash32[3]);\n");
+	//	fprintf(f, "printf(\"Trgt: %%08X%%8X%%08X%%08X\\n\", target[0], target[1], target[2], target[3]);\n");
+
+
+	fprintf(f, "\tfor (i = 0; i < 4; i++) {\n");
+	//	fprintf(f, "\t\thash32[i] = swap32(hash32[i]);\n\n");
+	fprintf(f, "\t\tif (hash32[i] > target[i])\n");
+	fprintf(f, "\t\t\treturn 0;\n");
+	//fprintf(f, "\t\telse if (hash32[i] < target[i])\n");
+	//fprintf(f, "\t\t\treturn 1;    // POW Solution Found\n");
+	fprintf(f, "\t\telse if (hash32[i] < target[i]) {\n");
+	fprintf(f, "\t\tm[0] = msg_0;\n");
+	fprintf(f, "\t\tm[1] = msg_1;\n");
+	fprintf(f, "\t\tm[2] = msg_2;\n");
+	fprintf(f, "\t\tm[3] = msg_3;\n");
+	fprintf(f, "\t\tm[4] = hash32[0];\n");
+	fprintf(f, "\t\tm[5] = hash32[1];\n");
+	fprintf(f, "\t\tm[6] = hash32[2];\n");
+	fprintf(f, "\t\tm[7] = hash32[3];\n");
+	fprintf(f, "\t\t\treturn 1;    // POW Solution Found\n");
+	fprintf(f, "\t\t}\n");
 	fprintf(f, "\t}\n");
-	fprintf(f, "\telse if (leaf == 1) {\n");
-	fprintf(f, "\t\tvm_state[1] = rotl32(vm_state[1], mod);\n");
-	fprintf(f, "\t\tvm_state[1] = vm_state[1] ^ x;\n");
-	fprintf(f, "\t}\n");
-	fprintf(f, "\telse if (leaf == 2) {\n");
-	fprintf(f, "\t\tvm_state[2] = rotl32(vm_state[2], mod);\n");
-	fprintf(f, "\t\tvm_state[2] = vm_state[2] ^ x;\n");
-	fprintf(f, "\t}\n");
-	fprintf(f, "\telse {\n");
-	fprintf(f, "\t\tvm_state[3] = rotl32(vm_state[3], mod);\n");
-	fprintf(f, "\t\tvm_state[3] = vm_state[3] ^ x;\n");
-	fprintf(f, "\t}\n");
+	fprintf(f, "\treturn 0;\n");
 	fprintf(f, "}\n\n");
 
-	fprintf(f, "__kernel void execute (global uint* restrict base_data, global int* restrict input_m, global double* restrict input_f, global uint* restrict output) {\n");
-	fprintf(f, "\tint i, bounty_found;\n");
-	fprintf(f, "\tuint base_data_local[20];\n");
-	fprintf(f, "\tuint msg[16];\n");
-	fprintf(f, "\tuint hash[4];\n");
-	fprintf(f, "\tuint target[4];\n");
-	fprintf(f, "\tuint vm_input[12];\n");
-	fprintf(f, "\tuint vm_state[4];\n\n");
-	fprintf(f, "\tint w = get_global_id(0); // Index in the wavefront Dim1\n");
-	fprintf(f, "\tint q = get_global_id(1); // Index in the wavefront Dim2\n");
-	fprintf(f, "\tint idx = w + (q * get_global_size(0)); // Index in the 2D wavefront\n");
-	fprintf(f, "\tglobal int* m = &input_m[idx * 64000];\n");
-	fprintf(f, "\tglobal double* f = &input_f[idx * 1000];\n");
-	fprintf(f, "\tglobal uint* out = &output[idx];\n\n");
+	// FIX
+	if (!convert_ast_to_opencl(f))
+		return false;
+	// FIX
 
-	fprintf(f, "\t// 96 Bytes of base_data is made up of:\n");
-	fprintf(f, "\t// 32 Byte Multiplicator (First 4 Bytes = Index, Second 4 Bytes = Incremented Value)\n");
-	fprintf(f, "\t// 32 Byte Public Key\n");
-	fprintf(f, "\t//  8 Byte Work ID\n");
-	fprintf(f, "\t//  8 Byte Block ID\n");
-	fprintf(f, "\t// 16 Byte POW Target;\n\n");
+	//fprintf(f, "__kernel void execute (global uint* restrict base_data, global int* restrict input_m, global double* restrict input_f, global uint* restrict output) {\n");
+	//fprintf(f, "\tint i, bounty_found;\n");
+	//fprintf(f, "\tuint base_data_local[20];\n");
+	//fprintf(f, "\tuint msg[16];\n");
+	//fprintf(f, "\tuint hash[4];\n");
+	//fprintf(f, "\tuint target[4];\n");
+	//fprintf(f, "\tuint vm_input[12];\n");
+	//fprintf(f, "\tuint vm_state[4];\n\n");
+	//fprintf(f, "\tint w = get_global_id(0); // Index in the wavefront Dim1\n");
+	//fprintf(f, "\tint q = get_global_id(1); // Index in the wavefront Dim2\n");
+	//fprintf(f, "\tint idx = w + (q * get_global_size(0)); // Index in the 2D wavefront\n");
+	//fprintf(f, "\tglobal int* m = &input_m[idx * 64000];\n");
+	//fprintf(f, "\tglobal double* f = &input_f[idx * 1000];\n");
+	//fprintf(f, "\tglobal uint* out = &output[idx];\n\n");
 
-	fprintf(f, "\t// Save POW Target;\n");
-	fprintf(f, "\tfor (i = 0; i < 4; i++)\n");
-	fprintf(f, "\t\ttarget[i] = base_data[i + 20];\n\n");
+	//fprintf(f, "\t// 96 Bytes of base_data is made up of:\n");
+	//fprintf(f, "\t// 32 Byte Multiplicator (First 4 Bytes = Index, Second 4 Bytes = Incremented Value)\n");
+	//fprintf(f, "\t// 32 Byte Public Key\n");
+	//fprintf(f, "\t//  8 Byte Work ID\n");
+	//fprintf(f, "\t//  8 Byte Block ID\n");
+	//fprintf(f, "\t// 16 Byte POW Target;\n\n");
 
-	fprintf(f, "\t// Copy base_data So The Multiplicator Can Be Updated Locally\n");
-	fprintf(f, "\tfor (i = 0; i < 20; i++) // 80 bytes\n");
-	fprintf(f, "\t\tbase_data_local[i] = base_data[i];\n\n");
+	//fprintf(f, "\t// Save POW Target;\n");
+	//fprintf(f, "\tfor (i = 0; i < 4; i++)\n");
+	//fprintf(f, "\t\ttarget[i] = base_data[i + 20];\n\n");
 
-	fprintf(f, "\t// Update OpenCL Thread ID In The Input Data\n");
-	fprintf(f, "\tbase_data_local[1] = idx;\n\n");
+	//fprintf(f, "\t// Copy base_data So The Multiplicator Can Be Updated Locally\n");
+	//fprintf(f, "\tfor (i = 0; i < 20; i++) // 80 bytes\n");
+	//fprintf(f, "\t\tbase_data_local[i] = base_data[i];\n\n");
 
-	fprintf(f, "\t// Get MD5 Hash of 80 Byte Input\n");
-	fprintf(f, "\tmd5((char*)&base_data_local[0], 80, &hash[0]);\n\n");
+	//fprintf(f, "\t// Update OpenCL Thread ID In The Input Data\n");
+	//fprintf(f, "\tbase_data_local[1] = idx;\n\n");
 
-	fprintf(f, "\t// Randomize The Inputs\n");
-	fprintf(f, "#pragma unroll\n");
-	fprintf(f, "\tfor (i = 0; i < 12; i++) {\n");
-	fprintf(f, "\t\tvm_input[i] = swap32(hash[i %% 4]);\n");
-	fprintf(f, "\t\tif (i > 4)\n");
-	fprintf(f, "\t\t\tvm_input[i] = vm_input[i] ^ vm_input[i - 3];\n");
-	fprintf(f, "\t}\n\n");
+	//fprintf(f, "\t// Get MD5 Hash of 80 Byte Input\n");
+	//fprintf(f, "\tmd5((char*)&base_data_local[0], 80, &hash[0]);\n\n");
 
-	fprintf(f, "\t// Copy Inputs To Global Memory;\n");
-	fprintf(f, "\tfor (i = 0; i < 12; i++)\n");
-	fprintf(f, "\t\tm[i] = vm_input[i];\n\n");
+	//fprintf(f, "\t// Randomize The Inputs\n");
+	//fprintf(f, "#pragma unroll\n");
+	//fprintf(f, "\tfor (i = 0; i < 12; i++) {\n");
+	//fprintf(f, "\t\tvm_input[i] = swap32(hash[i %% 4]);\n");
+	//fprintf(f, "\t\tif (i > 4)\n");
+	//fprintf(f, "\t\t\tvm_input[i] = vm_input[i] ^ vm_input[i - 3];\n");
+	//fprintf(f, "\t}\n\n");
 
-	fprintf(f, "\t// Reset VM State\n");
-	fprintf(f, "\tvm_state[0] = 0;\n");
-	fprintf(f, "\tvm_state[1] = 0;\n");
-	fprintf(f, "\tvm_state[2] = 0;\n");
-	fprintf(f, "\tvm_state[3] = 0;\n\n");
+	//fprintf(f, "\t// Copy Inputs To Global Memory;\n");
+	//fprintf(f, "\tfor (i = 0; i < 12; i++)\n");
+	//fprintf(f, "\t\tm[i] = vm_input[i];\n\n");
 
-	fprintf(f, "\t//The following code created by ElasticPL to C parser\n");
+	//fprintf(f, "\t// Reset VM State\n");
+	//fprintf(f, "\tvm_state[0] = 0;\n");
+	//fprintf(f, "\tvm_state[1] = 0;\n");
+	//fprintf(f, "\tvm_state[2] = 0;\n");
+	//fprintf(f, "\tvm_state[3] = 0;\n\n");
 
-	fprintf(f, "%s", code);
+	//fprintf(f, "\t//The following code created by ElasticPL to C parser\n");
 
-	fprintf(f, "\n\tif (bounty_found) {\n");
-	fprintf(f, "\t\tout[0] = 2;\n");
-	fprintf(f, "\t}\n");
-	fprintf(f, "\telse {\n");
+	//fprintf(f, "%s", code);
 
-	fprintf(f, "\t\t// Copy State & Inputs To MD5 Message;\n");
-	fprintf(f, "\t\tfor (i = 0; i < 4; i++)\n");
-	fprintf(f, "\t\t\tmsg[i] = swap32(vm_state[i]);\n");
-	fprintf(f, "\t\tfor (i = 0; i < 12; i++)\n");
-	fprintf(f, "\t\t\tmsg[i + 4] = swap32(vm_input[i]);\n");
-	fprintf(f, "\n");
+	//fprintf(f, "\n\tif (bounty_found) {\n");
+	//fprintf(f, "\t\tout[0] = 2;\n");
+	//fprintf(f, "\t}\n");
+	//fprintf(f, "\telse {\n");
 
-	fprintf(f, "\t\t// Get MD5 Hash of State & Inputs\n");
-	fprintf(f, "\t\tmd5((char*)&msg[0], 64, &hash[0]);\n\n");
+	//fprintf(f, "\t\t// Copy State & Inputs To MD5 Message;\n");
+	//fprintf(f, "\t\tfor (i = 0; i < 4; i++)\n");
+	//fprintf(f, "\t\t\tmsg[i] = swap32(vm_state[i]);\n");
+	//fprintf(f, "\t\tfor (i = 0; i < 12; i++)\n");
+	//fprintf(f, "\t\t\tmsg[i + 4] = swap32(vm_input[i]);\n");
+	//fprintf(f, "\n");
 
-	// Debugging
-	fprintf(f, "\t\t// Temp Dump For Debugging\n");
-	fprintf(f, "\t\tm[12] = target[0];\n");
-	fprintf(f, "\t\tm[13] = target[1];\n");
-	fprintf(f, "\t\tm[14] = target[2];\n");
-	fprintf(f, "\t\tm[15] = target[3];\n\n");
+	//fprintf(f, "\t\t// Get MD5 Hash of State & Inputs\n");
+	//fprintf(f, "\t\tmd5((char*)&msg[0], 64, &hash[0]);\n\n");
 
-	fprintf(f, "\t\tm[16] = swap32(hash[0]);\n");
-	fprintf(f, "\t\tm[17] = swap32(hash[1]);\n");
-	fprintf(f, "\t\tm[18] = swap32(hash[2]);\n");
-	fprintf(f, "\t\tm[19] = swap32(hash[3]);\n\n");
+	//// Debugging
+	//fprintf(f, "\t\t// Temp Dump For Debugging\n");
+	//fprintf(f, "\t\tm[12] = target[0];\n");
+	//fprintf(f, "\t\tm[13] = target[1];\n");
+	//fprintf(f, "\t\tm[14] = target[2];\n");
+	//fprintf(f, "\t\tm[15] = target[3];\n\n");
 
-	fprintf(f, "\t\tm[20] = vm_state[0];\n");
-	fprintf(f, "\t\tm[21] = vm_state[1];\n");
-	fprintf(f, "\t\tm[22] = vm_state[2];\n");
-	fprintf(f, "\t\tm[23] = vm_state[3];\n\n");
-	// End Debugging
+	//fprintf(f, "\t\tm[16] = swap32(hash[0]);\n");
+	//fprintf(f, "\t\tm[17] = swap32(hash[1]);\n");
+	//fprintf(f, "\t\tm[18] = swap32(hash[2]);\n");
+	//fprintf(f, "\t\tm[19] = swap32(hash[3]);\n\n");
 
-	fprintf(f, "\t\t// Check For POW Solutions\n");
-	fprintf(f, "\t\tfor (i = 0; i < 4; i++) {\n");
-	fprintf(f, "\t\t\thash[i] = swap32(hash[i]);\n");
-	fprintf(f, "\t\t\tif (hash[i] <= target[i]){\n");
-	fprintf(f, "\t\t\t\tout[0] = 1; // POW Solution Found\n");
-	fprintf(f, "\t\t\t\treturn;\n");
-	fprintf(f, "\t\t\t}\n");
-	fprintf(f, "\t\t\telse {\n");
-	fprintf(f, "\t\t\t\tif (hash[i] > target[i])\n");
-	fprintf(f, "\t\t\t\t\tbreak;\n");
-	fprintf(f, "\t\t\t}\n");
-	fprintf(f, "\t\t}\n");
-	fprintf(f, "\t\tout[0] = 0;\n");
-	fprintf(f, "\t\treturn;\n");
-	fprintf(f, "\t}\n");
-	fprintf(f, "}\n");
+	//fprintf(f, "\t\tm[20] = vm_state[0];\n");
+	//fprintf(f, "\t\tm[21] = vm_state[1];\n");
+	//fprintf(f, "\t\tm[22] = vm_state[2];\n");
+	//fprintf(f, "\t\tm[23] = vm_state[3];\n\n");
+	//// End Debugging
+
+	//fprintf(f, "\t\t// Check For POW Solutions\n");
+	//fprintf(f, "\t\tfor (i = 0; i < 4; i++) {\n");
+	//fprintf(f, "\t\t\thash[i] = swap32(hash[i]);\n");
+	//fprintf(f, "\t\t\tif (hash[i] <= target[i]){\n");
+	//fprintf(f, "\t\t\t\tout[0] = 1; // POW Solution Found\n");
+	//fprintf(f, "\t\t\t\treturn;\n");
+	//fprintf(f, "\t\t\t}\n");
+	//fprintf(f, "\t\t\telse {\n");
+	//fprintf(f, "\t\t\t\tif (hash[i] > target[i])\n");
+	//fprintf(f, "\t\t\t\t\tbreak;\n");
+	//fprintf(f, "\t\t\t}\n");
+	//fprintf(f, "\t\t}\n");
+	//fprintf(f, "\t\tout[0] = 0;\n");
+	//fprintf(f, "\t\treturn;\n");
+	//fprintf(f, "\t}\n");
+	//fprintf(f, "}\n");
 
 	if (opt_test_vm) {
 		fprintf(stdout, "\n********************************************************************************\n");
