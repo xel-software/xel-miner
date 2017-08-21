@@ -350,7 +350,6 @@ static bool convert_function(ast* root);
 static bool convert_node(ast* node);
 static void get_cast(char *lcast, char *rcast, DATA_TYPE ldata_type, DATA_TYPE rdata_type, bool right_only);
 static bool get_node_inputs(ast* node, char **lstr, char **rstr);
-extern bool convert_verify_to_java(char *verify_src);
 
 extern uint32_t calc_wcet();
 static uint32_t calc_function_weight(ast* root, uint32_t *depth);

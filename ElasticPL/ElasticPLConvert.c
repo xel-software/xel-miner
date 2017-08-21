@@ -98,9 +98,25 @@ extern bool convert_ast_to_opencl(FILE* f) {
 		if (i == ast_main_idx)
 			continue;
 		else if (i == ast_verify_idx)
-			fprintf(f, "void %s(global int *found, uint *target, global uint *m, global int *i, global uint *u, global long *l, global ulong *ul, global float *f, global double *d, global uint *s);\n", stack_exp[i]->svalue);
+			fprintf(f, "void %s(uint *target, global uint *found, global uint *m%s%s%s%s%s%s%s);\n", \
+				stack_exp[i]->svalue, \
+				ast_vm_ints ? ", global int *i" : "", \
+				ast_vm_uints ? ", global uint *u" : "", \
+				ast_vm_longs ? ", global long *l" : "", \
+				ast_vm_ulongs ? ", global ulong *ul" : "", \
+				ast_vm_floats ? ", global float *f" : "", \
+				ast_vm_doubles ? ", global double *d" : "", \
+				ast_submit_sz ? ", global uint *s" : "");
 		else
-			fprintf(f, "void %s(global uint *m, global int *i, global uint *u, global long *l, global ulong *ul, global float *f, global double *d, global uint *s);\n", stack_exp[i]->svalue);
+			fprintf(f, "void %s(global uint *m%s%s%s%s%s%s%s);\n", \
+				stack_exp[i]->svalue, \
+				ast_vm_ints ? ", global int *i" : "", \
+				ast_vm_uints ? ", global uint *u" : "", \
+				ast_vm_longs ? ", global long *l" : "", \
+				ast_vm_ulongs ? ", global ulong *ul" : "", \
+				ast_vm_floats ? ", global float *f" : "", \
+				ast_vm_doubles ? ", global double *d" : "", \
+				ast_submit_sz ? ", global uint *s" : "");
 	}
 	fprintf(f, "\n");
 
@@ -152,7 +168,7 @@ extern bool convert_ast_to_opencl(FILE* f) {
 				fprintf(f, "\tglobal uint* s = &vm_s[0];\n");
 			else
 				fprintf(f, "\tglobal uint* s = NULL;\n");
-			fprintf(f, "\tglobal int* found = &output[idx];\n");
+			fprintf(f, "\tglobal uint* found = &output[idx];\n");
 			fprintf(f, "\t*found = 0;\n\n");
 
 			fprintf(f, "\t// 96 Bytes of base_data is made up of:\n");
@@ -191,20 +207,6 @@ extern bool convert_ast_to_opencl(FILE* f) {
 			fprintf(f, "\t// Copy Inputs To Global Memory;\n");
 			fprintf(f, "\tfor (j = 0; j < 12; j++)\n");
 			fprintf(f, "\t\tm[j] = vm_input[j];\n\n");
-
-// Temp Logic To Dump Some Data
-			fprintf(f, "\tfor (j = 0; j < 20; j++)\n");
-			fprintf(f, "\t\tu[100 + j] = base_data_local[j];\n\n");
-
-			fprintf(f, "\tfor (j = 20; j < 24; j++)\n");
-			fprintf(f, "\t\tu[100 + j] = base_data[j];\n\n");
-
-			fprintf(f, "\t\tu[101] = 6;\n");
-			fprintf(f, "\t\tu[170] = s[0];\n");
-			fprintf(f, "\t\tu[171] = s[1];\n");
-			fprintf(f, "\t\tu[172] = 123;\n");
-			fprintf(f, "\t\tu[173] = s[3];\n");
-
 		}
 
 		if (!convert_function(stack_exp[i])) {
@@ -333,13 +335,29 @@ static bool convert_node(ast* node) {
 		}
 		else if (!strcmp(node->svalue, "verify")) {
 			if (opt_opencl)
-				sprintf(str, "void %s(global int *found, uint *target, global uint *m, global int *i, global uint *u, global long *l, global ulong *ul, global float *f, global double *d, global uint *s) {\n", node->svalue);
+				sprintf(str, "void %s(uint *target, global uint *found, global uint *m%s%s%s%s%s%s%s) {\n", \
+					node->svalue, \
+					ast_vm_ints ? ", global int *i" : "", \
+					ast_vm_uints ? ", global uint *u" : "", \
+					ast_vm_longs ? ", global long *l" : "", \
+					ast_vm_ulongs ? ", global ulong *ul" : "", \
+					ast_vm_floats ? ", global float *f" : "", \
+					ast_vm_doubles ? ", global double *d" : "", \
+					ast_submit_sz ? ", global uint *s" : "");
 			else
 				sprintf(str, "void %s_%s(uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target) {\n", node->svalue, job_suffix);
 		}
 		else {
 			if ( opt_opencl )
-				sprintf(str, "void %s(global uint *m, global int *i, global uint *u, global long *l, global ulong *ul, global float *f, global double *d, global uint *s) {\n", node->svalue);
+				sprintf(str, "void %s(global uint *m%s%s%s%s%s%s%s) {\n", \
+					node->svalue, \
+					ast_vm_ints ? ", global int *i" : "", \
+					ast_vm_uints ? ", global uint *u" : "", \
+					ast_vm_longs ? ", global long *l" : "", \
+					ast_vm_ulongs ? ", global ulong *ul" : "", \
+					ast_vm_floats ? ", global float *f" : "", \
+					ast_vm_doubles ? ", global double *d" : "", \
+					ast_submit_sz ? ", global uint *s" : "");
 			else
 				sprintf(str, "void %s_%s() {\n", node->svalue, job_suffix);
 		}
@@ -348,12 +366,28 @@ static bool convert_node(ast* node) {
 		str = malloc(256);
 		if (!strcmp(node->svalue, "verify"))
 			if (opt_opencl)
-				sprintf(str, "%s(found, target, m, i, u, l, ul, f, d, s)", node->svalue);
+				sprintf(str, "%s(target, found, m%s%s%s%s%s%s%s)", \
+					node->svalue, \
+					ast_vm_ints ? ", i" : "", \
+					ast_vm_uints ? ", u" : "", \
+					ast_vm_longs ? ", l" : "", \
+					ast_vm_ulongs ? ", ul" : "", \
+					ast_vm_floats ? ", f" : "", \
+					ast_vm_doubles ? ", d" : "", \
+					ast_submit_sz ? ", s" : "");
 			else
 				sprintf(str, "%s_%s(bounty_found, verify_pow, pow_found, target)", node->svalue, job_suffix);
 		else {
 			if (opt_opencl)
-				sprintf(str, "%s(m, i, u, l, ul, f, d, s)", node->svalue);
+				sprintf(str, "%s(m%s%s%s%s%s%s%s)", \
+					node->svalue, \
+					ast_vm_ints ? ", i" : "", \
+					ast_vm_uints ? ", u" : "", \
+					ast_vm_longs ? ", l" : "", \
+					ast_vm_ulongs ? ", ul" : "", \
+					ast_vm_floats ? ", f" : "", \
+					ast_vm_doubles ? ", d" : "", \
+					ast_submit_sz ? ", s" : "");
 			else
 				sprintf(str, "%s_%s()", node->svalue, job_suffix);
 		}
@@ -361,14 +395,14 @@ static bool convert_node(ast* node) {
 	case NODE_VERIFY_BTY:
 		str = malloc(strlen(lstr) + 50);
 		if (opt_opencl)
-			sprintf(str, "*found += (int)(%s != 0 ? 2 : 0)", lstr);
+			sprintf(str, "*found += (uint)(%s != 0 ? 2 : 0)", lstr);
 		else
 			sprintf(str, "*bounty_found = (uint32_t)(%s != 0 ? 1 : 0)", lstr);
 		break;
 	case NODE_VERIFY_POW:
 		str = malloc(strlen(lstr) + 100);
 		if (opt_opencl)
-			sprintf(str, "*found += check_pow(%s, &m[0], target)", lstr);
+			sprintf(str, "*found += (uint)check_pow(%s, &m[0], target)", lstr);
 		else
 			sprintf(str, "if (verify_pow == 1)\n\t\t*pow_found = check_pow(%s, &m[0], &target[0]);\n\telse\n\t\t*pow_found = 0", lstr);
 		break;
@@ -980,40 +1014,5 @@ static bool get_node_inputs(ast* node, char **lstr, char **rstr) {
 		break;
 	}
 
-	return true;
-}
-
-extern bool convert_verify_to_java(char *verify_src) {
-	int i;
-	size_t old_len, new_len;
-	char *old_str = NULL, *new_str = NULL;
-
-	stack_code_idx = 0;
-	tabs = 0;
-
-	if (!convert_function(stack_exp[ast_verify_idx])) {
-		return false;
-	}
-
-	old_len = 0;
-	old_str = calloc(1, 1);
-
-	for (i = 0; i < stack_code_idx; i++) {
-		if (stack_code[i]) {
-			new_len = strlen(stack_code[i]);
-			new_str = malloc(old_len + new_len + 1);
-			memcpy(new_str, old_str, old_len);
-			memcpy(new_str + old_len, stack_code[i], new_len + 1);
-			old_len = old_len + new_len;
-			old_str = new_str;
-			free(stack_code[i]);
-			stack_code[i] = NULL;
-		}
-	}
-
-	if (!old_str || ((old_len + 1) >= MAX_VERIFY_SIZE))
-		return false;
-
-	memcpy(verify_src, old_str, old_len + 1);
 	return true;
 }
