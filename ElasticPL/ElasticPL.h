@@ -345,6 +345,7 @@ static bool validate_functions();
 static bool validate_function_calls();
 
 extern bool convert_ast_to_c(char *work_str);
+extern bool convert_ast_to_opencl(FILE* f);
 static bool convert_function(ast* root);
 static bool convert_node(ast* node);
 static void get_cast(char *lcast, char *rcast, DATA_TYPE ldata_type, DATA_TYPE rdata_type, bool right_only);

@@ -87,6 +87,144 @@ extern bool convert_ast_to_c(char *work_str) {
 	return true;
 }
 
+extern bool convert_ast_to_opencl(FILE* f) {
+	int i, j;
+
+	if (!f)
+		return false;
+
+	// Write Function Declarations
+	for (i = ast_func_idx; i <= stack_exp_idx; i++) {
+		if (i == ast_main_idx)
+			continue;
+		else if (i == ast_verify_idx)
+			fprintf(f, "void %s(global int *found, uint *target, global uint *m, global int *i, global uint *u, global long *l, global ulong *ul, global float *f, global double *d, global uint *s);\n", stack_exp[i]->svalue);
+		else
+			fprintf(f, "void %s(global uint *m, global int *i, global uint *u, global long *l, global ulong *ul, global float *f, global double *d, global uint *s);\n", stack_exp[i]->svalue);
+	}
+	fprintf(f, "\n");
+
+	// Write Function Definitions
+	for (i = ast_func_idx; i <= stack_exp_idx; i++) {
+
+		stack_code_idx = 0;
+		tabs = 0;
+
+		// Add Variable Declarations For OpenCL 'Execute' Function
+		if ((i == ast_main_idx)) {
+			fprintf(f, "__kernel void execute(global uint* restrict base_data, global uint* restrict vm_m, global int* restrict vm_i, global uint* restrict vm_u, global long* restrict vm_l, global ulong* restrict vm_ul, global float* restrict vm_f, global double* restrict vm_d, global uint* restrict vm_s, global uint* restrict output) {\n");
+			fprintf(f, "\tint j;\n");
+			fprintf(f, "\tuint base_data_local[20];\n");
+			fprintf(f, "\tuint msg[16];\n");
+			fprintf(f, "\tuint hash[4];\n");
+			fprintf(f, "\tuint target[4];\n");
+			fprintf(f, "\tuint vm_input[12];\n");
+			fprintf(f, "\tint w = get_global_id(0); // Index in the wavefront Dim1\n");
+			fprintf(f, "\tint q = get_global_id(1); // Index in the wavefront Dim2\n");
+			fprintf(f, "\tint idx = w + (q * get_global_size(0)); // Index in the 2D wavefront\n");
+
+			fprintf(f, "\tglobal uint* m = &vm_m[idx * 12];\n");
+			if (ast_vm_ints)
+				fprintf(f, "\tglobal int* i = &vm_i[idx * %d];\n", ast_vm_ints);
+			else
+				fprintf(f, "\tglobal int* i = NULL;\n");
+			if (ast_vm_uints)
+				fprintf(f, "\tglobal uint* u = &vm_u[idx * %d];\n", ast_vm_uints);
+			else
+				fprintf(f, "\tglobal uint* u = NULL;\n");
+			if (ast_vm_longs)
+				fprintf(f, "\tglobal long* l = &vm_l[idx * %d];\n", ast_vm_longs);
+			else
+				fprintf(f, "\tglobal long* l = NULL;\n");
+			if (ast_vm_ulongs)
+				fprintf(f, "\tglobal ulong* ul = &vm_ul[idx * %d];\n", ast_vm_ulongs);
+			else
+				fprintf(f, "\tglobal ulong* ul = NULL;\n");
+			if (ast_vm_floats)
+				fprintf(f, "\tglobal float* f = &vm_f[idx * %d];\n", ast_vm_floats);
+			else
+				fprintf(f, "\tglobal float* f = NULL;\n");
+			if (ast_vm_doubles)
+				fprintf(f, "\tglobal double* d = &vm_d[idx * %d];\n", ast_vm_doubles);
+			else
+				fprintf(f, "\tglobal double* d = NULL;\n");
+			if (ast_submit_sz)
+				fprintf(f, "\tglobal uint* s = &vm_s[0];\n");
+			else
+				fprintf(f, "\tglobal uint* s = NULL;\n");
+			fprintf(f, "\tglobal int* found = &output[idx];\n");
+			fprintf(f, "\t*found = 0;\n\n");
+
+			fprintf(f, "\t// 96 Bytes of base_data is made up of:\n");
+			fprintf(f, "\t// 32 Byte Multiplicator (First 4 Bytes = Index, Second 4 Bytes = Incremented Value)\n");
+			fprintf(f, "\t// 32 Byte Public Key\n");
+			fprintf(f, "\t//  8 Byte Work ID\n");
+			fprintf(f, "\t//  8 Byte Block ID\n");
+			fprintf(f, "\t// 16 Byte POW Target;\n\n");
+
+			fprintf(f, "\t// Save POW Target;\n");
+			fprintf(f, "\tfor (j = 0; j < 4; j++)\n");
+			fprintf(f, "\t\ttarget[j] = base_data[j + 20];\n\n");
+
+			fprintf(f, "\t// Copy base_data So The Multiplicator Can Be Updated Locally\n");
+			fprintf(f, "\tfor (j = 0; j < 20; j++) // 80 bytes\n");
+			fprintf(f, "\t\tbase_data_local[j] = base_data[j];\n\n");
+
+			fprintf(f, "\t// Update OpenCL Thread ID In The Input Data\n");
+			fprintf(f, "\tbase_data_local[3] = idx; // This value holds GPU OpenCL Thread ID\n\n");
+
+			fprintf(f, "\t// Get MD5 Hash of 80 Byte Input\n");
+			fprintf(f, "\tmd5((char*)&base_data_local[0], 80, &hash[0]);\n\n");
+
+			fprintf(f, "\t// Set Inputs m[0]-m[3]\n");
+			fprintf(f, "\tfor (j = 0; j < 4; j++)\n");
+			fprintf(f, "\t\tvm_input[j] = base_data_local[j];\n\n");
+
+			fprintf(f, "\t// Randomize Inputs m[4]-m[11]\n");
+			fprintf(f, "#pragma unroll\n");
+			fprintf(f, "\tfor (j = 4; j < 12; j++) {\n");
+			fprintf(f, "\t\tvm_input[j] = swap32(hash[j %% 4]);\n");
+			fprintf(f, "\t\tif (j > 8)\n");
+			fprintf(f, "\t\t\tvm_input[j] = vm_input[j] ^ vm_input[j - 3];\n");
+			fprintf(f, "\t}\n\n");
+
+			fprintf(f, "\t// Copy Inputs To Global Memory;\n");
+			fprintf(f, "\tfor (j = 0; j < 12; j++)\n");
+			fprintf(f, "\t\tm[j] = vm_input[j];\n\n");
+
+// Temp Logic To Dump Some Data
+			fprintf(f, "\tfor (j = 0; j < 20; j++)\n");
+			fprintf(f, "\t\tu[100 + j] = base_data_local[j];\n\n");
+
+			fprintf(f, "\tfor (j = 20; j < 24; j++)\n");
+			fprintf(f, "\t\tu[100 + j] = base_data[j];\n\n");
+
+			fprintf(f, "\t\tu[101] = 6;\n");
+			fprintf(f, "\t\tu[170] = s[0];\n");
+			fprintf(f, "\t\tu[171] = s[1];\n");
+			fprintf(f, "\t\tu[172] = 123;\n");
+			fprintf(f, "\t\tu[173] = s[3];\n");
+
+		}
+
+		if (!convert_function(stack_exp[i])) {
+			fclose(f);
+			return false;
+		}
+
+		for (j = 0; j < stack_code_idx; j++) {
+			if (stack_code[j]) {
+				fprintf(f, "%s", stack_code[j]);
+				free(stack_code[j]);
+				stack_code[j] = NULL;
+			}
+		}
+		fprintf(f, "\n");
+	}
+
+	return true;
+}
+
 static bool convert_function(ast* root) {
 	bool downward = true;
 	ast *ast_ptr = NULL;
@@ -187,25 +325,52 @@ static bool convert_node(ast* node) {
 	switch (node->type) {
 	case NODE_FUNCTION:
 		str = malloc(256);
-		if ((!strcmp(node->svalue, "main")) || (!strcmp(node->svalue, "verify")))
-			sprintf(str, "void %s_%s(uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target) {\n", node->svalue, job_suffix);
-		else
-			sprintf(str, "void %s_%s() {\n", node->svalue, job_suffix);
+		if (!strcmp(node->svalue, "main")) {
+			if (opt_opencl)
+				return true;
+			else
+				sprintf(str, "void %s_%s(uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target) {\n", node->svalue, job_suffix);
+		}
+		else if (!strcmp(node->svalue, "verify")) {
+			if (opt_opencl)
+				sprintf(str, "void %s(global int *found, uint *target, global uint *m, global int *i, global uint *u, global long *l, global ulong *ul, global float *f, global double *d, global uint *s) {\n", node->svalue);
+			else
+				sprintf(str, "void %s_%s(uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target) {\n", node->svalue, job_suffix);
+		}
+		else {
+			if ( opt_opencl )
+				sprintf(str, "void %s(global uint *m, global int *i, global uint *u, global long *l, global ulong *ul, global float *f, global double *d, global uint *s) {\n", node->svalue);
+			else
+				sprintf(str, "void %s_%s() {\n", node->svalue, job_suffix);
+		}
 		break;
 	case NODE_CALL_FUNCTION:
 		str = malloc(256);
 		if (!strcmp(node->svalue, "verify"))
-			sprintf(str, "%s_%s(bounty_found, verify_pow, pow_found, target)", node->svalue, job_suffix);
-		else
-			sprintf(str, "%s_%s()", node->svalue, job_suffix);
+			if (opt_opencl)
+				sprintf(str, "%s(found, target, m, i, u, l, ul, f, d, s)", node->svalue);
+			else
+				sprintf(str, "%s_%s(bounty_found, verify_pow, pow_found, target)", node->svalue, job_suffix);
+		else {
+			if (opt_opencl)
+				sprintf(str, "%s(m, i, u, l, ul, f, d, s)", node->svalue);
+			else
+				sprintf(str, "%s_%s()", node->svalue, job_suffix);
+		}
 		break;
 	case NODE_VERIFY_BTY:
 		str = malloc(strlen(lstr) + 50);
-		sprintf(str, "*bounty_found = (uint32_t)(%s != 0 ? 1 : 0)", lstr);
+		if (opt_opencl)
+			sprintf(str, "*found += (int)(%s != 0 ? 2 : 0)", lstr);
+		else
+			sprintf(str, "*bounty_found = (uint32_t)(%s != 0 ? 1 : 0)", lstr);
 		break;
 	case NODE_VERIFY_POW:
 		str = malloc(strlen(lstr) + 100);
-		sprintf(str, "if (verify_pow == 1)\n\t\t*pow_found = check_pow(%s, &m[0], target);\n\telse\n\t\t*pow_found = 0", lstr);
+		if (opt_opencl)
+			sprintf(str, "*found += check_pow(%s, &m[0], target)", lstr);
+		else
+			sprintf(str, "if (verify_pow == 1)\n\t\t*pow_found = check_pow(%s, &m[0], &target[0]);\n\telse\n\t\t*pow_found = 0", lstr);
 		break;
 	case NODE_CONSTANT:
 		str = malloc(25);
