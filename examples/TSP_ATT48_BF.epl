@@ -9,8 +9,8 @@
  * Algorithm:	Brute Force
  *
  * Memory Map:
- *   Round Number:          m[  1]
- *   Random Input:          m[  4]
+ *   Round Number:          m[ 10]
+ *   Random Input:          m[  0]
  *   Cost Matrix Vars:		u[ 20] - u[ 23]
  *   X Dist & Y Dist:		i[  0] - i[  1]
  *   Distance Point A to B	f[  0]
@@ -148,13 +148,13 @@ function create_cost_matrix {
 	f[0]  = 0;		// rij - Pseudo-Euclidean Distance Between A & B
 
 	// Outer Loop - Point A = 0 to 48
-	// u[40] is the loop counter
+	// u[90] is the loop counter
 	// 48 is # of iterations
 	// 48 is # of iterations for WCET Calc
 	repeat(u[90], 48, 48) {
 
 		// Inner Loop - Point B = 0 to 48
-		// u[41] is the loop counter
+		// u[91] is the loop counter
 		repeat(u[91], 48, 48) {
 
 			// When Point A = Point B, Distance = 0
@@ -188,8 +188,8 @@ function create_cost_matrix {
 function main {
 
 	// Only Initialize Point Data & Cost Matrix Values Once
-	// m[1] Contains The Run #
-	if (m[1] == 0) {
+	// m[10] Contains The Run #
+	if (m[10] == 0) {
 		init_point_data();
 		create_cost_matrix();
 	}
@@ -206,7 +206,7 @@ function main {
 	u[248] = 0;								// End At Point Zero
 	u[30] = 47;								// Path Array Offset - Start At Final Point In Path
 	repeat(u[90], 47, 47) {
-		u[31] = (abs(m[4]) % u[30]) + 1;	// Use m[4] to create a random number between 0 and 47
+		u[31] = (abs(m[0]) % u[30]) + 1;	// Use m[0] to create a random number between 0 and 47
 		u[32] = u[200 + u[31]];				// Index of first point in path to swap
 		u[200 + u[31]] = u[200 + u[30]];	// Index of second point in path to swap
 		u[200 + u[30]] = u[32];				// Swap points

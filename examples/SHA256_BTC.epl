@@ -6,7 +6,7 @@
  * Desc:	Demo Of SHA256 Algo Using BTC 80 Byte Header and SHA256d 
  *
  * Memory Map:
- *   Round Number:          m[  1]
+ *   Round Number:          m[ 10]
  *   Padded Block Header:   u[  0] - u[ 32]
  *   Hash 1 (Midstate):	    u[ 40] - u[ 47]
  *   Hash 2 (Final):        u[ 50] - u[ 57]
@@ -127,7 +127,7 @@ function main {
 function verify {
 	
 	// Only Initialize Input & K Values Once
-	if (m[1] == 0) {
+	if (m[10] == 0) {
 		init_K();
 
 		// Input Data To Be Hashed
