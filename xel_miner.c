@@ -769,16 +769,18 @@ static bool get_vm_input(struct work *work) {
 	// Hash The Inputs
 	MD5(msg, 80, hash);
 
-	// Set Inputs m[0]-m[3]
-	for (i = 0; i < 4; i++)
-		work->vm_input[i] = mult32[i];
-
-	// Randomize Inputs m[4]-m[11]
-	for (i = 4; i < 12; i++) {
+	// Randomize Inputs m[0]-m[9]
+	for (i = 0; i < 10; i++) {
 		work->vm_input[i] = swap32(hash32[i % 4]);
-		if (i > 8)
+		if (i > 4)
 			work->vm_input[i] = work->vm_input[i] ^ work->vm_input[i - 3];
 	}
+
+	// Set m[10] To Round Number
+	work->vm_input[10] = mult32[1];
+
+	// Set Inputs m[11] To Iteration Number
+	work->vm_input[11] = mult32[2];
 
 	return true;
 }
