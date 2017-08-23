@@ -6,7 +6,7 @@
 <i>This code is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 See the GNU General Public License for more details.</i>
 
-This is a prototype of a miner for solving XEL work packages.  <b>The miner is not optimized</b> in any way as its purpose is to demonstrate all the functionality of ElasticPL and the workflow between the Miner & Elastic Node.
+This is a prototype of a miner for solving XEL work packages.  <b>The miner is not optimized</b> in any way as its purpose is to demonstrate all the functionality of ElasticPL and the workflow between the Miner & Elastic Node regardless of hardware or OS.
 
 It is intended that other developers will improve on the miner performance & functionality by creating versions for specific hardware / OS including all applicable optimizations.
 
