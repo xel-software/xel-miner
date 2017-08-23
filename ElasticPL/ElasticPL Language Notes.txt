@@ -92,15 +92,13 @@ VM INITIALIZED VARIABLES
 	The ElasticPL VM inializes 12 Unsigned Int variables each run/iteration.
 	These variables are stored in m[0] through m[11] and defined as follows:
 	
-		m[0]	Thread ID
-		m[1]	Run Number
-		m[2]	Iteration Number
-		m[3]	GPU OpenCL Thread ID
-		m[4]	Random 32 bit Unsigned Int
+		m[0]	Random 32 bit Unsigned Int
 		.
 		.
 		.
-		m[11]	Random 32 bit Unsigned Int
+		m[9]	Random 32 bit Unsigned Int
+		m[10]	Run Number
+		m[11]	Iteration Number
 
 	The variables allow the job authors to randomize their algorithm inputs
 	as well as trigger functions to run at specific intervals (i.e. run an 

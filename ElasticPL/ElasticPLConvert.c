@@ -192,17 +192,19 @@ extern bool convert_ast_to_opencl(FILE* f) {
 			fprintf(f, "\t// Get MD5 Hash of 80 Byte Input\n");
 			fprintf(f, "\tmd5((char*)&base_data_local[0], 80, &hash[0]);\n\n");
 
-			fprintf(f, "\t// Set Inputs m[0]-m[3]\n");
-			fprintf(f, "\tfor (j = 0; j < 4; j++)\n");
-			fprintf(f, "\t\tvm_input[j] = base_data_local[j];\n\n");
-
-			fprintf(f, "\t// Randomize Inputs m[4]-m[11]\n");
+			fprintf(f, "\t// Randomize Inputs m[0]-m[9]\n");
 			fprintf(f, "#pragma unroll\n");
-			fprintf(f, "\tfor (j = 4; j < 12; j++) {\n");
+			fprintf(f, "\tfor (j = 0; j < 10; j++) {\n");
 			fprintf(f, "\t\tvm_input[j] = swap32(hash[j %% 4]);\n");
-			fprintf(f, "\t\tif (j > 8)\n");
+			fprintf(f, "\t\tif (j > 4)\n");
 			fprintf(f, "\t\t\tvm_input[j] = vm_input[j] ^ vm_input[j - 3];\n");
 			fprintf(f, "\t}\n\n");
+
+			fprintf(f, "\t// Set m[10] To Round #\n");
+			fprintf(f, "\t\tvm_input[10] = base_data_local[1];\n\n");
+
+			fprintf(f, "\t// Set m[11] To Iteration #\n");
+			fprintf(f, "\t\tvm_input[11] = base_data_local[2];\n\n");
 
 			fprintf(f, "\t// Copy Inputs To Global Memory;\n");
 			fprintf(f, "\tfor (j = 0; j < 12; j++)\n");
