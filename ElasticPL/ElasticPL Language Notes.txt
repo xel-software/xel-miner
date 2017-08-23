@@ -95,7 +95,7 @@ VM INITIALIZED VARIABLES
 		m[0]	Thread ID
 		m[1]	Run Number
 		m[2]	Iteration Number
-		m[3]	Timestamp of Round 0 (for each iteration)
+		m[3]	GPU OpenCL Thread ID
 		m[4]	Random 32 bit Unsigned Int
 		.
 		.
