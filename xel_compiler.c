@@ -98,8 +98,8 @@ bool create_c_source(char *work_str) {
 	fprintf(f, "\tmsg32[1] = msg_1;\n");
 	fprintf(f, "\tmsg32[2] = msg_2;\n");
 	fprintf(f, "\tmsg32[3] = msg_3;\n\n");
-	fprintf(f, "\tfor (i = 4; i < 12; i++)\n");  // Only using m[4]-m[11] as that is what's created by multiplicator
-	fprintf(f, "\t\tmsg32[i] = m[i];\n\n");
+	fprintf(f, "\tfor (i = 0; i < 8; i++)\n");
+	fprintf(f, "\t\tmsg32[i+4] = m[i];\n\n");
 	fprintf(f, "\tMD5(msg, 48, hash);\n\n");
 
 
@@ -451,8 +451,8 @@ extern bool create_opencl_source(char *work_str) {
 	fprintf(f, "\tmsg32[1] = msg_1;\n");
 	fprintf(f, "\tmsg32[2] = msg_2;\n");
 	fprintf(f, "\tmsg32[3] = msg_3;\n\n");
-	fprintf(f, "\tfor (i = 4; i < 12; i++)\n");  // Only using m[4]-m[11] as that is what's created by multiplicator
-	fprintf(f, "\t\tmsg32[i] = m[i];\n\n");
+	fprintf(f, "\tfor (i = 0; i < 8; i++)\n");  // Only using m[4]-m[11] as that is what's created by multiplicator
+	fprintf(f, "\t\tmsg32[i+4] = m[i];\n\n");
 //	fprintf(f, "\tmd5(msg, 48, hash);\n\n");
 	fprintf(f, "\tmd5((char*)&msg[0], 48, &hash[0]);\n\n");
 
