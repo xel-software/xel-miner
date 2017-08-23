@@ -1061,7 +1061,7 @@ static double calc_diff(uint32_t *target) {
 static int decode_work(CURL *curl, const json_t *val, struct work *work) {
 	int i, j, rc, num_pkg, best_pkg, bty_rcvd, work_pkg_id, iteration_id;
 	uint64_t work_id;
-	uint32_t best_wcet = 0xFFFFFFFF, pow_tgt[4];
+	uint32_t storage_id, best_wcet = 0xFFFFFFFF, pow_tgt[4];
 	double difficulty, best_profit = 0, profit = 0;
 	char *tgt = NULL, *src = NULL, *str = NULL, *best_src = NULL, *best_tgt = NULL, *elastic_src = NULL;
 	json_t *wrk = NULL, *pkg = NULL;
@@ -1278,10 +1278,13 @@ static int decode_work(CURL *curl, const json_t *val, struct work *work) {
 		}
 
 		// Get Storage Values From Node
-		if (!get_work_storage(curl, g_work_package[best_pkg].work_str, g_work_package[best_pkg].storage)) {
+		storage_id = get_work_storage(curl, g_work_package[best_pkg].work_str, g_work_package[best_pkg].storage);
+		if (storage_id < 0) {
 			applog(LOG_ERR, "ERROR: Unable to get 'storage' for work_id: %s", g_work_package[best_pkg].work_str);
 			return 0;
 		}
+
+		g_work_package[best_pkg].storage_id = storage_id;
 	}
 
 	// Copy Work Package Details To Work
@@ -1369,8 +1372,9 @@ static bool get_work_source(CURL *curl, char *work_str, char *elastic_src) {
 	return true;
 }
 
-static bool get_work_storage(CURL *curl, char *work_str, uint32_t *storage) {
+static int get_work_storage(CURL *curl, char *work_str, uint32_t *storage) {
 	int err;
+	uint32_t storage_id;
 	size_t max_str_len;
 	char req[100], *str = NULL;
 	json_t *val;
@@ -1383,7 +1387,7 @@ static bool get_work_storage(CURL *curl, char *work_str, uint32_t *storage) {
 	if (!val) {
 		applog(LOG_ERR, "ERROR: 'json_rpc_call' for 'storage' failed...retrying in %d seconds", opt_fail_pause);
 		sleep(opt_fail_pause);
-		return false;
+		return -1;
 	}
 
 	gettimeofday(&tv_end, NULL);
@@ -1394,17 +1398,18 @@ static bool get_work_storage(CURL *curl, char *work_str, uint32_t *storage) {
 
 	// Get Storage Values From JSON Message
 	str = (char *)json_string_value(json_object_get(val, "storage"));
+	storage_id = (uint32_t)json_integer_value(json_object_get(val, "storage_id"));
 
 	// Extract The ElasticPL Source Code
 	max_str_len = (size_t)(sizeof(storage) * 2); // Hex Representation Of Storage Is Twice The Size
 	if (!str || strlen(str) > max_str_len || strlen(str) == 0) {
 		applog(LOG_ERR, "ERROR: Invalid 'storage' for work_id: %s", work_str);
-		return false;
+		return -1;
 	}
 
 	if (!hex2ints(storage, sizeof(storage), str, max_str_len)) {
 		applog(LOG_ERR, "ERROR: Unable to convert 'storage' for work_id: %s", work_str);
-		return false;
+		return -1;
 	}
 
 	gettimeofday(&tv_start, NULL);
@@ -1415,7 +1420,7 @@ static bool get_work_storage(CURL *curl, char *work_str, uint32_t *storage) {
 
 	json_decref(val);
 
-	return true;
+	return storage_id;
 }
 
 static bool submit_work(CURL *curl, struct submit_req *req) {
@@ -1429,10 +1434,6 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 		applog(LOG_ERR, "ERROR: Unable to allocate memory for submit work url");
 		return false;
 	}
-
-// TODO - Not sure what this value is used for.
-//        Hardcoded for now until it is determined if it's needed
-	uint32_t rand_id = 0;
 
 	if ((req->req_type == SUBMIT_BOUNTY) || (req->req_type == SUBMIT_POW)) {
 
@@ -1455,12 +1456,12 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 			return false;
 		
 		if (req->req_type == SUBMIT_BOUNTY) {
-			sprintf(url, "%s?requestType=createPoX&random=%u", rpc_url, rand_id);
-			sprintf(data, "deadline=3&feeNQT=0&amountNQT=0&work_id=%s&data=%s&multiplicator=%s&is_pow=false&secretPhrase=%s", req->work_str, submit_data_hex, req->mult, passphrase);
+			sprintf(url, "%s?requestType=submitSolution", rpc_url);
+			sprintf(data, "deadline=3&work_id=%s&data=%s&multiplicator=%s&storage_id=%d&is_pow=false&secretPhrase=%s", req->work_str, submit_data_hex, req->mult, req->storage_id, passphrase);
 		}
 		else {
-			sprintf(url, "%s?requestType=createPoX&random=%u", rpc_url, rand_id);
-			sprintf(data, "deadline=3&feeNQT=0&amountNQT=0&work_id=%s&data=%s&multiplicator=%s&is_pow=true&secretPhrase=%s", req->work_str, submit_data_hex, req->mult, passphrase);
+			sprintf(url, "%s?requestType=submitSolution", rpc_url);
+			sprintf(data, "deadline=3&work_id=%s&data=%s&multiplicator=%s&storage_id=%d&is_pow=true&secretPhrase=%s", req->work_str, submit_data_hex, req->mult, req->storage_id, passphrase);
 		}
 	}
 	else {
@@ -2296,6 +2297,7 @@ static bool add_submit_req(struct work *work, uint32_t *data, enum submit_comman
 	bin2hex(work->announcement_hash, 32, g_submit_req[g_submit_req_cnt].hash, 65);
 	bin2hex(work->multiplicator, 32, g_submit_req[g_submit_req_cnt].mult, 65);
 	g_submit_req[g_submit_req_cnt].iteration_id = work->iteration_id;
+	g_submit_req[g_submit_req_cnt].storage_id = g_work_package[work->package_id].storage_id;
 	g_submit_req[g_submit_req_cnt].submit_data_sz = g_work_package[work->package_id].submit_sz;
 	g_submit_req[g_submit_req_cnt].submit_data = data;
 	if (req_type != SUBMIT_POW) {

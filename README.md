@@ -1,11 +1,14 @@
 <h1><b>Only Use For Standalone ElasticPL Testing!</b></h1>
 
 # xel_miner 	0.9.2
+# ElasticPL 	0.9.1
 
 <i>This code is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 See the GNU General Public License for more details.</i>
 
-This is a prototype of a miner for solving XEL work packages.  The miner is still in the early stages of development...it is simply a prototype that attempts demonstrate all the functionality of an XEL miner.
+This is a prototype of a miner for solving XEL work packages.  <b>The miner is not optimized</b> in any way as its purpose is to demonstrate all the functionality of ElasticPL and the workflow between the Miner & Elastic Node.
+
+It is intended that other developers will improve on the miner performance & functionality by creating versions for specific hardware / OS including all applicable optimizations.
 
 <b>*** The GPU miner is highly experimental.  If you choose to use it, monitor your cards closely to ensure they don't overheat. ***</b>
 

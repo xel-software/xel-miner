@@ -163,6 +163,7 @@ struct submit_req {
 	uint64_t work_id;
 	unsigned char work_str[22];
 	uint32_t iteration_id;
+	uint32_t storage_id;
 	uint32_t submit_data_sz;
 	uint32_t *submit_data;
 };
@@ -345,7 +346,7 @@ static void dump_vm(int idx);
 static bool get_work(CURL *curl);
 static int decode_work(CURL *curl, const json_t *val, struct work *work);
 static bool get_work_source(CURL *curl, char *work_str, char *elastic_src);
-static bool get_work_storage(CURL *curl, char *work_str, uint32_t *storage);
+static int get_work_storage(CURL *curl, char *work_str, uint32_t *storage);
 static double calc_diff(uint32_t *target);
 extern bool add_work_package(struct work_package *work_package);
 static void update_pending_cnt(uint64_t work_id, bool add);
