@@ -706,21 +706,19 @@ static void *test_vm_thread(void *userdata) {
 //		rc = inst->verify(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target);
 		rc = inst->execute(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target);
 
+		// Run A Continuous Test
 		//for (i = 0; i < 0xFFFFFFFF; i++) {
-		//	vm_m[1] = i;
-		//	rc = inst->execute(g_work_package[0].work_id);
-		//	if (rc == 1)
+		//	vm_m[10] = i;  // Update Round
+		//	rc = inst->execute(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target);
+		//	if (bounty_found)
+		//		break;
+		//	if (pow_found)
 		//		break;
 		//}
 
 		if (inst)
 			free_library(inst);
 	}
-
-	//if (rc < 0) {
-	//	applog(LOG_ERR, "ERROR: An error was encountered while running job #%s (rc = %d)", g_work_package[g_work_package_idx].work_str, rc);
-	//	exit(EXIT_FAILURE);
-	//}
 
 	applog(LOG_DEBUG, "DEBUG: Bounty Found: %s", (bounty_found == 1) ? "true" : "false");
 	applog(LOG_DEBUG, "DEBUG: POW Found: %s", (pow_found == 1) ? "true" : "false");
@@ -828,7 +826,7 @@ static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work
 	mult32[0] = thr_id;												// Ensures Each Thread Is Unique
 	mult32[1] = *rnd;												// Round - Value Will Be Incremented On Each Pass
 	mult32[2] = iteration;											// Iteration - Not Implemented Yet
-	mult32[3] = (*rnd == 0) ? (uint32_t)time(NULL) : mult32[3];		// Timestamp of Round 0
+	mult32[3] = 0;													// N/A - GPU OpenCL Thread ID
 	mult32[7] = genrand_int32();									// Random Number
 
 	while (1) {
