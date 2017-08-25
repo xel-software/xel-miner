@@ -16,10 +16,6 @@
 
 int num_exp = 0;
 
-int d_stack_op[10];	// DEBUG
-ast *d_stack_exp[10];	// DEBUG
-
-
 static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_vm_mem, bool is_vm_storage, int64_t val_int64, uint64_t val_uint64, double val_double, unsigned char *svalue, int token_num, int line_num, DATA_TYPE data_type, ast* left, ast* right) {
 	DATA_TYPE dt_l, dt_r;
 	ast* e = calloc(1, sizeof(ast));
@@ -107,7 +103,7 @@ static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_vm_mem, bool
 	return e;
 }
 
-/*
+
 static void push_op(int token_id) {
 	stack_op[++stack_op_idx] = token_id;
 	top_op = token_id;
@@ -146,82 +142,7 @@ static ast* pop_exp() {
 
 	return exp;
 }
-*/
 
-static void push_op(int token_id) {
-	stack_op[++stack_op_idx] = token_id;
-	top_op = token_id;
-
-
-	// DEBUG
-	int i;
-	for (i = 0; i < 10; i++)
-		d_stack_op[i] = stack_op[i];
-
-
-}
-
-static int pop_op() {
-	int op = -1;
-	if (stack_op_idx >= 0) {
-		op = stack_op[stack_op_idx];
-		stack_op[stack_op_idx--] = -1;
-	}
-
-	if (stack_op_idx >= 0)
-		top_op = stack_op[stack_op_idx];
-	else
-		top_op = -1;
-
-
-
-
-
-	// DEBUG
-	int i;
-	for (i = 0; i < 10; i++)
-		d_stack_op[i] = stack_op[i];
-
-
-
-
-	return op;
-}
-
-static void push_exp(ast* exp) {
-	stack_exp[++stack_exp_idx] = exp;
-	if (!exp->end_stmnt)
-		num_exp++;
-
-
-	// DEBUG
-	int i;
-	for (i = 0; i < 10; i++)
-		d_stack_exp[i] = stack_exp[i];
-
-
-}
-
-static ast* pop_exp() {
-	ast *exp = NULL;
-
-	if (stack_exp_idx >= 0) {
-		exp = stack_exp[stack_exp_idx];
-		stack_exp[stack_exp_idx--] = NULL;
-		if (!exp->end_stmnt)
-			num_exp--;
-	}
-
-
-
-	// DEBUG
-	int i;
-	for (i = 0; i < 10; i++)
-		d_stack_exp[i] = stack_exp[i];
-
-
-	return exp;
-}
 
 static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_type) {
 
