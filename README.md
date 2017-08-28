@@ -1,7 +1,6 @@
-<h1><b>
-Miner 		v0.9.3
-ElasticPL 	v0.9.1
-</b></h1>
+<h1><b>Miner		v0.9.3</b></h1>
+<h1><b>ElasticPL 	v0.9.1</b></h1>
+
 ________________________________________________________________________________________________
 
 <i>This code is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
