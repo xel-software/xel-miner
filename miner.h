@@ -2,7 +2,7 @@
 #define __MINER_H__
 
 #define PACKAGE_NAME "xel_miner"
-#define MINER_VERSION "0.9.2"
+#define MINER_VERSION "0.9.3"
 
 #define USER_AGENT PACKAGE_NAME "/" PACKAGE_VERSION
 #define MAX_CPUS 16
@@ -135,7 +135,6 @@ struct work {
 	uint32_t pow_target[4];
 	uint32_t vm_input[12];
 	unsigned char multiplicator[32];
-	unsigned char announcement_hash[32];
 };
 
 struct thr_info {
@@ -158,7 +157,6 @@ struct submit_req {
 	time_t start_tm;	// Time Request Was Submitted
 	time_t delay_tm;	// If Populated, Time When Next Request Can Be Sent
 	int retries;
-	char hash[65];		// Announcment Hash In Hex
 	char mult[65];		// Multiplicator In Hex
 	uint64_t work_id;
 	unsigned char work_str[22];

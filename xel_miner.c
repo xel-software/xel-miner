@@ -1545,9 +1545,6 @@ static void *cpu_miner_thread(void *userdata) {
 	long hashes_done;
 	struct timeval tv_start, tv_end, diff;
 	int rc = 0;
-	unsigned char msg[41];
-	uint32_t *msg32 = (uint32_t *)msg;
-	uint32_t *workid32;
 	double eval_rate;
 	struct instance *inst = NULL;
 	char hash[32];
@@ -1704,18 +1701,6 @@ static void *cpu_miner_thread(void *userdata) {
 		if (rc == 1) {
 			applog(LOG_NOTICE, "CPU%d: Submitting Bounty Solution", thr_id);
 
-			// Create Announcement Message
-			workid32 = (uint32_t *)&work.work_id;
-			memcpy(&msg[0], &workid32[1], 4);	// Swap First 4 Bytes Of Long
-			memcpy(&msg[4], &workid32[0], 4);	// With Second 4 Bytes Of Long
-			memcpy(&msg[8], work.multiplicator, 32);
-			msg[40] = 1;
-			msg32[0] = swap32(msg32[0]);
-			msg32[1] = swap32(msg32[1]);
-
-			// Create Announcment Hash
-			sha256(msg, 41, work.announcement_hash);
-
 			// Create Submit Request
 			wc = (struct workio_cmd *) calloc(1, sizeof(*wc));
 			if (!wc) {
@@ -1799,9 +1784,7 @@ static void *gpu_miner_thread(void *userdata) {
 	struct timeval tv_start, tv_end, diff;
 	int i, rc = 0;
 	uint32_t vm_storage = 0;
-	unsigned char *ocl_source, str[50], msg[64];
-	uint32_t *msg32 = (uint32_t *)msg;
-	uint32_t *workid32;
+	unsigned char *ocl_source, str[50];
 	double eval_rate;
 	struct instance *inst = NULL;
 	char hash[32];
@@ -1947,18 +1930,6 @@ static void *gpu_miner_thread(void *userdata) {
 				// Update Multiplicator To Include OpenCL Thread ID That Found The Bounty
 				mult32[3] = i;
 
-				// Create Announcement Message
-				workid32 = (uint32_t *)&work.work_id;
-				memcpy(&msg[0], &workid32[1], 4);	// Swap First 4 Bytes Of Long
-				memcpy(&msg[4], &workid32[0], 4);	// With Second 4 Bytes Of Long
-				memcpy(&msg[8], work.multiplicator, 32);
-				msg[40] = 1;
-				msg32[0] = swap32(msg32[0]);
-				msg32[1] = swap32(msg32[1]);
-
-				// Create Announcment Hash
-				sha256(msg, 41, work.announcement_hash);
-
 				// Create Submit Request
 				wc = (struct workio_cmd *) calloc(1, sizeof(*wc));
 				if (!wc) {
@@ -2032,7 +2003,6 @@ static void *gpu_miner_thread(void *userdata) {
 		timeval_subtract(&diff, &tv_end, &tv_start);
 		if (diff.tv_sec >= 5) {
 
-			mult32[6] = genrand_int32();
 			mult32[7] = genrand_int32();
 
 			if (!opt_quiet) {
@@ -2292,7 +2262,6 @@ static bool add_submit_req(struct work *work, uint32_t *data, enum submit_comman
 	g_submit_req[g_submit_req_cnt].retries = 0;
 	g_submit_req[g_submit_req_cnt].work_id = work->work_id;
 	strncpy(g_submit_req[g_submit_req_cnt].work_str, work->work_str, 21);
-	bin2hex(work->announcement_hash, 32, g_submit_req[g_submit_req_cnt].hash, 65);
 	bin2hex(work->multiplicator, 32, g_submit_req[g_submit_req_cnt].mult, 65);
 	g_submit_req[g_submit_req_cnt].iteration_id = work->iteration_id;
 	g_submit_req[g_submit_req_cnt].storage_id = g_work_package[work->package_id].storage_id;

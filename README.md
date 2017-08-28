@@ -1,20 +1,22 @@
-<h1><b>Only Use For Standalone ElasticPL Testing!</b></h1>
-
-# xel_miner 	0.9.2
-# ElasticPL 	0.9.1
+<h1><b>
+Miner 		v0.9.3
+ElasticPL 	v0.9.1
+</b></h1>
+________________________________________________________________________________________________
 
 <i>This code is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 See the GNU General Public License for more details.</i>
 
-This is a prototype of a miner for solving XEL work packages.  <b>The miner is not optimized</b> in any way as its purpose is to demonstrate all the functionality of ElasticPL and the workflow between the Miner & Elastic Node regardless of hardware or OS.
+This is a prototype of a miner for solving XEL work packages.  <b>The miner is not optimized in any way</b> as its purpose is to demonstrate all the functionality of ElasticPL and the workflow between the Miner & Elastic Node regardless of hardware or OS.
 
-It is intended that other developers will improve on the miner performance & functionality by creating versions for specific hardware / OS including all applicable optimizations.
+It is intended that other developers will improve upon the miner performance & functionality by creating versions for specific hardware / OS including all applicable optimizations.
 
 <b>*** The GPU miner is highly experimental.  If you choose to use it, monitor your cards closely to ensure they don't overheat. ***</b>
+________________________________________________________________________________________________
 
-The miner build has been tested using GCC in Linux as well as MinGW32 (using GCC) on Windows.
+The miner build has been tested using GCC on Ubuntu 16.04 as well as MinGW32 (using GCC) on Windows 7/10.
 
-Below are the steps I used to get the miner running on my Raspberry Pi.
+Below are the steps I used to get the miner running on an Ubuntu server & Raspberry Pi.
 <ul>
 <li>sudo apt-get update</li>
 <li>sudo apt-get install cmake libcurl4-openssl-dev libudev-dev screen libtool pkg-config libjansson-dev libssl-dev</li>
@@ -39,13 +41,8 @@ Use "sudo ./xel_miner -h" to see a full list of options.
 
 ________________________________________________________________________________________________
 
-<b>Donations are welcome to support my work on this project:</b>
 
-	XEL: XEL-AZJK-TAVH-3KN3-9EZSH
-________________________________________________________________________________________________
-
-
-#Credits
+<b>Credits</b>
 <ul>
 <li>The core of the miner is based on cpuminer</li>
 <li>The ElasticPL / Work Package logic is based on the tireless efforts of Evil-Knievel</li>
