@@ -55,7 +55,7 @@ extern bool convert_ast_to_c(char *work_str) {
 	// Write Function Declarations
 	for (i = ast_func_idx; i <= stack_exp_idx; i++) {
 		if ((i == ast_main_idx) || (i == ast_verify_idx))
-			fprintf(f, "void %s_%s(uint32_t *, uint32_t, uint32_t *, uint32_t *);\n", stack_exp[i]->svalue, job_suffix);
+			fprintf(f, "void %s_%s(uint32_t *, uint32_t, uint32_t *, uint32_t *, uint32_t *);\n", stack_exp[i]->svalue, job_suffix);
 		else
 			fprintf(f, "void %s_%s();\n", stack_exp[i]->svalue, job_suffix);
 	}
@@ -328,12 +328,12 @@ static bool convert_node(ast* node) {
 
 	switch (node->type) {
 	case NODE_FUNCTION:
-		str = malloc(256);
+		str = malloc(350);
 		if (!strcmp(node->svalue, "main")) {
 			if (opt_opencl)
 				return true;
 			else
-				sprintf(str, "void %s_%s(uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target) {\n", node->svalue, job_suffix);
+				sprintf(str, "void %s_%s(uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target, uint32_t *hash) {\n", node->svalue, job_suffix);
 		}
 		else if (!strcmp(node->svalue, "verify")) {
 			if (opt_opencl)
@@ -347,7 +347,7 @@ static bool convert_node(ast* node) {
 					ast_vm_doubles ? ", global double *d" : "", \
 					ast_submit_sz ? ", global uint *s" : "");
 			else
-				sprintf(str, "void %s_%s(uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target) {\n", node->svalue, job_suffix);
+				sprintf(str, "void %s_%s(uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target, uint32_t *hash) {\n", node->svalue, job_suffix);
 		}
 		else {
 			if ( opt_opencl )
@@ -378,7 +378,7 @@ static bool convert_node(ast* node) {
 					ast_vm_doubles ? ", d" : "", \
 					ast_submit_sz ? ", s" : "");
 			else
-				sprintf(str, "%s_%s(bounty_found, verify_pow, pow_found, target)", node->svalue, job_suffix);
+				sprintf(str, "%s_%s(bounty_found, verify_pow, pow_found, target, hash)", node->svalue, job_suffix);
 		else {
 			if (opt_opencl)
 				sprintf(str, "%s(m%s%s%s%s%s%s%s)", \
@@ -402,11 +402,11 @@ static bool convert_node(ast* node) {
 			sprintf(str, "*bounty_found = (uint32_t)(%s != 0 ? 1 : 0)", lstr);
 		break;
 	case NODE_VERIFY_POW:
-		str = malloc(strlen(lstr) + 100);
+		str = malloc(strlen(lstr) + 150);
 		if (opt_opencl)
-			sprintf(str, "*found += (uint)check_pow(%s, &m[0], target)", lstr);
+			sprintf(str, "*found += (uint)check_pow(%s, &m[0], &target[0])", lstr);
 		else
-			sprintf(str, "if (verify_pow == 1)\n\t\t*pow_found = check_pow(%s, &m[0], &target[0]);\n\telse\n\t\t*pow_found = 0", lstr);
+			sprintf(str, "if (verify_pow == 1)\n\t\t*pow_found = check_pow(%s, &m[0], &target[0], &hash[0]);\n\telse\n\t\t*pow_found = 0", lstr);
 		break;
 	case NODE_CONSTANT:
 		str = malloc(25);
