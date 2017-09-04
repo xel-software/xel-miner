@@ -519,7 +519,7 @@ static void *test_vm_thread(void *userdata) {
 	struct work_package work_package = { 0 };
 	struct instance *inst = NULL;
 	int i, rc;
-	uint32_t bounty_found, pow_found, hash[4];
+	uint32_t bounty_found, pow_found;
 	uint32_t *vm_out = NULL, *vm_input = NULL;
 	uint32_t *mult32 = (uint32_t *)work.multiplicator;
 	unsigned char *ocl_source;
@@ -531,7 +531,7 @@ static void *test_vm_thread(void *userdata) {
 	work.work_id = 12345;
 
 	// Set The Target For The Work
-	g_pow_target[0] = 0x00000FFF;
+	g_pow_target[0] = 0x00FFFFFF;
 	g_pow_target[1] = 0xFFFFFFFF;
 	g_pow_target[2] = 0xFFFFFFFF;
 	g_pow_target[3] = 0xFFFFFFFF;
@@ -703,18 +703,23 @@ static void *test_vm_thread(void *userdata) {
 		inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d, vm_s);
 
 		// Execute The VM Logic
-//		rc = inst->verify(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, &hash[0]);
-		rc = inst->execute(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, &hash[0]);
+//		rc = inst->verify(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, work.pow_hash);
+//		rc = inst->execute(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, work.pow_hash);
 
 		// Run A Continuous Test
-		//for (i = 0; i < 0xFFFFFFFF; i++) {
-		//	vm_m[10] = i;  // Update Round
-		//	rc = inst->execute(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, &hash[0]);
-		//	if (bounty_found)
-		//		break;
-		//	if (pow_found)
-		//		break;
-		//}
+		uint32_t rnd;
+		long hashes_done;
+		for (i = 0; i < 0xFFFFFFFF; i++) {
+			rc = execute_vm(thr_id, &rnd, 0, &work, inst, &hashes_done, 1);
+			if (rc == 1) {
+				bounty_found = true;
+				break;
+			}
+			else if (rc == 2) {
+				pow_found = true;
+				break;
+			}
+		}
 
 		if (inst)
 			free_library(inst);
@@ -722,7 +727,7 @@ static void *test_vm_thread(void *userdata) {
 
 	applog(LOG_DEBUG, "DEBUG: Bounty Found: %s", (bounty_found == 1) ? "true" : "false");
 	applog(LOG_DEBUG, "DEBUG: POW Found: %s", (pow_found == 1) ? "true" : "false");
-	applog(LOG_DEBUG, "DEBUG: POW Hash: %08X%08X%08X%08X", hash[0], hash[1], hash[2], hash[3]);
+	applog(LOG_DEBUG, "DEBUG: POW Hash: %08X%08X%08X%08X", work.pow_hash[0], work.pow_hash[1], work.pow_hash[2], work.pow_hash[3]);
 
 	dump_vm(0);
 
@@ -814,7 +819,7 @@ static bool get_opencl_base_data(struct work *work, uint32_t *vm_input) {
 	return true;
 }
 
-static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work *work, struct instance *inst, long *hashes_done, bool new_work) {
+static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work *work, struct instance *inst, long *hashes_done) {
 	int rc;
 	time_t t_start = time(NULL);
 	char msg[64];
@@ -841,7 +846,8 @@ static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work
 		memcpy(vm_m, work->vm_input, VM_M_ARRAY_SIZE * sizeof(uint32_t));
 
 		// Execute The VM Logic
-		rc = inst->execute(work->work_id, &bounty_found, 1, &pow_found, work->pow_target, work->pow_hash);
+//		rc = inst->execute(work->work_id, &bounty_found, 1, &pow_found, work->pow_target, work->pow_hash);
+		rc = inst->execute(work->work_id, &bounty_found, 1, &pow_found, g_pow_target, work->pow_hash);
 
 		if (opt_test_miner) {
 			dump_vm(work->package_id);
@@ -1547,7 +1553,6 @@ static void *cpu_miner_thread(void *userdata) {
 	int rc = 0;
 	double eval_rate;
 	struct instance *inst = NULL;
-	bool new_work = true;
 	uint32_t rnd = 0, iteration = 0;
 
 	uint32_t vm_ints = 0;
@@ -1590,7 +1595,6 @@ static void *cpu_miner_thread(void *userdata) {
 			// Copy Global Work Into Local Thread Work
 			memcpy((void *)&work, (void *)&g_work, sizeof(struct work));
 			work.thr_id = thr_id;
-			new_work = true;
 
 			// Allocate Memory For Global Variables
 			if (g_work_package[work.package_id].vm_ints > vm_ints) {
@@ -1679,8 +1683,7 @@ static void *cpu_miner_thread(void *userdata) {
 		work_restart[thr_id].restart = 0;
 
 		// Run VM To Check For POW Hash & Bounties
-		rc = execute_vm(thr_id, &rnd, iteration, &work, inst, &hashes_done, new_work);
-		new_work = false;
+		rc = execute_vm(thr_id, &rnd, iteration, &work, inst, &hashes_done);
 
 		// Record Elapsed Time
 		gettimeofday(&tv_end, NULL);
@@ -2261,7 +2264,7 @@ static bool add_submit_req(struct work *work, uint32_t *data, enum submit_comman
 	g_submit_req[g_submit_req_cnt].work_id = work->work_id;
 	strncpy(g_submit_req[g_submit_req_cnt].work_str, work->work_str, 21);
 	bin2hex((unsigned char *)work->multiplicator, 32, g_submit_req[g_submit_req_cnt].mult, 65);
-	bin2hex((unsigned char *)work->pow_hash, 32, g_submit_req[g_submit_req_cnt].mult, 65);
+	bin2hex((unsigned char *)work->pow_hash, 16, g_submit_req[g_submit_req_cnt].hash, 33);
 	g_submit_req[g_submit_req_cnt].iteration_id = work->iteration_id;
 	g_submit_req[g_submit_req_cnt].storage_id = g_work_package[work->package_id].storage_id;
 	g_submit_req[g_submit_req_cnt].submit_data_sz = g_work_package[work->package_id].submit_sz;

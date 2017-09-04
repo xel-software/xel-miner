@@ -2,7 +2,7 @@
 #define __MINER_H__
 
 #define PACKAGE_NAME "xel_miner"
-#define MINER_VERSION "0.9.3"
+#define MINER_VERSION "0.9.4"
 
 #define USER_AGENT PACKAGE_NAME "/" PACKAGE_VERSION
 #define MAX_CPUS 16
@@ -159,7 +159,7 @@ struct submit_req {
 	time_t delay_tm;	// If Populated, Time When Next Request Can Be Sent
 	int retries;
 	char mult[65];		// Multiplicator In Hex
-	char hash[65];		// POW Hash In Hex
+	char hash[33];		// POW Hash In Hex
 	uint64_t work_id;
 	unsigned char work_str[22];
 	uint32_t iteration_id;
@@ -340,7 +340,7 @@ static void show_usage_and_exit(int status);
 static void show_version_and_exit(void);
 static bool load_test_file(char *file_name, char *buf);
 static bool get_vm_input(struct work *work);
-static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work *work, struct instance *inst, long *hashes_done, bool new_work);
+static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work *work, struct instance *inst, long *hashes_done);
 static void dump_vm(int idx);
 
 static bool get_work(CURL *curl);
