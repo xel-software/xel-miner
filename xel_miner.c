@@ -650,7 +650,7 @@ static void *test_vm_thread(void *userdata) {
 		//		if (!vm_out[j])
 		//			continue;
 		//		else if ((vm_out[j] == 1) || (vm_out[j] == 3)) {
-		//			dump_opencl_debug_data(&gpu[0], h, j, 4, 4);
+		//			dump_opencl_debug_data(&gpu[0], h, j, 8, 4);
 		//			applog(LOG_DEBUG, "DEBUG: Hash - %08X%08X%08X%08X  Tgt - %08X%08X%08X%08X", h[0], h[1], h[2], h[3], g_pow_target[0], g_pow_target[1], g_pow_target[2], g_pow_target[3]);
 		//			applog(LOG_DEBUG, "DEBUG: Hashes = %lu", (i * 1024) + j);
 		//		}
@@ -704,26 +704,26 @@ static void *test_vm_thread(void *userdata) {
 
 		// Execute The VM Logic
 //		rc = inst->verify(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, work.pow_hash);
-//		rc = inst->execute(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, work.pow_hash);
+		rc = inst->execute(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, work.pow_hash);
 
 		// Run A Continuous Test
-		uint32_t rnd;
-		long hashes_done;
-		for (i = 0; i < 0xFFFFFFFF; i++) {
-			rc = execute_vm(thr_id, &rnd, 0, &work, inst, &hashes_done, 1);
-			if (rc == 1) {
-				bounty_found = true;
-				break;
-			}
-			else if (rc == 2) {
-				pow_found = true;
-				break;
-			}
+		//uint32_t rnd;
+		//long hashes_done;
+		//for (i = 0; i < 0xFFFFFFFF; i++) {
+		//	rc = execute_vm(thr_id, &rnd, 0, &work, inst, &hashes_done, 1);
+		//	if (rc == 1) {
+		//		bounty_found = true;
+		//		break;
+		//	}
+		//	else if (rc == 2) {
+		//		pow_found = true;
+		//		break;
+		//	}
 		}
 
-		if (inst)
-			free_library(inst);
-	}
+	//	if (inst)
+	//		free_library(inst);
+	//}
 
 	applog(LOG_DEBUG, "DEBUG: Bounty Found: %s", (bounty_found == 1) ? "true" : "false");
 	applog(LOG_DEBUG, "DEBUG: POW Found: %s", (pow_found == 1) ? "true" : "false");
@@ -1788,9 +1788,7 @@ static void *gpu_miner_thread(void *userdata) {
 	unsigned char *ocl_source, str[50];
 	double eval_rate;
 	struct instance *inst = NULL;
-	char hash[32];
 	uint32_t *mult32 = (uint32_t *)work.multiplicator;
-	uint32_t *hash32 = (uint32_t *)hash;
 
 	// Set lower priority
 	if (!opt_norenice)
@@ -1924,8 +1922,11 @@ static void *gpu_miner_thread(void *userdata) {
 				continue;
 			}
 
+			// Copy Hash To Work (Currently POW Hash Is Written To m[8]-m[11])
+			dump_opencl_debug_data(&gpu[thr_id], &work.pow_hash[0], i, 8, 4);
+
 			// Check For Bounty Solutions
-			else if ((vm_out[i] == 2) || (vm_out[i] == 3)) {
+			if ((vm_out[i] == 2) || (vm_out[i] == 3)) {
 				applog(LOG_NOTICE, "%s - %d: Submitting Bounty Solution", mythr->name, i);
 
 				// Update Multiplicator To Include OpenCL Thread ID That Found The Bounty
@@ -1962,8 +1963,7 @@ static void *gpu_miner_thread(void *userdata) {
 
 				// Get Hash From Kernel Data
 				if (opt_debug) {
-					dump_opencl_debug_data(&gpu[thr_id], &hash32[0], i, 4, 4);
-					applog(LOG_DEBUG, "DEBUG: Hash - %08X%08X%08X%08X  Tgt - %08X%08X%08X%08X", hash32[0], hash32[1], hash32[2], hash32[3], work.pow_target[0], work.pow_target[1], work.pow_target[2], work.pow_target[3]);
+					applog(LOG_DEBUG, "DEBUG: Hash - %08X%08X%08X%08X  Tgt - %08X%08X%08X%08X", work.pow_hash[0], work.pow_hash[1], work.pow_hash[2], work.pow_hash[3], g_pow_target[0], g_pow_target[1], g_pow_target[2], g_pow_target[3]);
 				}
 
 				applog(LOG_NOTICE, "%s - %d: Submitting POW Solution", mythr->name, i);

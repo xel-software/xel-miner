@@ -433,7 +433,7 @@ extern bool create_opencl_source(char *work_str) {
 
 	fprintf(f, "static uint check_pow(uint msg_0, uint msg_1, uint msg_2, uint msg_3, global uint *m, uint *target) {\n");
 	fprintf(f, "\tint i;\n");
-	fprintf(f, "\tchar msg[48], hash[20];\n");
+	fprintf(f, "\tchar msg[48], hash[16];\n");
 	fprintf(f, "\tuint32_t *msg32 = (uint32_t *)(msg);\n");
 	fprintf(f, "\tuint32_t *hash32 = (uint32_t *)(hash);\n\n");
 	fprintf(f, "\tmsg32[0] = msg_0;\n");
@@ -444,17 +444,24 @@ extern bool create_opencl_source(char *work_str) {
 	fprintf(f, "\t\tmsg32[i+4] = m[i];\n\n");
 	fprintf(f, "\tmd5((char*)&msg[0], 48, &hash[0]);\n\n");
 
+	
+	fprintf(f, "\t// Copy Hash To m[8]-m[11] So It Can Be Sent To Node\n");
+	fprintf(f, "\tm[8]  = hash32[0];\n");
+	fprintf(f, "\tm[9]  = hash32[1];\n");
+	fprintf(f, "\tm[10] = hash32[2];\n");
+	fprintf(f, "\tm[11] = hash32[3];\n\n");
+
 	// Dump Some Data For Debugging
-	if (opt_debug) {
-		fprintf(f, "\tm[0] = msg_0;\n");
-		fprintf(f, "\tm[1] = msg_1;\n");
-		fprintf(f, "\tm[2] = msg_2;\n");
-		fprintf(f, "\tm[3] = msg_3;\n");
-		fprintf(f, "\tm[4] = hash32[0];\n");
-		fprintf(f, "\tm[5] = hash32[1];\n");
-		fprintf(f, "\tm[6] = hash32[2];\n");
-		fprintf(f, "\tm[7] = hash32[3];\n\n");
-	}
+	//if (opt_debug) {
+	//	fprintf(f, "\tm[0] = msg_0;\n");
+	//	fprintf(f, "\tm[1] = msg_1;\n");
+	//	fprintf(f, "\tm[2] = msg_2;\n");
+	//	fprintf(f, "\tm[3] = msg_3;\n");
+	//	fprintf(f, "\tm[4] = hash32[0];\n");
+	//	fprintf(f, "\tm[5] = hash32[1];\n");
+	//	fprintf(f, "\tm[6] = hash32[2];\n");
+	//	fprintf(f, "\tm[7] = hash32[3];\n\n");
+	//}
 
 	fprintf(f, "\tfor (i = 0; i < 4; i++) {\n");
 	fprintf(f, "\t\tif (hash32[i] > target[i])\n");
