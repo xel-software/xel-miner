@@ -57,7 +57,7 @@ bool create_c_source(char *work_str) {
 	fprintf(f, "static uint32_t rotr32(uint32_t x, uint32_t n);\n");
 	fprintf(f, "static uint64_t rotl64(uint64_t x, uint64_t n);\n");
 	fprintf(f, "static uint64_t rotr64(uint64_t x, uint64_t n);\n\n");
-	fprintf(f, "static uint32_t check_pow(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t *, uint32_t *);\n\n");
+	fprintf(f, "static uint32_t check_pow(uint32_t, uint32_t, uint32_t, uint32_t, uint32_t *, uint32_t *, uint32_t *);\n\n");
 
 	// Include C Source Code For ElasticPL Jobs
 	fprintf(f, "#include \"job_%s.h\"\n\n", work_str);
@@ -85,23 +85,22 @@ bool create_c_source(char *work_str) {
 	fprintf(f, "\treturn (x>>n) | (x<<( (-n)&mask64 ));\n");
 	fprintf(f, "}\n\n");
 
-	fprintf(f, "static uint32_t check_pow(uint32_t msg_0, uint32_t msg_1, uint32_t msg_2, uint32_t msg_3, uint32_t *m, uint32_t *target) {\n");
+	fprintf(f, "static uint32_t check_pow(uint32_t msg_0, uint32_t msg_1, uint32_t msg_2, uint32_t msg_3, uint32_t *m, uint32_t *target, uint32_t *hash) {\n");
 	fprintf(f, "\tint i;\n");
-	fprintf(f, "\tchar msg[48], hash[20];\n");
+	fprintf(f, "\tchar msg[48];\n");
 	fprintf(f, "\tuint32_t *msg32 = (uint32_t *)(msg);\n");
-	fprintf(f, "\tuint32_t *hash32 = (uint32_t *)(hash);\n\n");
 	fprintf(f, "\tmsg32[0] = msg_0;\n");
 	fprintf(f, "\tmsg32[1] = msg_1;\n");
 	fprintf(f, "\tmsg32[2] = msg_2;\n");
 	fprintf(f, "\tmsg32[3] = msg_3;\n\n");
 	fprintf(f, "\tfor (i = 0; i < 8; i++)\n");
 	fprintf(f, "\t\tmsg32[i+4] = m[i];\n\n");
-	fprintf(f, "\tMD5(msg, 48, hash);\n\n");
+	fprintf(f, "\tMD5(msg, 48, (unsigned char *)hash);\n\n");
 
 	fprintf(f, "\tfor (i = 0; i < 4; i++) {\n");
-	fprintf(f, "\t\tif (hash32[i] > target[i])\n");
+	fprintf(f, "\t\tif (hash[i] > target[i])\n");
 	fprintf(f, "\t\t\treturn 0;\n");
-	fprintf(f, "\t\telse if (hash32[i] < target[i])\n");
+	fprintf(f, "\t\telse if (hash[i] < target[i])\n");
 	fprintf(f, "\t\t\treturn 1;    // POW Solution Found\n");
 	fprintf(f, "\t}\n");
 	fprintf(f, "\treturn 0;\n");
@@ -125,24 +124,24 @@ bool create_c_source(char *work_str) {
 	fprintf(f, "}\n\n");
 
 #ifdef WIN32
-	fprintf(f, "__declspec(dllexport) int32_t execute( uint64_t work_id, uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target ) {\n\n");
+	fprintf(f, "__declspec(dllexport) int32_t execute( uint64_t work_id, uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target, uint32_t *hash ) {\n\n");
 #else
-	fprintf(f, "int32_t execute( uint64_t work_id, uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target ) {\n\n");
+	fprintf(f, "int32_t execute( uint64_t work_id, uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target, uint32_t *hash ) {\n\n");
 #endif
 
 	// Call The Main Function For The Current Job
-	fprintf(f, "\tmain_%s(bounty_found, verify_pow, pow_found, target);\n\n", work_str);
+	fprintf(f, "\tmain_%s(bounty_found, verify_pow, pow_found, target, hash);\n\n", work_str);
 	fprintf(f, "\treturn 0;\n");
 	fprintf(f, "}\n\n");
 
 #ifdef WIN32
-	fprintf(f, "__declspec(dllexport) int32_t verify( uint64_t work_id, uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target ) {\n\n");
+	fprintf(f, "__declspec(dllexport) int32_t verify( uint64_t work_id, uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target, uint32_t *hash ) {\n\n");
 #else
-	fprintf(f, "int32_t verify( uint64_t work_id, uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target ) {\n\n");
+	fprintf(f, "int32_t verify( uint64_t work_id, uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target, uint32_t *hash ) {\n\n");
 #endif
 
 	// Call The Verify Function For The Current Job
-	fprintf(f, "\tverify_%s(bounty_found, verify_pow, pow_found, target);\n\n", work_str);
+	fprintf(f, "\tverify_%s(bounty_found, verify_pow, pow_found, target, hash);\n\n", work_str);
 	fprintf(f, "\treturn 0;\n");
 	fprintf(f, "}\n\n");
 
@@ -201,8 +200,8 @@ void create_instance(struct instance* inst, char *work_str) {
 		exit(EXIT_FAILURE);
 	}
 	inst->initialize = (int32_t(__cdecl *)(uint32_t *, int32_t *, uint32_t *, int64_t *, uint64_t *, float *, double *, uint32_t *))GetProcAddress((HMODULE)inst->hndl, "initialize");
-	inst->execute = (int32_t(__cdecl *)(uint64_t, uint32_t *, uint32_t, uint32_t *, uint32_t *))GetProcAddress((HMODULE)inst->hndl, "execute");
-	inst->verify = (int32_t(__cdecl *)(uint64_t, uint32_t *, uint32_t, uint32_t *, uint32_t *))GetProcAddress((HMODULE)inst->hndl, "verify");
+	inst->execute = (int32_t(__cdecl *)(uint64_t, uint32_t *, uint32_t, uint32_t *, uint32_t *, uint32_t *))GetProcAddress((HMODULE)inst->hndl, "execute");
+	inst->verify = (int32_t(__cdecl *)(uint64_t, uint32_t *, uint32_t, uint32_t *, uint32_t *, uint32_t *))GetProcAddress((HMODULE)inst->hndl, "verify");
 	if (!inst->initialize || !inst->execute || !inst->verify) {
 			fprintf(stderr, "Unable to find library functions");
 		FreeLibrary((HMODULE)inst->hndl);

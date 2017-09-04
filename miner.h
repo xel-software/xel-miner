@@ -133,6 +133,7 @@ struct work {
 	unsigned char work_str[22];
 	unsigned char work_nm[50];
 	uint32_t pow_target[4];
+	uint32_t pow_hash[4];
 	uint32_t vm_input[12];
 	unsigned char multiplicator[32];
 };
@@ -158,6 +159,7 @@ struct submit_req {
 	time_t delay_tm;	// If Populated, Time When Next Request Can Be Sent
 	int retries;
 	char mult[65];		// Multiplicator In Hex
+	char hash[65];		// POW Hash In Hex
 	uint64_t work_id;
 	unsigned char work_str[22];
 	uint32_t iteration_id;
@@ -209,13 +211,13 @@ struct instance {
 #ifdef WIN32
 	HINSTANCE hndl;
 	int32_t(__cdecl* initialize)(uint32_t *, int32_t *, uint32_t *, int64_t *, uint64_t *, float *, double *, uint32_t *);
-	int32_t(__cdecl* execute)(uint64_t, uint32_t *, uint32_t, uint32_t *, uint32_t *);
-	int32_t(__cdecl* verify)(uint64_t, uint32_t *, uint32_t, uint32_t *, uint32_t *);
+	int32_t(__cdecl* execute)(uint64_t, uint32_t *, uint32_t, uint32_t *, uint32_t *, uint32_t *);
+	int32_t(__cdecl* verify)(uint64_t, uint32_t *, uint32_t, uint32_t *, uint32_t *, uint32_t *);
 #else
 	void *hndl;
 	int32_t(*initialize)(uint32_t *, int32_t *, uint32_t *, int64_t *, uint64_t *, float *, double *, uint32_t *);
-	int32_t(*execute)(uint64_t, uint32_t *, uint32_t, uint32_t *, uint32_t *);
-	int32_t(*verify)(uint64_t, uint32_t *, uint32_t, uint32_t *, uint32_t *);
+	int32_t(*execute)(uint64_t, uint32_t *, uint32_t, uint32_t *, uint32_t *, uint32_t *);
+	int32_t(*verify)(uint64_t, uint32_t *, uint32_t, uint32_t *, uint32_t *, uint32_t *);
 #endif
 
 };
@@ -338,7 +340,7 @@ static void show_usage_and_exit(int status);
 static void show_version_and_exit(void);
 static bool load_test_file(char *file_name, char *buf);
 static bool get_vm_input(struct work *work);
-static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work *work, struct instance *inst, long *hashes_done, char* hash, bool new_work);
+static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work *work, struct instance *inst, long *hashes_done, bool new_work);
 static void dump_vm(int idx);
 
 static bool get_work(CURL *curl);
