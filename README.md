@@ -20,7 +20,7 @@ Below are the steps I used to get the miner running on an Ubuntu server & Raspbe
 <li>git clone https://github.com/sprocket-fpga/xel_miner.git</li>
 <li>cd xel_miner</li>
 <li>cd build</li>
-<li>cmake ..</li>
+<li>cmake .. (note, if you are using OpenCL, then use "cmake .. -USE_OPENCL"</li>
 <li>make install</li>
 </ul>
 

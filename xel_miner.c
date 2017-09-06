@@ -610,6 +610,9 @@ static void *test_vm_thread(void *userdata) {
 	}
 
 	if (opt_opencl) {
+
+#ifdef USE_OPENCL
+
 		// Calculate Worksize
 		if (!calc_opencl_worksize(&gpu[0]))
 			exit(EXIT_FAILURE);
@@ -680,12 +683,22 @@ static void *test_vm_thread(void *userdata) {
 		uint32_t dump[12];
 		dump_opencl_debug_data(&gpu[0], dump, 0, 0, 12);
 
+		printf("\n");
 		for (i = 0; i < 12; i++)
 			printf("\tdump[%d] = %08X\n", i, dump[i]);
 
 		printf("\n\tvm_out = %d\n", vm_out[0]);
 		printf("\n");
 
+		if ((vm_out[0] == 2) || (vm_out[0] == 3))
+			bounty_found = true;
+
+		if ((vm_out[0] == 1) || (vm_out[0] == 3))
+			pow_found = true;
+
+		memcpy(work.pow_hash, &dump[8], 16);
+
+#endif
 
 	}
 	else {
@@ -719,17 +732,16 @@ static void *test_vm_thread(void *userdata) {
 		//		pow_found = true;
 		//		break;
 		//	}
-		}
 
-	//	if (inst)
-	//		free_library(inst);
-	//}
+		dump_vm(0);
+	}
 
 	applog(LOG_DEBUG, "DEBUG: Bounty Found: %s", (bounty_found == 1) ? "true" : "false");
 	applog(LOG_DEBUG, "DEBUG: POW Found: %s", (pow_found == 1) ? "true" : "false");
 	applog(LOG_DEBUG, "DEBUG: POW Hash: %08X%08X%08X%08X", work.pow_hash[0], work.pow_hash[1], work.pow_hash[2], work.pow_hash[3]);
 
-	dump_vm(0);
+	if (inst)
+		free_library(inst);
 
 	applog(LOG_NOTICE, "DEBUG: Compiler Test Complete");
 	applog(LOG_WARNING, "Exiting " PACKAGE_NAME);

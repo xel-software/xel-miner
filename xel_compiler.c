@@ -145,6 +145,7 @@ bool create_c_source(char *work_str) {
 	fprintf(f, "\treturn 0;\n");
 	fprintf(f, "}\n\n");
 
+	fflush(f);
 	fclose(f);
 	return true;
 }
@@ -273,7 +274,7 @@ extern bool create_opencl_source(char *work_str) {
 	fprintf(f, "#define uint32_t uint\n");
 	fprintf(f, "#define int64_t long\n");
 	fprintf(f, "#define uint64_t ulong\n");
-
+	fprintf(f, "#define NULL 0\n\n");
 
 	fprintf(f, "/* The basic MD5 functions */\n");
 	fprintf(f, "#define F(x, y, z)          ((z) ^ ((x) & ((y) ^ (z))))\n");
@@ -370,7 +371,8 @@ extern bool create_opencl_source(char *work_str) {
 	fprintf(f, "\tinternal_state[1] = b + internal_state[1];\n");
 	fprintf(f, "\tinternal_state[2] = c + internal_state[2];\n");
 	fprintf(f, "\tinternal_state[3] = d + internal_state[3];\n");
-	fprintf(f, "}\n");
+	fprintf(f, "}\n\n");
+
 	fprintf(f, "void md5(const char* restrict msg, uint length_bytes, uint* restrict out) {\n");
 	fprintf(f, "\tuint i;\n");
 	fprintf(f, "\tuint bytes_left;\n");
@@ -442,7 +444,7 @@ extern bool create_opencl_source(char *work_str) {
 	fprintf(f, "\tmsg32[3] = msg_3;\n\n");
 	fprintf(f, "\tfor (i = 0; i < 8; i++)\n");
 	fprintf(f, "\t\tmsg32[i+4] = m[i];\n\n");
-	fprintf(f, "\tmd5((char*)&msg[0], 48, &hash[0]);\n\n");
+	fprintf(f, "\tmd5((char*)&msg[0], 48, &hash32[0]);\n\n");
 
 	
 	fprintf(f, "\t// Copy Hash To m[8]-m[11] So It Can Be Sent To Node\n");
@@ -471,16 +473,12 @@ extern bool create_opencl_source(char *work_str) {
 	fprintf(f, "\t}\n");
 	fprintf(f, "\treturn 1;\n");
 	fprintf(f, "}\n\n");
+	fflush(f);
 
 	if (!convert_ast_to_opencl(f))
 		return false;
 
-	if (opt_test_vm) {
-		fprintf(stdout, "\n********************************************************************************\n");
-		fprintf(stdout, "%s", code);
-		fprintf(stdout, "\n********************************************************************************\n");
-	}
-
+	fflush(f);
 	fclose(f);
 	if (code != NULL)
 		free(code);
