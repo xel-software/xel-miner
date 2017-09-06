@@ -60,6 +60,7 @@ extern bool convert_ast_to_c(char *work_str) {
 			fprintf(f, "void %s_%s();\n", stack_exp[i]->svalue, job_suffix);
 	}
 	fprintf(f, "\n");
+	fflush(f);
 
 	// Write Function Definitions
 	for (i = ast_func_idx; i <= stack_exp_idx; i++) {
@@ -80,8 +81,10 @@ extern bool convert_ast_to_c(char *work_str) {
 			}
 		}
 		fprintf(f, "\n");
+		fflush(f);
 	}
 
+	fflush(f);
 	fclose(f);
 
 	return true;
@@ -119,6 +122,7 @@ extern bool convert_ast_to_opencl(FILE* f) {
 				ast_submit_sz ? ", global uint *s" : "");
 	}
 	fprintf(f, "\n");
+	fflush(f);
 
 	// Write Function Definitions
 	for (i = ast_func_idx; i <= stack_exp_idx; i++) {
@@ -209,9 +213,11 @@ extern bool convert_ast_to_opencl(FILE* f) {
 			fprintf(f, "\t// Copy Inputs To Global Memory;\n");
 			fprintf(f, "\tfor (j = 0; j < 12; j++)\n");
 			fprintf(f, "\t\tm[j] = vm_input[j];\n\n");
+			fflush(f);
 		}
 
 		if (!convert_function(stack_exp[i])) {
+			fflush(f);
 			fclose(f);
 			return false;
 		}
@@ -224,6 +230,7 @@ extern bool convert_ast_to_opencl(FILE* f) {
 			}
 		}
 		fprintf(f, "\n");
+		fflush(f);
 	}
 
 	return true;
