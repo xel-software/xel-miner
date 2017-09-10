@@ -285,34 +285,31 @@ struct opencl_device {
 	cl_device_id device_id;
 	cl_context context;
 	cl_command_queue queue;
-	cl_kernel kernel_execute;
+	cl_kernel kernel;
 	cl_uint work_dim;
 	int threads;
-	size_t global_size[2];
-	size_t local_size[2];
-	cl_mem vm_input;
-	cl_mem vm_m;
-	cl_mem vm_i;
-	cl_mem vm_u;
-	cl_mem vm_l;
-	cl_mem vm_ul;
-	cl_mem vm_f;
-	cl_mem vm_d;
-	cl_mem vm_s;
-	cl_mem vm_out;
+	size_t global_size[3];
+	size_t local_size[3];
+	cl_mem obj_dat;
+	cl_mem obj_rnd;
+	cl_mem obj_res;
+	cl_mem obj_out;
+	cl_mem obj_sub;
+	cl_mem obj_storage;
 };
 
 extern struct opencl_device *gpu;
 
 extern int init_opencl_devices();
-extern unsigned char* load_opencl_source(char *work_str);
-extern bool init_opencl_kernel(struct opencl_device *gpu, char *ocl_source);
-extern bool create_opencl_buffers(struct opencl_device *gpu);
-extern bool calc_opencl_worksize(struct opencl_device *gpu);
-extern bool execute_kernel(struct opencl_device *gpu, const uint32_t *vm_input, const uint32_t *vm_s, uint32_t *vm_out);
-extern bool dump_opencl_kernel_data(struct opencl_device *gpu, uint32_t *data, int idx, int offset, int len);
-extern bool dump_opencl_debug_data(struct opencl_device *gpu, uint32_t *data, int idx, int offset, int len);
+extern int opencl_init_devices();
+extern unsigned char* opencl_load_source(char *work_str);
+extern bool opencl_create_kernel(struct opencl_device *gpu, char *ocl_source, uint32_t storage_sz);
+extern bool opencl_create_buffers(struct opencl_device *gpu);
+extern bool opencl_calc_worksize(struct opencl_device *gpu);
+extern bool opencl_init_buffer_data(struct opencl_device *gpu, uint32_t *base_data, uint32_t *round, uint32_t *result, uint32_t *storage, uint32_t storage_sz);
+extern bool opencl_run_kernel(struct opencl_device *gpu, uint32_t *rnd_num, uint32_t *result, uint32_t *output, uint32_t *submit, uint32_t submit_sz);
 static void *gpu_miner_thread(void *userdata);
+static bool opencl_err_check(int err, char *err_code);
 #endif
 
 struct thread_q;

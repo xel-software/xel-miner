@@ -26,8 +26,131 @@
 #include "miner.h"
 
 #define CL_CHECK(x) x
+#define MAX_OPENCL_PLATFORMS 100
 
-extern unsigned char* load_opencl_source(char *work_str) {
+bool opencl_err_check(int err, char *desc) {
+	if (err != CL_SUCCESS) {
+		applog(LOG_ERR, "Error: %s (Code: %d)", desc, err);
+		return false;
+	}
+	return true;
+}
+
+extern int opencl_init_devices() {
+	size_t i, j;
+	cl_platform_id platforms[MAX_OPENCL_PLATFORMS];
+	cl_uint err;
+	cl_uint num_platforms = 0;
+	cl_uint num_devices = 0;
+	char buffer[1024];
+	bool found;
+	int gpu_cnt = 0;
+
+	err = clGetPlatformIDs(MAX_OPENCL_PLATFORMS, platforms, &num_platforms);
+	if (!opencl_err_check(err, "No OpenCL platforms found")) return 0;
+
+	gpu = (struct opencl_device *)malloc(num_platforms * sizeof(struct opencl_device));
+
+	if (!gpu) {
+		applog(LOG_ERR, "ERROR: Unable to allocate GPU devices!");
+		return 0;
+	}
+
+	applog(LOG_DEBUG, "=== %d OpenCL platform(s) found: ===", num_platforms);
+
+	for (i = 0; i < num_platforms; i++) {
+
+		found = false;
+
+		applog(LOG_DEBUG, "  -- %d --", i);
+		clGetPlatformInfo(platforms[i], CL_PLATFORM_PROFILE, sizeof(buffer), buffer, NULL);
+		applog(LOG_DEBUG, "  PROFILE = %s", buffer);
+		clGetPlatformInfo(platforms[i], CL_PLATFORM_VERSION, sizeof(buffer), buffer, NULL);
+		applog(LOG_DEBUG, "  VERSION = %s", buffer);
+		clGetPlatformInfo(platforms[i], CL_PLATFORM_NAME, sizeof(buffer), buffer, NULL);
+		applog(LOG_DEBUG, "  NAME = %s", buffer);
+		clGetPlatformInfo(platforms[i], CL_PLATFORM_VENDOR, sizeof(buffer), buffer, NULL);
+		applog(LOG_DEBUG, "  VENDOR = %s", buffer);
+		clGetPlatformInfo(platforms[i], CL_PLATFORM_EXTENSIONS, sizeof(buffer), buffer, NULL);
+		applog(LOG_DEBUG, "  EXTENSIONS = %s", buffer);
+
+		err = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, 0, NULL, &num_devices);
+		if (!opencl_err_check(err, "Unable to get devices from OpenCL Platform")) return 0;
+
+		if (num_devices) {
+
+			applog(LOG_DEBUG, "  DEVICES:");
+			cl_device_id *devices = (cl_device_id *)malloc(num_devices * sizeof(cl_device_id));
+
+			err = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU, num_devices, devices, NULL);
+			if (!opencl_err_check(err, "Unable to get GPU devices from device list")) num_devices = 0;
+
+			for (j = 0; j < num_devices; j++) {
+
+				err = clGetDeviceInfo(devices[j], CL_DEVICE_NAME, sizeof(buffer), buffer, NULL);
+				if (!opencl_err_check(err, "Unable to Device Name from device list")) break;
+
+				applog(LOG_DEBUG, "    %d - %s", j, buffer);
+
+				err = clGetDeviceInfo(devices[j], CL_DEVICE_EXTENSIONS, sizeof(buffer), buffer, NULL);
+				if (!opencl_err_check(err, "Unable to Device Extensions from device list")) break;
+
+				if (!strstr(buffer, "cl_khr_fp64")) {
+					applog(LOG_DEBUG, "        *Device does not support 64bit Floating Point math");
+					break;
+				}
+
+				memcpy(&gpu[gpu_cnt].platform_id, &platforms[i], sizeof(cl_platform_id));
+				memcpy(&gpu[gpu_cnt].device_id, &devices[j], sizeof(cl_device_id));
+				strncpy(gpu[gpu_cnt].name, buffer, 99);
+				found = true;
+				break;
+			}
+			free(devices);
+		}
+
+		if (!found)
+			continue;
+
+		// Create Context
+		gpu[gpu_cnt].context = clCreateContext(NULL, 1, &gpu[gpu_cnt].device_id, NULL, NULL, &err);
+		if (!gpu[gpu_cnt].context) {
+			applog(LOG_ERR, "ERROR: Unable to create OpenCL context (Error: %d)", err);
+			return 0;
+		}
+
+		// Create Command Queue
+		gpu[gpu_cnt].queue = clCreateCommandQueue(gpu[gpu_cnt].context, gpu[gpu_cnt].device_id, 0, &err);
+		if (!gpu[gpu_cnt].queue) {
+			applog(LOG_ERR, "ERROR: Unable to create OpenCL command queue (Error: %d)", err);
+			return 0;
+		}
+
+		gpu_cnt++;
+	}
+
+	return gpu_cnt;
+}
+
+extern bool opencl_create_buffers(struct opencl_device *gpu) {
+	cl_uint err;
+
+	gpu->obj_dat = clCreateBuffer(gpu->context, CL_MEM_READ_ONLY, 24 * sizeof(uint32_t), NULL, &err);
+	if (!opencl_err_check(err, "Unable to create OpenCL 'base_data' buffer")) return false;
+
+	gpu->obj_rnd = clCreateBuffer(gpu->context, CL_MEM_READ_ONLY, 1 * sizeof(uint32_t), NULL, &err);
+	if (!opencl_err_check(err, "Unable to create OpenCL 'round' buffer")) return false;
+
+	gpu->obj_res = clCreateBuffer(gpu->context, CL_MEM_READ_WRITE, 1 * sizeof(uint32_t), NULL, &err);
+	if (!opencl_err_check(err, "Unable to create OpenCL 'result' buffer")) return false;
+
+	gpu->obj_out = clCreateBuffer(gpu->context, CL_MEM_WRITE_ONLY, 5 * sizeof(uint32_t), NULL, &err);
+	if (!opencl_err_check(err, "Unable to create OpenCL 'output' buffer")) return false;
+
+	return true;
+}
+
+extern unsigned char* opencl_load_source(char *work_str) {
 	unsigned char filename[50], *ocl_source = NULL;
 	FILE *fp;
 	size_t bytes;
@@ -60,170 +183,14 @@ extern unsigned char* load_opencl_source(char *work_str) {
 	return ocl_source;
 }
 
-extern bool init_opencl_kernel(struct opencl_device *gpu, char *ocl_source) {
-	cl_int ret;
-
-	// Load OpenCL Source Code
-	cl_program program = clCreateProgramWithSource(gpu->context, 1, (const char **)&ocl_source, NULL, &ret);
-	if (ret != CL_SUCCESS) {
-		applog(LOG_ERR, "Unable to load OpenCL program (Error: %d)", ret);
-		return false;
-	}
-
-	// Compile OpenCL Source Code
-	ret = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
-	if (ret != CL_SUCCESS) {
-		size_t len;
-		char buffer[2048];
-		clGetProgramBuildInfo(program, gpu->device_id, CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
-		applog(LOG_ERR, "Unable to compile OpenCL program (Error: %d) -\n%s", ret, buffer);
-		return false;
-	}
-
-	// Create OpenCL Kernel
-	gpu->kernel_execute = clCreateKernel(program, "execute", &ret);
-	if (!gpu->kernel_execute || ret != CL_SUCCESS) {
-		applog(LOG_ERR, "Unable to create OpenCL kernel (Error: %d)", ret);
-		clReleaseProgram(program);
-		return false;
-	}
-
-	// Set Argurments For Kernel
-	ret  = clSetKernelArg(gpu->kernel_execute, 0, sizeof(cl_mem), (const void*)&gpu->vm_input);
-	ret |= clSetKernelArg(gpu->kernel_execute, 1, sizeof(cl_mem), (const void*)&gpu->vm_m);
-	ret |= clSetKernelArg(gpu->kernel_execute, 2, sizeof(cl_mem), (const void*)&gpu->vm_i);
-	ret |= clSetKernelArg(gpu->kernel_execute, 3, sizeof(cl_mem), (const void*)&gpu->vm_u);
-	ret |= clSetKernelArg(gpu->kernel_execute, 4, sizeof(cl_mem), (const void*)&gpu->vm_l);
-	ret |= clSetKernelArg(gpu->kernel_execute, 5, sizeof(cl_mem), (const void*)&gpu->vm_ul);
-	ret |= clSetKernelArg(gpu->kernel_execute, 6, sizeof(cl_mem), (const void*)&gpu->vm_f);
-	ret |= clSetKernelArg(gpu->kernel_execute, 7, sizeof(cl_mem), (const void*)&gpu->vm_d);
-	ret |= clSetKernelArg(gpu->kernel_execute, 8, sizeof(cl_mem), (const void*)&gpu->vm_s);
-	ret |= clSetKernelArg(gpu->kernel_execute, 9, sizeof(cl_mem), (const void*)&gpu->vm_out);
-
-	if (ret != CL_SUCCESS) {
-		applog(LOG_ERR, "Unable to set OpenCL argurments for 'execute' kernel (Error: %d)", ret);
-		return false;
-	}
-
-	return true;
-}
-
-extern int init_opencl_devices() {
-	size_t i, j;
-	cl_platform_id platforms[100];
-	cl_uint ret;
-	cl_uint platforms_n = 0;
-	cl_uint devices_n = 0;
-	char buffer[1024];
-	bool found;
-	int gpu_cnt = 0;
-
-	CL_CHECK(clGetPlatformIDs(100, platforms, &platforms_n));
-
-	if (platforms_n == 0) {
-		applog(LOG_ERR, "ERROR: No OpenCL platforms found!");
-		return 0;
-	}
-
-	gpu = (struct opencl_device *)malloc(platforms_n * sizeof(struct opencl_device));
-
-	if (!gpu) {
-		applog(LOG_ERR, "ERROR: Unable to allocate GPU devices!");
-		return 0;
-	}
-
-	applog(LOG_DEBUG, "=== %d OpenCL platform(s) found: ===", platforms_n);
-
-	for (i = 0; i < platforms_n; i++) {
-
-		found = false;
-
-		applog(LOG_DEBUG, "  -- %d --", i);
-		CL_CHECK(clGetPlatformInfo(platforms[i], CL_PLATFORM_PROFILE, sizeof(buffer), buffer, NULL));
-		applog(LOG_DEBUG, "  PROFILE = %s", buffer);
-		CL_CHECK(clGetPlatformInfo(platforms[i], CL_PLATFORM_VERSION, sizeof(buffer), buffer, NULL));
-		applog(LOG_DEBUG, "  VERSION = %s", buffer);
-		CL_CHECK(clGetPlatformInfo(platforms[i], CL_PLATFORM_NAME, sizeof(buffer), buffer, NULL));
-		applog(LOG_DEBUG, "  NAME = %s", buffer);
-		CL_CHECK(clGetPlatformInfo(platforms[i], CL_PLATFORM_VENDOR, sizeof(buffer), buffer, NULL));
-		applog(LOG_DEBUG, "  VENDOR = %s", buffer);
-		CL_CHECK(clGetPlatformInfo(platforms[i], CL_PLATFORM_EXTENSIONS, sizeof(buffer), buffer, NULL));
-		applog(LOG_DEBUG, "  EXTENSIONS = %s", buffer);
-
-		ret = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_ALL, 0, NULL, &devices_n);
-		if (ret != CL_SUCCESS) {
-			applog(LOG_ERR, "Error: Unable to get devices from OpenCL Platform %d (Error: %d)", i, ret);
-			return 0;
-		}
-
-		if (devices_n) {
-
-			applog(LOG_DEBUG, "  DEVICES:");
-			cl_device_id *devices = (cl_device_id *)malloc(devices_n * sizeof(cl_device_id));
-
-			ret = clGetDeviceIDs(platforms[i], CL_DEVICE_TYPE_GPU, devices_n, devices, NULL);
-
-			if (ret != CL_SUCCESS)
-				devices_n = 0;
-
-			for (j = 0; j < devices_n; j++) {
-
-				ret = clGetDeviceInfo(devices[j], CL_DEVICE_NAME, sizeof(buffer), buffer, NULL);
-				if (ret != CL_SUCCESS)
-					break;
-
-				applog(LOG_DEBUG, "    %d - %s", j, buffer);
-
-				ret = clGetDeviceInfo(devices[j], CL_DEVICE_EXTENSIONS, sizeof(buffer), buffer, NULL);
-				if (ret != CL_SUCCESS)
-					break;
-
-				if (!strstr(buffer, "cl_khr_fp64")) {
-					applog(LOG_DEBUG, "        *Device does not support 64bit Floating Point math");
-					break;
-				}
-
-				memcpy(&gpu[gpu_cnt].platform_id, &platforms[i], sizeof(cl_platform_id));
-				memcpy(&gpu[gpu_cnt].device_id, &devices[j], sizeof(cl_device_id));
-				strncpy(gpu[gpu_cnt].name, buffer, 99);
-				found = true;
-				break;
-			}
-			free(devices);
-		}
-
-		if (!found)
-			continue;
-
-		// Create Context
-		gpu[gpu_cnt].context = clCreateContext(0, 1, &gpu[gpu_cnt].device_id, NULL, NULL, &ret);
-		if (!gpu[gpu_cnt].context) {
-			applog(LOG_ERR, "Unable to create OpenCL context (Error: %d)", ret);
-			return false;
-		}
-
-		// Create Command Queue
-		gpu[gpu_cnt].queue = clCreateCommandQueue(gpu[gpu_cnt].context, gpu[gpu_cnt].device_id, 0, &ret);
-		if (!gpu[gpu_cnt].queue) {
-			applog(LOG_ERR, "Unable to create OpenCL command queue (Error: %d)", ret);
-			return false;
-		}
-
-		gpu_cnt++;
-	}
-
-	return gpu_cnt;
-}
-
-extern bool calc_opencl_worksize(struct opencl_device *gpu) {
-	uint32_t max_threads = 1024;
+extern bool opencl_calc_worksize(struct opencl_device *gpu) {
+	uint32_t max_threads = 409600;
 	cl_ulong global_mem = 0;
 	cl_ulong local_mem = 0;
 	cl_uint compute_units = 0;
 	cl_uint dimensions = 0;
 	cl_uint vwidth = 0;
 	size_t max_work_size = 0;
-	size_t dim1, dim2;
 
 	clGetDeviceInfo(gpu->device_id, CL_DEVICE_GLOBAL_MEM_SIZE, sizeof(cl_ulong), &global_mem, NULL);
 	applog(LOG_DEBUG, "  CL_DEVICE_GLOBAL_MEM_SIZE = %lu", global_mem);
@@ -242,212 +209,148 @@ extern bool calc_opencl_worksize(struct opencl_device *gpu) {
 
 	clGetDeviceInfo(gpu->device_id, CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT, sizeof(cl_uint), &vwidth, NULL);
 	applog(LOG_DEBUG, "  CL_DEVICE_PREFERRED_VECTOR_WIDTH_INT  = %zu", vwidth);
-	
+
+
+	///////////////////////////////////////////////////////////////
+	// TODO: These Calcs Need To Be Redone
+	///////////////////////////////////////////////////////////////
+
+
 	// Calculate Max Threads (Must Be A Multiple Of Work Size)
-	max_threads = (uint32_t)((uint32_t)((opt_opencl_gthreads ? opt_opencl_gthreads : 1024) / max_work_size) * max_work_size);
+	max_threads = (uint32_t)((uint32_t)((opt_opencl_gthreads ? opt_opencl_gthreads : max_threads) / max_work_size) * max_work_size);
 
 	// Calculate Num Threads For This Device
-	// GLOB MEM NEEDED: 96 + (x * VM_MEMORY_SIZE * sizeof(int32_t)) + (x * VM_MEMORY_SIZE * sizeof(double)) + (x * sizeof(uint32_t))
-
 	double vm_mem = (((g_work_package[g_work_package_idx].vm_ints + g_work_package[g_work_package_idx].vm_uints + g_work_package[g_work_package_idx].vm_floats + g_work_package[g_work_package_idx].storage_sz) * 4) +
 		((g_work_package[g_work_package_idx].vm_longs + g_work_package[g_work_package_idx].vm_ulongs + g_work_package[g_work_package_idx].vm_doubles) * 8));
-	double calc = ((double)global_mem - 96.0 - 650 * 1024 * 1024 /*Some 650 M space for who knows what*/) / vm_mem;
-	size_t bound = (size_t)calc;
+
+	// Calculate Threads (Arbitrarily Subtract 1MB From Mem)
+	double threads = ((double)global_mem - (1000000)) / vm_mem;
+	size_t bound = (size_t)threads;
 
 	gpu->threads = (bound < max_threads) ? (int)bound : max_threads;
+	gpu->work_dim = 1;
+	gpu->global_size[0] = gpu->threads;
+	gpu->global_size[1] = 1;
+	gpu->global_size[2] = 1;
+	gpu->local_size[0] = max_work_size;
+	gpu->local_size[1] = 1;
+	gpu->local_size[2] = 1;
 
-	if (dimensions == 1 || opt_opencl_vwidth == 1) {
-		gpu->work_dim = 1;
-		gpu->global_size[0] = gpu->threads;
-		gpu->global_size[1] = 1;
-		gpu->local_size[0] = max_work_size;
-		gpu->local_size[1] = 1;
+	applog(LOG_INFO, "Global GPU Memory = %llu, Using %d Threads - G{ %d, %d, %d } L{ %d, %d, %d }", global_mem, gpu->threads, gpu->global_size[0], gpu->global_size[1], gpu->global_size[2], gpu->local_size[0], gpu->local_size[1], gpu->local_size[2]);
+
+	return true;
+}
+
+extern bool opencl_create_kernel(struct opencl_device *gpu, char *ocl_source, uint32_t storage_sz) {
+	cl_int err;
+	cl_program program;
+
+	// Load OpenCL Source Code
+	program = clCreateProgramWithSource(gpu->context, 1, (const char **)&ocl_source, NULL, &err);
+	if (!opencl_err_check(err, "Unable to load OpenCL program")) return false;
+
+	// Compile OpenCL Source Code
+	err = clBuildProgram(program, 0, NULL, NULL, NULL, NULL);
+	if (!opencl_err_check(err, "Unable to compile OpenCL program")) {
+		size_t len;
+		char buffer[10000];
+		clGetProgramBuildInfo(program, gpu->device_id, CL_PROGRAM_BUILD_LOG, sizeof(buffer), buffer, &len);
+		applog(LOG_ERR, "%s", buffer);
+		return false;
+	}
+
+	// Create OpenCL Kernel
+	gpu->kernel = clCreateKernel(program, "execute", &err);
+	if (!opencl_err_check(err, "Unable to create OpenCL kernel")) {
+		clReleaseProgram(program);
+		return false;
+	}
+
+	// Create Buffer For Submit / Storage (Depending On Whether ElasticPL Job Uses Storage)
+	if (storage_sz) {
+		gpu->obj_sub = clCreateBuffer(gpu->context, CL_MEM_WRITE_ONLY, storage_sz * sizeof(uint32_t), NULL, &err);
+		if (!opencl_err_check(err, "Unable to create OpenCL 'submit' buffer")) return false;
+
+		gpu->obj_storage = clCreateBuffer(gpu->context, CL_MEM_READ_ONLY, storage_sz * sizeof(uint32_t), NULL, &err);
+		if (!opencl_err_check(err, "Unable to create OpenCL 'storage' buffer")) return false;
 	}
 	else {
-		gpu->work_dim = 2;
-		dim1 = ((size_t)gpu->threads > max_work_size) ? max_work_size : (size_t)gpu->threads;
-		dim2 = (size_t)(gpu->threads / dim1);
-		gpu->global_size[0] = dim1;
-		gpu->global_size[1] = dim2;
-
-		// Make Sure Local Size Y Value Is A Multiple Of Global Size
-		if (opt_opencl_vwidth && (dim2 % opt_opencl_vwidth != 0)) {
-				applog(LOG_ERR, "ERROR: Invalid opt_opencl_vwidth = %d.  Must be a multiple of '%d'", opt_opencl_vwidth, dim2);
-				return false;
-		}
-
-		gpu->local_size[1] = (size_t)(opt_opencl_vwidth ? opt_opencl_vwidth : dim2);
-
-		// Calculate Local Size X Value
-		gpu->local_size[0] = max_work_size;
-		while ((gpu->local_size[0] * gpu->local_size[1]) > max_work_size) {
-			if (max_work_size % (gpu->local_size[0] * gpu->local_size[1]) == 0)
-				break;
-
-			gpu->local_size[0] = (size_t)(gpu->local_size[0] / 2);
-
-		}
+		gpu->obj_sub = NULL;
+		gpu->obj_storage = NULL;
 	}
 
-	applog(LOG_INFO, "Global GPU Memory = %llu, Using %d Threads - G{ %d, %d } L{ %d, %d }", global_mem , gpu->threads, gpu->global_size[0], gpu->global_size[1], gpu->local_size[0], gpu->local_size[1]);
+	// Set Argurments For Kernel (Storage Argument Is Optional)
+	err = clSetKernelArg(gpu->kernel, 0, sizeof(cl_mem), (const void*)&gpu->obj_dat);		// Base Data
+	err |= clSetKernelArg(gpu->kernel, 1, sizeof(cl_mem), (const void*)&gpu->obj_rnd);		// Round Number
+	err |= clSetKernelArg(gpu->kernel, 2, sizeof(cl_mem), (const void*)&gpu->obj_res);		// Result
+	err |= clSetKernelArg(gpu->kernel, 3, sizeof(cl_mem), (const void*)&gpu->obj_out);		// Output
+	err |= clSetKernelArg(gpu->kernel, 4, sizeof(cl_mem), (const void*)&gpu->obj_sub);		// Data To Submit
+	err |= clSetKernelArg(gpu->kernel, 5, sizeof(cl_mem), (const void*)&gpu->obj_storage);	// Storage
+	if (!opencl_err_check(err, "Unable to set OpenCL argurments for 'execute' kernel")) return false;
 
 	return true;
 }
 
-extern bool create_opencl_buffers(struct opencl_device *gpu) {
-	cl_uint ret;
+extern bool opencl_init_buffer_data(struct opencl_device *gpu, uint32_t *base_data, uint32_t *rnd_num, uint32_t *result, uint32_t *storage, uint32_t storage_len) {
+	cl_uint err;
 
-	gpu->vm_input = clCreateBuffer(gpu->context, CL_MEM_READ_ONLY, 96 * sizeof(char), NULL, &ret);
-	if (ret != CL_SUCCESS) {
-		applog(LOG_ERR, "ERROR: Unable to create OpenCL 'vm_input' buffer (Error: %d)", ret);
-		return false;
-	}
+	// Copy Base Data To OpenCL Buffer
+	err = clEnqueueWriteBuffer(gpu->queue, gpu->obj_dat, CL_FALSE, 0, 24 * sizeof(uint32_t), base_data, 0, NULL, NULL);
+	if (!opencl_err_check(err, "Unable to write to OpenCL 'base_data' Buffer")) return false;
 
-	gpu->vm_m = clCreateBuffer(gpu->context, CL_MEM_WRITE_ONLY, gpu->threads * 12 * sizeof(uint32_t), NULL, &ret);
-	if (ret != CL_SUCCESS) {
-		applog(LOG_ERR, "ERROR: Unable to create OpenCL 'vm_m' buffer (Error: %d)", ret);
-		return false;
-	}
+	// Reset Round Buffer
+	err = clEnqueueWriteBuffer(gpu->queue, gpu->obj_rnd, CL_FALSE, 0, 1 * sizeof(uint32_t), rnd_num, 0, NULL, NULL);
+	if (!opencl_err_check(err, "Unable to write to OpenCL 'base_data' Buffer")) return false;
 
-	if (g_work_package[g_work_package_idx].vm_ints) {
-		gpu->vm_i = clCreateBuffer(gpu->context, CL_MEM_WRITE_ONLY, gpu->threads * g_work_package[g_work_package_idx].vm_ints * sizeof(int32_t), NULL, &ret);
-		if (ret != CL_SUCCESS) {
-			applog(LOG_ERR, "ERROR: Unable to create OpenCL 'vm_i' buffer (Error: %d)", ret);
-			return false;
-		}
-	}
-	 else
-		 gpu->vm_i = NULL;
-
-	if (g_work_package[g_work_package_idx].vm_uints) {
-		gpu->vm_u = clCreateBuffer(gpu->context, CL_MEM_WRITE_ONLY, gpu->threads * g_work_package[g_work_package_idx].vm_uints * sizeof(uint32_t), NULL, &ret);
-		if (ret != CL_SUCCESS) {
-			applog(LOG_ERR, "ERROR: Unable to create OpenCL 'vm_u' buffer (Error: %d)", ret);
-			return false;
-		}
-	}
-	else
-		gpu->vm_u = NULL;
-
-	if (g_work_package[g_work_package_idx].vm_longs) {
-		gpu->vm_l = clCreateBuffer(gpu->context, CL_MEM_WRITE_ONLY, gpu->threads * g_work_package[g_work_package_idx].vm_longs * sizeof(int64_t), NULL, &ret);
-		if (ret != CL_SUCCESS) {
-			applog(LOG_ERR, "ERROR: Unable to create OpenCL 'vm_l' buffer (Error: %d)", ret);
-			return false;
-		}
-	}
-	else
-		gpu->vm_l = NULL;
-
-	if (g_work_package[g_work_package_idx].vm_ulongs) {
-		gpu->vm_ul = clCreateBuffer(gpu->context, CL_MEM_WRITE_ONLY, gpu->threads * g_work_package[g_work_package_idx].vm_ulongs * sizeof(uint64_t), NULL, &ret);
-		if (ret != CL_SUCCESS) {
-			applog(LOG_ERR, "ERROR: Unable to create OpenCL 'vm_ul' buffer (Error: %d)", ret);
-			return false;
-		}
-	}
-	else
-		gpu->vm_ul = NULL;
-
-	if (g_work_package[g_work_package_idx].vm_floats) {
-		gpu->vm_f = clCreateBuffer(gpu->context, CL_MEM_WRITE_ONLY, gpu->threads * g_work_package[g_work_package_idx].vm_floats * sizeof(float), NULL, &ret);
-		if (ret != CL_SUCCESS) {
-			applog(LOG_ERR, "ERROR: Unable to create OpenCL 'vm_f' buffer (Error: %d)", ret);
-			return false;
-		}
-	}
-	else
-		gpu->vm_f = NULL;
-
-	if (g_work_package[g_work_package_idx].vm_doubles) {
-		gpu->vm_d = clCreateBuffer(gpu->context, CL_MEM_WRITE_ONLY, gpu->threads * g_work_package[g_work_package_idx].vm_doubles * sizeof(double), NULL, &ret);
-		if (ret != CL_SUCCESS) {
-			applog(LOG_ERR, "ERROR: Unable to create OpenCL 'vm_d' buffer (Error: %d)", ret);
-			return false;
-		}
-	}
-	else
-		gpu->vm_d = NULL;
-
-	if (g_work_package[g_work_package_idx].storage_sz) {
-		gpu->vm_s = clCreateBuffer(gpu->context, CL_MEM_READ_ONLY, g_work_package[g_work_package_idx].storage_sz * sizeof(uint32_t), NULL, &ret);
-		if (ret != CL_SUCCESS) {
-			applog(LOG_ERR, "ERROR: Unable to create OpenCL 'vm_s' buffer (Error: %d)", ret);
-			return false;
-		}
-	}
-	else
-		gpu->vm_s = NULL;
-
-	gpu->vm_out = clCreateBuffer(gpu->context, CL_MEM_WRITE_ONLY, gpu->threads * sizeof(uint32_t), NULL, &ret);
-	if (ret != CL_SUCCESS) {
-		applog(LOG_ERR, "ERROR: Unable to create OpenCL 'vm_out' buffer (Error: %d)", ret);
-		return false;
-	}
-
-	return true;
-}
-
-extern bool execute_kernel(struct opencl_device *gpu, const uint32_t *vm_input, const uint32_t *vm_s, uint32_t *vm_out) {
-	cl_uint ret;
-
-	// Copy Random Inputs To OpenCL Buffer
-	ret = clEnqueueWriteBuffer(gpu->queue, gpu->vm_input, CL_TRUE, 0, 96 * sizeof(char), vm_input, 0, NULL, NULL);
-	if (ret != CL_SUCCESS) {
-		applog(LOG_ERR, "ERROR: Unable to write to OpenCL 'vm_input' Buffer (Error: %d)", ret);
-		return false;
-	}
+	// Reset Result Buffer
+	err = clEnqueueWriteBuffer(gpu->queue, gpu->obj_res, CL_FALSE, 0, 1 * sizeof(uint32_t), result, 0, NULL, NULL);
+	if (!opencl_err_check(err, "Unable to write to OpenCL 'base_data' Buffer")) return false;
 
 	// Copy Storage To OpenCL Buffer
-	if (g_work_package[g_work_package_idx].storage_sz && (g_work_package[g_work_package_idx].iteration_id > 0)) {
-			ret = clEnqueueWriteBuffer(gpu->queue, gpu->vm_s, CL_TRUE, 0, g_work_package[g_work_package_idx].storage_sz * sizeof(uint32_t), vm_s, 0, NULL, NULL);
-		if (ret != CL_SUCCESS) {
-			applog(LOG_ERR, "ERROR: Unable to write to OpenCL 'vm_s' Buffer (Error: %d)", ret);
-			return false;
+	if (gpu->obj_storage && storage_len) {
+		err = clEnqueueWriteBuffer(gpu->queue, gpu->obj_storage, CL_FALSE, 0, storage_len * sizeof(uint32_t), storage, 0, NULL, NULL);
+		if (!opencl_err_check(err, "Unable to write to OpenCL 'storage' Buffer")) return false;
+	}
+
+	clFinish(gpu->queue);
+
+	return true;
+}
+
+extern bool opencl_run_kernel(struct opencl_device *gpu, uint32_t *rnd_num, uint32_t *result, uint32_t *output, uint32_t *submit, uint32_t submit_sz) {
+	cl_uint err;
+
+	// Update Round Number
+	err = clEnqueueWriteBuffer(gpu->queue, gpu->obj_rnd, CL_TRUE, 0, 1 * sizeof(uint32_t), rnd_num, 0, NULL, NULL);
+	if (!opencl_err_check(err, "Unable to write to OpenCL 'round' Buffer")) return false;
+
+	// Reset Result Buffer
+	if (result[0]) {
+		result[0] = 0;
+		err = clEnqueueWriteBuffer(gpu->queue, gpu->obj_res, CL_TRUE, 0, 1 * sizeof(uint32_t), result, 0, NULL, NULL);
+		if (!opencl_err_check(err, "Unable to write to OpenCL 'result' Buffer")) return false;
+	}
+//	clFinish(gpu->queue);
+
+	// Run OpenCL Kernel
+	err = clEnqueueNDRangeKernel(gpu->queue, gpu->kernel, 1, NULL, gpu->global_size, 0, 0, 0, 0);
+	//	err = clEnqueueNDRangeKernel(gpu->queue, gpu->kernel, gpu->work_dim, NULL, &gpu->global_size[0], &gpu->local_size[0], 0, NULL, NULL);
+	if (!opencl_err_check(err, "Unable to run 'execute' kernel")) return false;
+
+	// Check For POW / Bounty Solutions
+	err = clEnqueueReadBuffer(gpu->queue, gpu->obj_res, CL_TRUE, 0, 1 * sizeof(uint32_t), result, 0, NULL, NULL);
+	if (!opencl_err_check(err, "Unable to read from OpenCL 'result' Buffer")) return false;
+
+	// Get Output
+	if (result[0]) {
+		err = clEnqueueReadBuffer(gpu->queue, gpu->obj_out, CL_FALSE, 0, 5 * sizeof(uint32_t), output, 0, NULL, NULL);
+		if (!opencl_err_check(err, "Unable to read from OpenCL 'output' Buffer")) return false;
+
+		if (gpu->obj_sub && submit_sz) {
+			err = clEnqueueReadBuffer(gpu->queue, gpu->obj_sub, CL_FALSE, 0, submit_sz * sizeof(uint32_t), submit, 0, NULL, NULL);
+			if (!opencl_err_check(err, "Unable to read from OpenCL 'submit' Buffer")) return false;
 		}
-	}
-
-	// Run OpenCL VM
-	ret = clEnqueueNDRangeKernel(gpu->queue, gpu->kernel_execute, gpu->work_dim, NULL, &gpu->global_size[0], &gpu->local_size[0], 0, NULL, NULL);
-	if (ret) {
-		applog(LOG_ERR, "ERROR: Unable to run 'execute' kernel (Error: %d)", ret);
-		return false;
-	}
-
-	// Get VM Output
-	ret = clEnqueueReadBuffer(gpu->queue, gpu->vm_out, CL_TRUE, 0, gpu->threads * sizeof(uint32_t), vm_out, 0, NULL, NULL);
-	if (ret != CL_SUCCESS) {
-		applog(LOG_ERR, "ERROR: Unable to read from OpenCL 'vm_out' Buffer (Error: %d)", ret);
-		return false;
-	}
-
-	return true;
-}
-
-// Currently Only Dumps Values From u[]
-extern bool dump_opencl_kernel_data(struct opencl_device *gpu, uint32_t *data, int idx, int offset, int len) {
-	cl_uint ret;
-
-	ret = clEnqueueReadBuffer(gpu->queue, gpu->vm_u, CL_TRUE, (idx * g_work_package[g_work_package_idx].vm_uints * sizeof(uint32_t)) + (offset * sizeof(uint32_t)), len * sizeof(uint32_t), &data[0], 0, NULL, NULL);
-	if (ret != CL_SUCCESS) {
-		applog(LOG_ERR, "ERROR: Unable to read from OpenCL 'vm_u' Buffer (Error: %d)", ret);
-		return false;
-	}
-
-	return true;
-}
-
-// Currently Dumps Debug Values From A Hacked Up m[] When POW Is Found
-extern bool dump_opencl_debug_data(struct opencl_device *gpu, uint32_t *data, int idx, int offset, int len) {
-	cl_uint ret;
-
-	if (len > 12)
-		return false;
-
-	ret = clEnqueueReadBuffer(gpu->queue, gpu->vm_m, CL_TRUE, (idx * 12 * sizeof(uint32_t)) + (offset * sizeof(uint32_t)), len * sizeof(uint32_t), &data[0], 0, NULL, NULL);
-	if (ret != CL_SUCCESS) {
-		applog(LOG_ERR, "ERROR: Unable to read from OpenCL 'vm_m' Buffer (Error: %d)", ret);
-		return false;
+		clFinish(gpu->queue);
 	}
 
 	return true;

@@ -520,7 +520,7 @@ static void *test_vm_thread(void *userdata) {
 	struct instance *inst = NULL;
 	int i, rc;
 	uint32_t bounty_found, pow_found;
-	uint32_t *vm_out = NULL, *vm_input = NULL;
+	uint32_t *vm_input = NULL;
 	uint32_t *mult32 = (uint32_t *)work.multiplicator;
 	unsigned char *ocl_source;
 
@@ -531,6 +531,7 @@ static void *test_vm_thread(void *userdata) {
 	work.work_id = 12345;
 
 	// Set The Target For The Work
+//	g_pow_target[0] = 0xFFFFFFFF;
 	g_pow_target[0] = 0x00FFFFFF;
 	g_pow_target[1] = 0xFFFFFFFF;
 	g_pow_target[2] = 0xFFFFFFFF;
@@ -613,90 +614,98 @@ static void *test_vm_thread(void *userdata) {
 
 #ifdef USE_OPENCL
 
-		// Calculate Worksize
-		if (!calc_opencl_worksize(&gpu[0]))
-			exit(EXIT_FAILURE);
-
-		// Create Buffers
-		if (!create_opencl_buffers(&gpu[0]))
+		// Create OpenCL Buffers
+		if (!opencl_create_buffers(&gpu[0]))
 			exit(EXIT_FAILURE);
 
 		// Load & Compile OpenCL Code
-		ocl_source = load_opencl_source(g_work_package[0].work_str);
-//		ocl_source = load_opencl_source("tmp");
+		ocl_source = opencl_load_source(g_work_package[0].work_str);
+//		ocl_source = opencl_load_source("tmp");
 		if (!ocl_source)
 			exit(EXIT_FAILURE);
 
-		// Initialize OpenCL Buffers
-		if (!init_opencl_kernel(&gpu[thr_id], ocl_source))
+		// Calculate Worksize
+		if (!opencl_calc_worksize(&gpu[0]))
+			exit(EXIT_FAILURE);
+
+		// Create OpenCL Kernel / Set Arguments
+		if (!opencl_create_kernel(&gpu[thr_id], ocl_source, g_work_package[0].storage_sz))
 			exit(EXIT_FAILURE);
 
 		free(ocl_source);
 
 		// Allocate Memory For OpenCL Inputs / Outputs
 		vm_input = (uint32_t *)calloc(24, sizeof(uint32_t));
-		vm_out = (uint32_t *)calloc(gpu[0].threads, sizeof(uint32_t));
+		uint32_t *rnd_num = (uint32_t *)calloc(1, sizeof(uint32_t));
+		uint32_t *result = (uint32_t *)calloc(1, sizeof(uint32_t));
+		uint32_t *storage = vm_s;
+		uint32_t *output = (uint32_t *)calloc(5, sizeof(uint32_t));
+		uint32_t *submit = NULL;
+		if (g_work_package[0].storage_sz)
+			submit = (uint32_t *)calloc(g_work_package[0].storage_sz, sizeof(uint32_t));
 
 		// Get Random Inputs For OpenCL Inputs
 		get_opencl_base_data(&work, vm_input);
 
-		// Run A Continuous Test
-		//int j;
-		//uint32_t h[4];
-		//for (i = 0; i < 0xFFFFFFFF; i++) {
-		//	// Get Values For VM Inputs
-		//	get_opencl_base_data(&work, vm_input);
-		//	// Execute The Code On The GPU
-		//	if (!execute_kernel(&gpu[0], vm_input, vm_s, vm_out))
-		//		exit(EXIT_FAILURE);
-		//	for (j = 0; j < gpu[0].threads; j++) {
-		//		if (!vm_out[j])
-		//			continue;
-		//		else if ((vm_out[j] == 1) || (vm_out[j] == 3)) {
-		//			dump_opencl_debug_data(&gpu[0], h, j, 8, 4);
-		//			applog(LOG_DEBUG, "DEBUG: Hash - %08X%08X%08X%08X  Tgt - %08X%08X%08X%08X", h[0], h[1], h[2], h[3], g_pow_target[0], g_pow_target[1], g_pow_target[2], g_pow_target[3]);
-		//			applog(LOG_DEBUG, "DEBUG: Hashes = %lu", (i * 1024) + j);
-		//		}
-		//		else if ((vm_out[j] == 2) || (vm_out[j] == 3)) {
-		//			uint32_t dmp[256];
-		//			int k;
-		//			dump_opencl_kernel_data(&gpu[0], dmp, j, 0, 255);
-		//			applog(LOG_DEBUG, "DEBUG: Bounty Found");
-		//			for (k = 0; k < 256; k++) {
-		//				printf("dump[%d] = %d\n", k, dmp[k]);
-		//			}
+//		uint32_t data[] = { 0x01,0x00,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0x0000FFFF,0xFFFFFFFF,0xFFFFFFFF,0xFFFFFFFF };
+		uint32_t data[] = { 0x01,0x00,0x02,0x03,0x04,0x05,0x06,0x07,0x08,0x09,0x10,0x11,0x12,0x13,0x14,0x15,0x16,0x17,0x18,0x19,0xAFFFFFFF,0xFFFFFFFF,0xFFFFFFFF,0xFFFFFFFF };
+		memcpy(vm_input, data, 96);
 
-		//			applog(LOG_DEBUG, "");
-		//			dump_opencl_debug_data(&gpu[0], dmp, j, 0, 12);
-		//			for (k = 0; k < 12; k++) {
-		//				printf("m[%d] = %d\n", k, dmp[k]);
-		//			}
-		//		}
-		//	}
-		//	// Update Multiplicator
-		//	mult32[1]++;
-		//}
-
-		if (!execute_kernel(&gpu[0], vm_input, vm_s, vm_out))
+		if (!opencl_init_buffer_data(&gpu[0], vm_input, rnd_num, result, storage, 0))
 			exit(EXIT_FAILURE);
 
-		uint32_t dump[12];
-		dump_opencl_debug_data(&gpu[0], dump, 0, 0, 12);
+		// Run A Continuous Test
+//		int k;
+//
+////		0x1DAC2B7C
+//
+////		for (i = 0; i < 0xFFFFFFFF; i++) {
+//		for (i = 0; i < 2; i++) {
+////		for (i = 1250; i < 1300; i++) {
+//
+//			// Update Round Number
+//			rnd_num[0] = i;
+//
+//			// Execute The Code On The GPU
+//			if (!opencl_run_kernel(&gpu[0], rnd_num, result, output, submit, g_work_package[0].storage_sz))
+//				exit(EXIT_FAILURE);
+//
+//			if (!result[0])
+//				continue;
+//
+//			if ((result[0] == 1) || (result[0] == 3)) {
+//				applog(LOG_DEBUG, "DEBUG: Found - %08X%08X%08X%08X, Hashes - %u", output[1], output[2], output[3], output[4], ((i + 1) * gpu[0].threads));
+//			}
+//			else if ((result[0] == 2) || (result[0] == 3)) {
+//				applog(LOG_DEBUG, "DEBUG: Bounty Found");
+//				applog(LOG_DEBUG, "");
+//				for (k = 0; k < 5; k++) {
+//					printf("output[%d] = %d\n", k, output[k]);
+//				}
+//			}
+//		}
+//
+//		printf("hashes = %u\n", (i + 1) * gpu[0].threads);
 
-		printf("\n");
-		for (i = 0; i < 12; i++)
-			printf("\tdump[%d] = %08X\n", i, dump[i]);
+		if (!opencl_run_kernel(&gpu[0], rnd_num, result, output, submit, g_work_package[0].storage_sz))
+			exit(EXIT_FAILURE);
 
-		printf("\n\tvm_out = %d\n", vm_out[0]);
-		printf("\n");
+		printf("\n\tresult = %u\n", result[0]);
+		for (i = 0; i < 5; i++)
+			printf("\tout[%d] = %08X\n", i, output[i]);
 
-		if ((vm_out[0] == 2) || (vm_out[0] == 3))
+		if ((result[0] == 2) || (result[0] == 3))
 			bounty_found = true;
 
-		if ((vm_out[0] == 1) || (vm_out[0] == 3))
+		if ((result[0] == 1) || (result[0] == 3))
 			pow_found = true;
 
-		memcpy(work.pow_hash, &dump[8], 16);
+		if (g_work_package[0].storage_sz) {
+			for (i = 0; i < 10; i++)
+				printf("\tsubmit[%d] = %08X\n", i, submit[i]);
+		}
+
+		memcpy(work.pow_hash, &output[1], 16);
 
 #endif
 
@@ -723,7 +732,7 @@ static void *test_vm_thread(void *userdata) {
 		//uint32_t rnd;
 		//long hashes_done;
 		//for (i = 0; i < 0xFFFFFFFF; i++) {
-		//	rc = execute_vm(thr_id, &rnd, 0, &work, inst, &hashes_done, 1);
+		//	rc = execute_vm(thr_id, &rnd, 0, &work, inst, &hashes_done1);
 		//	if (rc == 1) {
 		//		bounty_found = true;
 		//		break;
@@ -1790,12 +1799,12 @@ out:
 static void *gpu_miner_thread(void *userdata) {
 	struct thr_info *mythr = (struct thr_info *) userdata;
 	int thr_id = mythr->id;
-	uint32_t *vm_out = NULL, *vm_input = NULL;
+	uint32_t *vm_input = NULL, *vm_output = NULL, *vm_submit = NULL, *vm_round = NULL, *vm_result = NULL;
 	struct work work;
 	struct workio_cmd *wc = NULL;
 	uint64_t hashes_done;
 	struct timeval tv_start, tv_end, diff;
-	int i, rc = 0;
+	int rc = 0;
 	uint32_t vm_storage = 0;
 	unsigned char *ocl_source, str[50];
 	double eval_rate;
@@ -1808,11 +1817,19 @@ static void *gpu_miner_thread(void *userdata) {
 
 	// Initialize Arrays To Hold OpenCL Core Inputs / Outputs
 	vm_input = (uint32_t *)calloc(24, sizeof(uint32_t));
-	vm_out = (uint32_t *)calloc(gpu[thr_id].threads, sizeof(uint32_t));
-	vm_s = NULL;
+	vm_output = (uint32_t *)calloc(5, sizeof(uint32_t));
+	vm_round = (uint32_t *)calloc(1, sizeof(uint32_t));
+	vm_result = (uint32_t *)calloc(1, sizeof(uint32_t));
+	vm_submit = NULL;
 
-	if (!vm_out || !vm_input) {
+	if (!vm_input || !vm_output) {
 		applog(LOG_ERR, "ERROR: Unable to allocate VM memory");
+		goto out;
+	}
+
+	// Create OpenCL Buffers
+	if (!opencl_create_buffers(&gpu[thr_id])) {
+		applog(LOG_ERR, "ERROR: Unable to create OpenCL Buffers");
 		goto out;
 	}
 
@@ -1840,10 +1857,11 @@ static void *gpu_miner_thread(void *userdata) {
 			// Allocate Memory For Storage
 			if (g_work_package[work.package_id].storage_sz > vm_storage) {
 				vm_storage = g_work_package[work.package_id].storage_sz;
+				vm_submit = realloc(vm_s, vm_storage * sizeof(uint32_t));
 				vm_s = realloc(vm_s, vm_storage * sizeof(uint32_t));
 				memset(vm_s, 0, vm_storage * sizeof(uint32_t));
 
-				if (vm_storage && !vm_s) {
+				if (vm_storage && (!vm_s || !vm_submit)) {
 					applog(LOG_ERR, "GPU%d: Unable to allocate memory for storage", thr_id);
 					goto out;
 				}
@@ -1859,33 +1877,28 @@ static void *gpu_miner_thread(void *userdata) {
 
 			// Randomize Inputs
 			mult32[0] = thr_id;												// Ensures Each Thread Is Unique
-			mult32[1] = 0;													// Round - Value Will Be Incremented After Each Pass
+			mult32[1] = 0;													// Round - Value Will Be Incremented For Each GPU Thread
 			mult32[2] = g_work_package[work.package_id].iteration_id;		// Iteration
 			mult32[3] = 0;													// GPU OpenCL Thread ID
 			mult32[7] = genrand_int32();									// Random Number
 
-			// Calculate Worksize For New Work Variables
-			if (!calc_opencl_worksize(&gpu[0])) {
-				memset(&work, 0, sizeof(struct work));
-				sleep(15);
-				continue;
-			}
-
-			// Create Buffers
-			if (!create_opencl_buffers(&gpu[0])) {
-				memset(&work, 0, sizeof(struct work));
-				sleep(15);
-				continue;
-			}
-
-			ocl_source = load_opencl_source(work.work_str);
+			// Load & Compile OpenCL Code
+			ocl_source = opencl_load_source(work.work_str);
 			if (!ocl_source) {
 				memset(&work ,0, sizeof(struct work));
 				sleep(15);
 				continue;
 			}
 
-			if (!init_opencl_kernel(&gpu[thr_id], ocl_source)) {
+			// Calculate Worksize For New ElasticPL Job
+			if (!opencl_calc_worksize(&gpu[thr_id])) {
+				memset(&work, 0, sizeof(struct work));
+				sleep(15);
+				continue;
+			}
+
+			// Create OpenCL Kernel / Set Arguments
+			if (!opencl_create_kernel(&gpu[thr_id], ocl_source, g_work_package[0].storage_sz)) {
 				memset(&work, 0, sizeof(struct work));
 				free(ocl_source);
 				sleep(15);
@@ -1924,88 +1937,80 @@ static void *gpu_miner_thread(void *userdata) {
 		get_opencl_base_data(&work, vm_input);
 
 		// Execute The VM
-		if (!execute_kernel(&gpu[thr_id], vm_input, vm_s, vm_out))
+		if (!opencl_run_kernel(&gpu[thr_id], vm_round, vm_result, vm_output, vm_submit, g_work_package[0].storage_sz))
 			goto out;
 
-		// Check VM Output For Solutions
-		for (i = 0; i < gpu[thr_id].threads; i++) {
+		if (!vm_result[0])
+			continue;
 
-			if (!vm_out[i]) {
-				continue;
+		// Update Multiplicator To Include Round Number & Thread ID
+		mult32[1] = vm_output[0];						// Round Number
+		mult32[3] = vm_output[0] % gpu[thr_id].threads;	// GPU Thread ID
+
+		// Copy Hash To Work Structure
+		memcpy(&work.pow_hash[0], &vm_output[1], 16);
+
+		// Check For Bounty Solutions
+		if (vm_result[0] > 1) {
+			applog(LOG_NOTICE, "%s - %d: Submitting Bounty Solution", mythr->name, mult32[3]);
+
+			// Create Submit Request
+			wc = (struct workio_cmd *) calloc(1, sizeof(*wc));
+			if (!wc) {
+				applog(LOG_ERR, "ERROR: Unable to allocate workio_cmd.  Shutting down thread for %s", mythr->name);
+				goto out;
 			}
 
-			// Copy Hash To Work (Currently POW Hash Is Written To m[8]-m[11])
-			dump_opencl_debug_data(&gpu[thr_id], &work.pow_hash[0], i, 8, 4);
+			wc->cmd = SUBMIT_BOUNTY;
+			wc->thr = mythr;
+			memcpy(&wc->work, &work, sizeof(struct work));
 
-			// Check For Bounty Solutions
-			if ((vm_out[i] == 2) || (vm_out[i] == 3)) {
-				applog(LOG_NOTICE, "%s - %d: Submitting Bounty Solution", mythr->name, i);
-
-				// Update Multiplicator To Include OpenCL Thread ID That Found The Bounty
-				mult32[3] = i;
-
-				// Create Submit Request
-				wc = (struct workio_cmd *) calloc(1, sizeof(*wc));
-				if (!wc) {
-					applog(LOG_ERR, "ERROR: Unable to allocate workio_cmd.  Shutting down thread for %s", mythr->name);
-					goto out;
-				}
-
-				wc->cmd = SUBMIT_BOUNTY;
-				wc->thr = mythr;
-				memcpy(&wc->work, &work, sizeof(struct work));
-
-				// Save Values To Be Submitted To Node
-				if (g_work_package[work.package_id].submit_sz) {
-					wc->submit_data = malloc(g_work_package[work.package_id].submit_sz * sizeof(uint32_t));
-					dump_opencl_kernel_data(&gpu[0], wc->submit_data, i, g_work_package[work.package_id].storage_idx, g_work_package[work.package_id].submit_sz);
-				}
-
-				// Add Solution To Queue
-				if (!tq_push(thr_info[work_thr_id].q, wc)) {
-					applog(LOG_ERR, "ERROR: Unable to add solution to queue.  Shutting down thread for GPU%d", thr_id);
-					if (wc->submit_data) free(wc->submit_data);
-					free(wc);
-					goto out;
-				}
+			// Save Values To Be Submitted To Node
+			if (g_work_package[work.package_id].submit_sz) {
+				wc->submit_data = malloc(g_work_package[work.package_id].submit_sz * sizeof(uint32_t));
+				memcpy(wc->submit_data, vm_submit, g_work_package[work.package_id].submit_sz * sizeof(uint32_t));
 			}
 
-			// Check For POW Solutions
-			else if ((vm_out[i] == 1) || (vm_out[i] == 3)) {
+			// Add Solution To Queue
+			if (!tq_push(thr_info[work_thr_id].q, wc)) {
+				applog(LOG_ERR, "ERROR: Unable to add solution to queue.  Shutting down thread for GPU%d", thr_id);
+				if (wc->submit_data) free(wc->submit_data);
+				free(wc);
+				goto out;
+			}
+		}
 
-				// Get Hash From Kernel Data
-				if (opt_debug) {
-					applog(LOG_DEBUG, "DEBUG: Hash - %08X%08X%08X%08X  Tgt - %08X%08X%08X%08X", work.pow_hash[0], work.pow_hash[1], work.pow_hash[2], work.pow_hash[3], g_pow_target[0], g_pow_target[1], g_pow_target[2], g_pow_target[3]);
-				}
+		// Check For POW Solutions
+		else if ((vm_result[0] == 1) || (vm_result[0] == 3)) {
 
-				applog(LOG_NOTICE, "%s - %d: Submitting POW Solution", mythr->name, i);
+			if (opt_debug) {
+				applog(LOG_DEBUG, "DEBUG: Hash - %08X%08X%08X%08X  Tgt - %08X%08X%08X%08X", work.pow_hash[0], work.pow_hash[1], work.pow_hash[2], work.pow_hash[3], g_pow_target[0], g_pow_target[1], g_pow_target[2], g_pow_target[3]);
+			}
 
-				// Update Multiplicator To Include OpenCL Thread ID That Found The Bounty
-				mult32[3] = i;
+			applog(LOG_NOTICE, "%s - %d: Submitting POW Solution", mythr->name, mult32[3]);
 
-				wc = (struct workio_cmd *) calloc(1, sizeof(*wc));
-				if (!wc) {
-					applog(LOG_ERR, "ERROR: Unable to allocate workio_cmd.  Shutting down thread for %s", mythr->name);
-					goto out;
-				}
+			wc = (struct workio_cmd *) calloc(1, sizeof(*wc));
+			if (!wc) {
+				applog(LOG_ERR, "ERROR: Unable to allocate workio_cmd.  Shutting down thread for %s", mythr->name);
+				goto out;
+			}
 
-				wc->cmd = SUBMIT_POW;
-				wc->thr = mythr;
-				memcpy(&wc->work, &work, sizeof(struct work));
+			wc->cmd = SUBMIT_POW;
+			wc->thr = mythr;
+			memcpy(&wc->work, &work, sizeof(struct work));
 
-				// Save Values To Be Submitted To Node
-				if (g_work_package[work.package_id].submit_sz) {
-					wc->submit_data = malloc(g_work_package[work.package_id].submit_sz * sizeof(uint32_t));
-					dump_opencl_kernel_data(&gpu[0], wc->submit_data, i, g_work_package[work.package_id].storage_idx, g_work_package[work.package_id].submit_sz);
-				}
+			// Save Values To Be Submitted To Node
+			if (g_work_package[work.package_id].submit_sz) {
+				wc->submit_data = malloc(g_work_package[work.package_id].submit_sz * sizeof(uint32_t));
+				memcpy(wc->submit_data, vm_submit, g_work_package[work.package_id].submit_sz * sizeof(uint32_t));
+			}
 
-				// Add Solution To Queue
-				if (!tq_push(thr_info[work_thr_id].q, wc)) {
-					applog(LOG_ERR, "ERROR: Unable to add solution to queue.  Shutting down thread for GPU%d", thr_id);
-					if (wc->submit_data) free(wc->submit_data);
-					free(wc);
-					goto out;
-				}
+			// Add Solution To Queue
+			if (!tq_push(thr_info[work_thr_id].q, wc)) {
+				applog(LOG_ERR, "ERROR: Unable to add solution to queue.  Shutting down thread for GPU%d", thr_id);
+				if (wc->submit_data) free(wc->submit_data);
+				free(wc);
+				goto out;
 			}
 		}
 
@@ -2043,7 +2048,10 @@ out:
 	clReleaseContext(context);
 	*/
 	if (vm_input) free(vm_input);
-	if (vm_out) free(vm_out);
+	if (vm_output) free(vm_output);
+	if (vm_round) free(vm_round);
+	if (vm_result) free(vm_result);
+	if (vm_submit) free(vm_submit);
 	if (vm_s) free(vm_s);
 	tq_freeze(mythr->q);
 
@@ -2476,7 +2484,7 @@ int main(int argc, char **argv) {
 #ifdef USE_OPENCL
 	// Initialize GPU Devices
 	if (opt_opencl) {
-		num_gpus = init_opencl_devices();
+		num_gpus = opencl_init_devices();
 		if (num_gpus == 0) {
 			applog(LOG_ERR, "ERROR: No OpenCL Devices that support 64bit Floating Point math found");
 			return 1;

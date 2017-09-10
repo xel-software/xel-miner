@@ -270,11 +270,11 @@ extern bool create_opencl_source(char *work_str) {
 	fprintf(f, "#pragma OPENCL EXTENSION cl_khr_byte_addressable_store : enable\n");
 	fprintf(f, "#pragma OPENCL EXTENSION cl_khr_fp64 : enable\n\n");
 
-	fprintf(f, "#define int32_t int\n");
-	fprintf(f, "#define uint32_t uint\n");
-	fprintf(f, "#define int64_t long\n");
-	fprintf(f, "#define uint64_t ulong\n");
-	fprintf(f, "#define NULL 0\n\n");
+	fprintf(f, "#ifndef int32_t\n#define int32_t int\n#endif\n");
+	fprintf(f, "#ifndef uint32_t\n#define uint32_t uint\n#endif\n");
+	fprintf(f, "#ifndef int64_t\n#define int64_t long\n#endif\n");
+	fprintf(f, "#ifndef uint64_t\n#define uint64_t ulong\n#endif\n");
+	fprintf(f, "#ifndef NULL\n#define NULL 0\n#endif\n\n");
 
 	fprintf(f, "/* The basic MD5 functions */\n");
 	fprintf(f, "#define F(x, y, z)          ((z) ^ ((x) & ((y) ^ (z))))\n");
@@ -433,42 +433,21 @@ extern bool create_opencl_source(char *work_str) {
 	fprintf(f, "\treturn (x>>n) | (x<<( (-n) & 0x0000001f ));\n");
 	fprintf(f, "}\n\n");
 
-	fprintf(f, "static uint check_pow(uint msg_0, uint msg_1, uint msg_2, uint msg_3, global uint *m, uint *target) {\n");
+	fprintf(f, "static uint check_pow(uint msg_0, uint msg_1, uint msg_2, uint msg_3, uint *m, uint *target, uint *hash) {\n");
 	fprintf(f, "\tint i;\n");
-	fprintf(f, "\tchar msg[48], hash[16];\n");
-	fprintf(f, "\tuint32_t *msg32 = (uint32_t *)(msg);\n");
-	fprintf(f, "\tuint32_t *hash32 = (uint32_t *)(hash);\n\n");
+	fprintf(f, "\tchar msg[48];\n");
+	fprintf(f, "\tuint32_t *msg32 = (uint32_t *)(msg);\n\n");
 	fprintf(f, "\tmsg32[0] = msg_0;\n");
 	fprintf(f, "\tmsg32[1] = msg_1;\n");
 	fprintf(f, "\tmsg32[2] = msg_2;\n");
 	fprintf(f, "\tmsg32[3] = msg_3;\n\n");
 	fprintf(f, "\tfor (i = 0; i < 8; i++)\n");
 	fprintf(f, "\t\tmsg32[i+4] = m[i];\n\n");
-	fprintf(f, "\tmd5((char*)&msg[0], 48, &hash32[0]);\n\n");
-
-	
-	fprintf(f, "\t// Copy Hash To m[8]-m[11] So It Can Be Sent To Node\n");
-	fprintf(f, "\tm[8]  = hash32[0];\n");
-	fprintf(f, "\tm[9]  = hash32[1];\n");
-	fprintf(f, "\tm[10] = hash32[2];\n");
-	fprintf(f, "\tm[11] = hash32[3];\n\n");
-
-	// Dump Some Data For Debugging
-	//if (opt_debug) {
-	//	fprintf(f, "\tm[0] = msg_0;\n");
-	//	fprintf(f, "\tm[1] = msg_1;\n");
-	//	fprintf(f, "\tm[2] = msg_2;\n");
-	//	fprintf(f, "\tm[3] = msg_3;\n");
-	//	fprintf(f, "\tm[4] = hash32[0];\n");
-	//	fprintf(f, "\tm[5] = hash32[1];\n");
-	//	fprintf(f, "\tm[6] = hash32[2];\n");
-	//	fprintf(f, "\tm[7] = hash32[3];\n\n");
-	//}
-
+	fprintf(f, "\tmd5((char*)&msg[0], 48, &hash[0]);\n\n");
 	fprintf(f, "\tfor (i = 0; i < 4; i++) {\n");
-	fprintf(f, "\t\tif (hash32[i] > target[i])\n");
+	fprintf(f, "\t\tif (hash[i] > target[i])\n");
 	fprintf(f, "\t\t\treturn 0;\n");
-	fprintf(f, "\t\telse if (hash32[i] < target[i])\n");
+	fprintf(f, "\t\telse if (hash[i] < target[i])\n");
 	fprintf(f, "\t\t\treturn 1;    // POW Solution Found\n");
 	fprintf(f, "\t}\n");
 	fprintf(f, "\treturn 1;\n");
