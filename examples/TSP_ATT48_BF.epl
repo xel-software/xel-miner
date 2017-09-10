@@ -187,12 +187,8 @@ function create_cost_matrix {
 
 function main {
 
-	// Only Initialize Point Data & Cost Matrix Values Once
-	// m[10] Contains The Run #
-	if (m[10] == 0) {
-		init_point_data();
-		create_cost_matrix();
-	}
+	init_point_data();
+	create_cost_matrix();
 
 	// Initialize The Path ( Points 0 To 48 In Sequential Order)
 	// Path Variables Start At u[200]
