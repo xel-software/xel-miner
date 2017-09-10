@@ -539,14 +539,16 @@ static bool convert_node(ast* node) {
 	case NODE_BLOCK:
 		str = malloc(1000);
 		if (node->parent->type == NODE_FUNCTION) {
-			if (!strcmp(node->parent->svalue, "main")) {
-				if (!ast_submit_sz)
-					sprintf(str, "\n\tif (!res)\n\t\treturn;\n\n\tif (res > 1)\n\t\tprintf(\"\\n***** Bounty Found ***** Round: %%u, Thread : %%u\\n\\n\", round_num, idx);\n\n\tresult[0] = res;\n\toutput[0] = idx;\n\toutput[1] = hash[0];\n\toutput[2] = hash[1];\n\toutput[3] = hash[2];\n\toutput[4] = hash[3];\n}\n");
-				else
-					sprintf(str, "\n\tif (!res)\n\t\treturn;\n\n\tif (res > 1)\n\t\tprintf(\"\\n***** Bounty Found ***** Round: %%u, Thread : %%u\\n\\n\", round_num, idx);\n\n\tresult[0] = res;\n\toutput[0] = idx;\n\toutput[1] = hash[0];\n\toutput[2] = hash[1];\n\toutput[3] = hash[2];\n\toutput[4] = hash[3];\n\n\tfor (j = 0; j < %u; j++)\n\t\tsubmit[j] = u[j + %u];\n}\n", ast_submit_sz, ast_submit_idx);
+			if (opt_opencl) {
+				if (!strcmp(node->parent->svalue, "main")) {
+					if (!ast_submit_sz)
+						sprintf(str, "\n\tif (!res)\n\t\treturn;\n\n\tif (res > 1)\n\t\tprintf(\"\\n***** Bounty Found ***** Round: %%u, Thread : %%u\\n\\n\", round_num, idx);\n\n\tresult[0] = res;\n\toutput[0] = idx;\n\toutput[1] = hash[0];\n\toutput[2] = hash[1];\n\toutput[3] = hash[2];\n\toutput[4] = hash[3];\n}\n");
+					else
+						sprintf(str, "\n\tif (!res)\n\t\treturn;\n\n\tif (res > 1)\n\t\tprintf(\"\\n***** Bounty Found ***** Round: %%u, Thread : %%u\\n\\n\", round_num, idx);\n\n\tresult[0] = res;\n\toutput[0] = idx;\n\toutput[1] = hash[0];\n\toutput[2] = hash[1];\n\toutput[3] = hash[2];\n\toutput[4] = hash[3];\n\n\tfor (j = 0; j < %u; j++)\n\t\tsubmit[j] = u[j + %u];\n}\n", ast_submit_sz, ast_submit_idx);
+				}
+				else if (!strcmp(node->parent->svalue, "verify"))
+					sprintf(str, "\n\treturn res;\n}\n");
 			}
-			else if (!strcmp(node->parent->svalue, "verify"))
-				sprintf(str, "\n\treturn res;\n}\n");
 			else
 				sprintf(str, "}\n");
 		}
