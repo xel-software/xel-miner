@@ -101,25 +101,25 @@ extern bool convert_ast_to_opencl(FILE* f) {
 		if (i == ast_main_idx)
 			continue;
 		else if (i == ast_verify_idx)
-			fprintf(f, "void %s(uint *target, global uint *found, global uint *m%s%s%s%s%s%s%s);\n", \
+			fprintf(f, "uint %s(uint *target, uint *hash, uint *m%s%s%s%s%s%s%s);\n", \
 				stack_exp[i]->svalue, \
-				ast_vm_ints ? ", global int *i" : "", \
-				ast_vm_uints ? ", global uint *u" : "", \
-				ast_vm_longs ? ", global long *l" : "", \
-				ast_vm_ulongs ? ", global ulong *ul" : "", \
-				ast_vm_floats ? ", global float *f" : "", \
-				ast_vm_doubles ? ", global double *d" : "", \
-				ast_submit_sz ? ", global uint *s" : "");
+				ast_vm_ints ? ", int *i" : "", \
+				ast_vm_uints ? ", uint *u" : "", \
+				ast_vm_longs ? ", long *l" : "", \
+				ast_vm_ulongs ? ", ulong *ul" : "", \
+				ast_vm_floats ? ", float *f" : "", \
+				ast_vm_doubles ? ", double *d" : "", \
+				ast_submit_sz ? ", __global uint *s" : "");
 		else
-			fprintf(f, "void %s(global uint *m%s%s%s%s%s%s%s);\n", \
+			fprintf(f, "void %s(uint *m%s%s%s%s%s%s%s);\n", \
 				stack_exp[i]->svalue, \
-				ast_vm_ints ? ", global int *i" : "", \
-				ast_vm_uints ? ", global uint *u" : "", \
-				ast_vm_longs ? ", global long *l" : "", \
-				ast_vm_ulongs ? ", global ulong *ul" : "", \
-				ast_vm_floats ? ", global float *f" : "", \
-				ast_vm_doubles ? ", global double *d" : "", \
-				ast_submit_sz ? ", global uint *s" : "");
+				ast_vm_ints ? ", int *i" : "", \
+				ast_vm_uints ? ", uint *u" : "", \
+				ast_vm_longs ? ", long *l" : "", \
+				ast_vm_ulongs ? ", ulong *ul" : "", \
+				ast_vm_floats ? ", float *f" : "", \
+				ast_vm_doubles ? ", double *d" : "", \
+				ast_submit_sz ? ", __global uint *s" : "");
 	}
 	fprintf(f, "\n");
 	fflush(f);
@@ -132,87 +132,69 @@ extern bool convert_ast_to_opencl(FILE* f) {
 
 		// Add Variable Declarations For OpenCL 'Execute' Function
 		if ((i == ast_main_idx)) {
-			fprintf(f, "__kernel void execute(global uint* restrict base_data, global uint* restrict vm_m, global int* restrict vm_i, global uint* restrict vm_u, global long* restrict vm_l, global ulong* restrict vm_ul, global float* restrict vm_f, global double* restrict vm_d, global uint* restrict vm_s, global uint* restrict output) {\n");
+			fprintf(f, "__kernel void execute(__global uint* base_data, __global uint *rnd, volatile __global uint* result, volatile __global uint* output, volatile __global uint* submit, __global uint* storage) {\n");
 			fprintf(f, "\tint j;\n");
-			fprintf(f, "\tuint base_data_local[20];\n");
-			fprintf(f, "\tuint msg[16];\n");
+			fprintf(f, "\tuint msg[20];\n");
 			fprintf(f, "\tuint hash[4];\n");
 			fprintf(f, "\tuint target[4];\n");
-			fprintf(f, "\tuint vm_input[12];\n");
-			fprintf(f, "\tint w = get_global_id(0); // Index in the wavefront Dim1\n");
-			fprintf(f, "\tint q = get_global_id(1); // Index in the wavefront Dim2\n");
-			fprintf(f, "\tint idx = w + (q * get_global_size(0)); // Index in the 2D wavefront\n");
+			fprintf(f, "\tuint m[12];\n");
 
-			fprintf(f, "\tglobal uint* m = &vm_m[idx * 12];\n");
 			if (ast_vm_ints)
-				fprintf(f, "\tglobal int* i = &vm_i[idx * %d];\n", ast_vm_ints);
-			else
-				fprintf(f, "\tglobal int* i = NULL;\n");
+				fprintf(f, "\tint i[%d];\n", ast_vm_ints);
 			if (ast_vm_uints)
-				fprintf(f, "\tglobal uint* u = &vm_u[idx * %d];\n", ast_vm_uints);
-			else
-				fprintf(f, "\tglobal uint* u = NULL;\n");
+				fprintf(f, "\tuint u[%d];\n", ast_vm_uints);
 			if (ast_vm_longs)
-				fprintf(f, "\tglobal long* l = &vm_l[idx * %d];\n", ast_vm_longs);
-			else
-				fprintf(f, "\tglobal long* l = NULL;\n");
+				fprintf(f, "\tlong l[%d];\n", ast_vm_longs);
 			if (ast_vm_ulongs)
-				fprintf(f, "\tglobal ulong* ul = &vm_ul[idx * %d];\n", ast_vm_ulongs);
-			else
-				fprintf(f, "\tglobal ulong* ul = NULL;\n");
+				fprintf(f, "\tulong ul[%d];\n", ast_vm_ulongs);
 			if (ast_vm_floats)
-				fprintf(f, "\tglobal float* f = &vm_f[idx * %d];\n", ast_vm_floats);
-			else
-				fprintf(f, "\tglobal float* f = NULL;\n");
+				fprintf(f, "\tfloat f[%d];\n", ast_vm_floats);
 			if (ast_vm_doubles)
-				fprintf(f, "\tglobal double* d = &vm_d[idx * %d];\n", ast_vm_doubles);
-			else
-				fprintf(f, "\tglobal double* d = NULL;\n");
+				fprintf(f, "\tdouble d[%d];\n", ast_vm_doubles);
 			if (ast_submit_sz)
-				fprintf(f, "\tglobal uint* s = &vm_s[0];\n");
-			else
-				fprintf(f, "\tglobal uint* s = NULL;\n");
-			fprintf(f, "\tglobal uint* found = &output[idx];\n");
-			fprintf(f, "\t*found = 0;\n\n");
+				fprintf(f, "\tglobal uint* s = &storage[0];\n");
+
+			fprintf(f, "\tuint res = 0;\n\n");
+			fprintf(f, "\tint idx = get_global_id(0); // Index in the wavefront Dim1\n");
+			fprintf(f, "\tint round_num = idx + (rnd[0] * get_global_size(0));  // Each GPU Thread Gets A Unique Round Number\n\n");
 
 			fprintf(f, "\t// 96 Bytes of base_data is made up of:\n");
-			fprintf(f, "\t// 32 Byte Multiplicator (First 4 Bytes = Index, Second 4 Bytes = Incremented Value)\n");
+			fprintf(f, "\t// 32 Byte Multiplicator\n");
 			fprintf(f, "\t// 32 Byte Public Key\n");
 			fprintf(f, "\t//  8 Byte Work ID\n");
 			fprintf(f, "\t//  8 Byte Block ID\n");
 			fprintf(f, "\t// 16 Byte POW Target;\n\n");
 
-			fprintf(f, "\t// Save POW Target;\n");
+			fprintf(f, "\t// Copy base_data Into MD5 Message\n");
+			fprintf(f, "\tfor (j = 0; j < 20; j++) // 80 bytes\n");
+			fprintf(f, "\t\tmsg[j] = base_data[j];\n\n");
+
+			fprintf(f, "\t// Copy base_data Into Target\n");
 			fprintf(f, "\tfor (j = 0; j < 4; j++)\n");
 			fprintf(f, "\t\ttarget[j] = base_data[j + 20];\n\n");
 
-			fprintf(f, "\t// Copy base_data So The Multiplicator Can Be Updated Locally\n");
-			fprintf(f, "\tfor (j = 0; j < 20; j++) // 80 bytes\n");
-			fprintf(f, "\t\tbase_data_local[j] = base_data[j];\n\n");
+			fprintf(f, "\t// Update Round # (Multiplicator[1]) in MD5 Message\n");
+			fprintf(f, "\tmsg[1] = round_num;\n\n");
 
-			fprintf(f, "\t// Update OpenCL Thread ID In The Input Data\n");
-			fprintf(f, "\tbase_data_local[3] = idx; // This value holds GPU OpenCL Thread ID\n\n");
+			fprintf(f, "\t// Update GPU Thread ID (Multiplicator[3]) in MD5 Message\n");
+			fprintf(f, "\tmsg[3] = idx;\n\n");
 
 			fprintf(f, "\t// Get MD5 Hash of 80 Byte Input\n");
-			fprintf(f, "\tmd5((char*)&base_data_local[0], 80, &hash[0]);\n\n");
+			fprintf(f, "\tmd5((char*)&msg[0], 80, &hash[0]);\n\n");
 
 			fprintf(f, "\t// Randomize Inputs m[0]-m[9]\n");
 			fprintf(f, "#pragma unroll\n");
 			fprintf(f, "\tfor (j = 0; j < 10; j++) {\n");
-			fprintf(f, "\t\tvm_input[j] = swap32(hash[j %% 4]);\n");
+			fprintf(f, "\t\tm[j] = swap32(hash[j %% 4]);\n");
 			fprintf(f, "\t\tif (j > 4)\n");
-			fprintf(f, "\t\t\tvm_input[j] = vm_input[j] ^ vm_input[j - 3];\n");
+			fprintf(f, "\t\t\tm[j] = m[j] ^ m[j - 3];\n");
 			fprintf(f, "\t}\n\n");
 
 			fprintf(f, "\t// Set m[10] To Round #\n");
-			fprintf(f, "\t\tvm_input[10] = base_data_local[1];\n\n");
+			fprintf(f, "\tm[10] = round_num;\n\n");
 
 			fprintf(f, "\t// Set m[11] To Iteration #\n");
-			fprintf(f, "\t\tvm_input[11] = base_data_local[2];\n\n");
-
-			fprintf(f, "\t// Copy Inputs To Global Memory;\n");
-			fprintf(f, "\tfor (j = 0; j < 12; j++)\n");
-			fprintf(f, "\t\tm[j] = vm_input[j];\n\n");
+			fprintf(f, "\tm[11] = base_data[3];\n\n");
 			fflush(f);
 		}
 
@@ -344,29 +326,29 @@ static bool convert_node(ast* node) {
 		}
 		else if (!strcmp(node->svalue, "verify")) {
 			if (opt_opencl)
-				sprintf(str, "void %s(uint *target, global uint *found, global uint *m%s%s%s%s%s%s%s) {\n", \
+				sprintf(str, "uint %s(uint *target, uint *hash, uint *m%s%s%s%s%s%s%s) {\n\tuint res = 0;\n\n", \
 					node->svalue, \
-					ast_vm_ints ? ", global int *i" : "", \
-					ast_vm_uints ? ", global uint *u" : "", \
-					ast_vm_longs ? ", global long *l" : "", \
-					ast_vm_ulongs ? ", global ulong *ul" : "", \
-					ast_vm_floats ? ", global float *f" : "", \
-					ast_vm_doubles ? ", global double *d" : "", \
-					ast_submit_sz ? ", global uint *s" : "");
+					ast_vm_ints ? ", int *i" : "", \
+					ast_vm_uints ? ", uint *u" : "", \
+					ast_vm_longs ? ", long *l" : "", \
+					ast_vm_ulongs ? ", ulong *ul" : "", \
+					ast_vm_floats ? ", float *f" : "", \
+					ast_vm_doubles ? ", double *d" : "", \
+					ast_submit_sz ? ", __global uint *s" : "");
 			else
 				sprintf(str, "void %s_%s(uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target, uint32_t *hash) {\n", node->svalue, job_suffix);
 		}
 		else {
 			if ( opt_opencl )
-				sprintf(str, "void %s(global uint *m%s%s%s%s%s%s%s) {\n", \
+				sprintf(str, "void %s(uint *m%s%s%s%s%s%s%s) {\n", \
 					node->svalue, \
-					ast_vm_ints ? ", global int *i" : "", \
-					ast_vm_uints ? ", global uint *u" : "", \
-					ast_vm_longs ? ", global long *l" : "", \
-					ast_vm_ulongs ? ", global ulong *ul" : "", \
-					ast_vm_floats ? ", global float *f" : "", \
-					ast_vm_doubles ? ", global double *d" : "", \
-					ast_submit_sz ? ", global uint *s" : "");
+					ast_vm_ints ? ", int *i" : "", \
+					ast_vm_uints ? ", uint *u" : "", \
+					ast_vm_longs ? ", long *l" : "", \
+					ast_vm_ulongs ? ", ulong *ul" : "", \
+					ast_vm_floats ? ", float *f" : "", \
+					ast_vm_doubles ? ", double *d" : "", \
+					ast_submit_sz ? ", __global uint *s" : "");
 			else
 				sprintf(str, "void %s_%s() {\n", node->svalue, job_suffix);
 		}
@@ -375,7 +357,7 @@ static bool convert_node(ast* node) {
 		str = malloc(256);
 		if (!strcmp(node->svalue, "verify"))
 			if (opt_opencl)
-				sprintf(str, "%s(target, found, m%s%s%s%s%s%s%s)", \
+				sprintf(str, "res = %s(target, hash, m%s%s%s%s%s%s%s)", \
 					node->svalue, \
 					ast_vm_ints ? ", i" : "", \
 					ast_vm_uints ? ", u" : "", \
@@ -404,14 +386,14 @@ static bool convert_node(ast* node) {
 	case NODE_VERIFY_BTY:
 		str = malloc(strlen(lstr) + 50);
 		if (opt_opencl)
-			sprintf(str, "*found += (uint)(%s != 0 ? 2 : 0)", lstr);
+			sprintf(str, "res += (uint)(%s != 0 ? 2 : 0)", lstr);
 		else
 			sprintf(str, "*bounty_found = (uint32_t)(%s != 0 ? 1 : 0)", lstr);
 		break;
 	case NODE_VERIFY_POW:
 		str = malloc(strlen(lstr) + 150);
 		if (opt_opencl)
-			sprintf(str, "*found += (uint)check_pow(%s, &m[0], &target[0])", lstr);
+			sprintf(str, "res += (uint)check_pow(%s, &m[0], &target[0], &hash[0])", lstr);
 		else
 			sprintf(str, "if (verify_pow == 1)\n\t\t*pow_found = check_pow(%s, &m[0], &target[0], &hash[0]);\n\telse\n\t\t*pow_found = 0", lstr);
 		break;
@@ -555,9 +537,19 @@ static bool convert_node(ast* node) {
 		sprintf(str, "%sint loop%d;\n%sfor (loop%d = 0; loop%d < (%s); loop%d++) {\n%s\tif (loop%d >= %lld) break;\n%s\tu[%lld] = loop%d;\n", tab[tabs - 1], node->token_num, tab[tabs - 1], node->token_num, node->token_num, lstr, node->token_num, tab[tabs - 1], node->token_num, node->ivalue, tab[tabs - 1], node->uvalue, node->token_num);
 		break;
 	case NODE_BLOCK:
-		str = malloc(100);
-		if (node->parent->type == NODE_FUNCTION)
-			sprintf(str, "}\n");
+		str = malloc(1000);
+		if (node->parent->type == NODE_FUNCTION) {
+			if (!strcmp(node->parent->svalue, "main")) {
+				if (!ast_submit_sz)
+					sprintf(str, "\n\tif (!res)\n\t\treturn;\n\n\tif (res > 1)\n\t\tprintf(\"\\n***** Bounty Found ***** Round: %%u, Thread : %%u\\n\\n\", round_num, idx);\n\n\tresult[0] = res;\n\toutput[0] = idx;\n\toutput[1] = hash[0];\n\toutput[2] = hash[1];\n\toutput[3] = hash[2];\n\toutput[4] = hash[3];\n}\n");
+				else
+					sprintf(str, "\n\tif (!res)\n\t\treturn;\n\n\tif (res > 1)\n\t\tprintf(\"\\n***** Bounty Found ***** Round: %%u, Thread : %%u\\n\\n\", round_num, idx);\n\n\tresult[0] = res;\n\toutput[0] = idx;\n\toutput[1] = hash[0];\n\toutput[2] = hash[1];\n\toutput[3] = hash[2];\n\toutput[4] = hash[3];\n\n\tfor (j = 0; j < %u; j++)\n\t\tsubmit[j] = u[j + %u];\n}\n", ast_submit_sz, ast_submit_idx);
+			}
+			else if (!strcmp(node->parent->svalue, "verify"))
+				sprintf(str, "\n\treturn res;\n}\n");
+			else
+				sprintf(str, "}\n");
+		}
 		else
 			sprintf(str, "%s}\n", tab[tabs]);
 		break;
