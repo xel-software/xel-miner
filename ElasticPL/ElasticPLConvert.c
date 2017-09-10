@@ -548,6 +548,8 @@ static bool convert_node(ast* node) {
 				}
 				else if (!strcmp(node->parent->svalue, "verify"))
 					sprintf(str, "\n\treturn res;\n}\n");
+				else
+					sprintf(str, "}\n");
 			}
 			else
 				sprintf(str, "}\n");
