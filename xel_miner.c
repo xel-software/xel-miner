@@ -653,40 +653,40 @@ static void *test_vm_thread(void *userdata) {
 			exit(EXIT_FAILURE);
 
 		// Run A Continuous Test
-//		int k;
-//
-////		0x1DAC2B7C
-//
-////		for (i = 0; i < 0xFFFFFFFF; i++) {
-//		for (i = 0; i < 2; i++) {
-////		for (i = 1250; i < 1300; i++) {
-//
-//			// Update Round Number
-//			rnd_num[0] = i;
-//
-//			// Execute The Code On The GPU
-//			if (!opencl_run_kernel(&gpu[0], rnd_num, result, output, submit, g_work_package[0].storage_sz))
-//				exit(EXIT_FAILURE);
-//
-//			if (!result[0])
-//				continue;
-//
-//			if ((result[0] == 1) || (result[0] == 3)) {
-//				applog(LOG_DEBUG, "DEBUG: Found - %08X%08X%08X%08X, Hashes - %u", output[1], output[2], output[3], output[4], ((i + 1) * gpu[0].threads));
-//			}
-//			else if ((result[0] == 2) || (result[0] == 3)) {
-//				applog(LOG_DEBUG, "DEBUG: Bounty Found");
-//				applog(LOG_DEBUG, "");
-//				for (k = 0; k < 5; k++) {
-//					printf("output[%d] = %d\n", k, output[k]);
-//				}
-//			}
-//		}
-//
-//		printf("hashes = %u\n", (i + 1) * gpu[0].threads);
+		int k;
 
-		if (!opencl_run_kernel(&gpu[0], rnd_num, result, output, submit, g_work_package[0].storage_sz))
-			exit(EXIT_FAILURE);
+//		0x1DAC2B7C
+
+//		for (i = 0; i < 0xFFFFFFFF; i++) {
+		for (i = 0; i < 2; i++) {
+//		for (i = 1250; i < 1300; i++) {
+
+			// Update Round Number
+			rnd_num[0] = i;
+
+			// Execute The Code On The GPU
+			if (!opencl_run_kernel(&gpu[0], rnd_num, result, output, submit, g_work_package[0].storage_sz))
+				exit(EXIT_FAILURE);
+
+			if (!result[0])
+				continue;
+
+			if ((result[0] == 1) || (result[0] == 3)) {
+				applog(LOG_DEBUG, "DEBUG: Found - %08X%08X%08X%08X, Hashes - %u", output[1], output[2], output[3], output[4], ((i + 1) * gpu[0].threads));
+			}
+			else if ((result[0] == 2) || (result[0] == 3)) {
+				applog(LOG_DEBUG, "DEBUG: Bounty Found");
+				applog(LOG_DEBUG, "");
+				for (k = 0; k < 5; k++) {
+					printf("output[%d] = %08X (%u)\n", k, output[k], output[k]);
+				}
+			}
+		}
+
+		printf("\nhashes = %u\n", (i + 1) * gpu[0].threads);
+
+//		if (!opencl_run_kernel(&gpu[0], rnd_num, result, output, submit, g_work_package[0].storage_sz))
+//			exit(EXIT_FAILURE);
 
 		printf("\n\tresult = %u\n", result[0]);
 		for (i = 0; i < 5; i++)
@@ -1484,7 +1484,7 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 		}
 		else {
 			sprintf(url, "%s?requestType=submitSolution", rpc_url);
-			sprintf(data, "deadline=3&work_id=%s&data=%s&multiplicator=%s&storage_id=%d&is_pow=true&hash=%s&secretPhrase=%s", req->work_str, submit_data_hex, req->mult, req->storage_id, req->hash, passphrase);
+			sprintf(data, "deadline=3&work_id=%s&data=%s&multiplicator=%s&storage_id=%d&is_pow=true&hash=&secretPhrase=%s", req->work_str, submit_data_hex, req->mult, req->storage_id, passphrase);
 		}
 	}
 	else {
