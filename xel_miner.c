@@ -768,7 +768,7 @@ static void *test_vm_thread(void *userdata) {
 	return NULL;
 }
 
-char tmp_msg[80];
+unsigned char tmp_msg[80];
 
 static bool get_vm_input(struct work *work) {
 	int i;
