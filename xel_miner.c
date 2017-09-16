@@ -768,6 +768,8 @@ static void *test_vm_thread(void *userdata) {
 	return NULL;
 }
 
+char tmp_msg[80];
+
 static bool get_vm_input(struct work *work) {
 	int i;
 	char msg[80];
@@ -788,6 +790,11 @@ static bool get_vm_input(struct work *work) {
 	msg32[17] = swap32(msg32[17]);
 	msg32[18] = swap32(msg32[18]);
 	msg32[19] = swap32(msg32[19]);
+
+
+	// fix
+	memcpy(tmp_msg, msg, 80);
+	// fix
 
 	// Hash The Inputs
 	MD5(msg, 80, hash);
@@ -848,7 +855,7 @@ static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work
 	uint32_t *mult32 = (uint32_t *)work->multiplicator;
 
 	mult32[0] = thr_id;												// Ensures Each Thread Is Unique
-	mult32[1] = *rnd;												// Round - Value Will Be Incremented On Each Pass
+//	mult32[1] = *rnd;												// Round - Value Will Be Incremented On Each Pass
 	mult32[2] = iteration;											// Iteration - Not Implemented Yet
 	mult32[3] = 0;													// N/A - GPU OpenCL Thread ID
 	mult32[7] = genrand_int32();									// Random Number
@@ -859,6 +866,7 @@ static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work
 			return 0;
 
 		// Get Values For VM Inputs
+		mult32[1] = (*rnd)++;												// Round - Value Will Be Incremented On Each Pass
 		get_vm_input(work);
 
 		// Reset VM Memory
@@ -874,19 +882,31 @@ static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work
 		}
 
 		// Bounty or POW Found, Exit Immediately
-		if (bounty_found)
-			return 1;
-		else if (pow_found)
+		//if (bounty_found)
+		//	return 1;
+		//else if (pow_found)
+		//	return 2;
+
+
+// Fix
+		if (pow_found) {
+			int k;
+			printf("\nMD5 Message: ");
+			for (k = 0; k < 80; k++)
+				printf("%02X", tmp_msg[k]);
+			printf("\n");
 			return 2;
+		}
+// Fix
+
 
 		(*hashes_done)++;
 
 		// Only Run For 1s Before Returning To Miner Thread
 		if ((time(NULL) - t_start) >= 1)
-			break;
+//		if ((time(NULL) - t_start) >= 1000)
+				break;
 
-		// Increment round
-		mult32[1] += 1;
 	}
 	return 0;
 }
@@ -1100,7 +1120,7 @@ static int decode_work(CURL *curl, const json_t *val, struct work *work) {
 	wrk = json_object_get(val, "work_packages");
 
 	if (!wrk) {
-		applog(LOG_ERR, "Invalid JSON response to getwork request");
+		applog(LOG_ERR, "Invalid JSON response to getMineableWork request");
 		return 0;
 	}
 
@@ -1132,7 +1152,7 @@ static int decode_work(CURL *curl, const json_t *val, struct work *work) {
 
 		// Temp Fix
 		tgt = (char *)calloc(33, sizeof(char));
-		sprintf(tgt, "0000FFFFFFFFFFFFFFFFFFFFFFFFFFFF");
+		sprintf(tgt, "00000FFFFFFFFFFFFFFFFFFFFFFFFFFF");
 		// Temp Fix
 
 
@@ -1374,7 +1394,7 @@ static bool get_work_source(CURL *curl, char *work_str, char *elastic_src) {
 	// Check If Any Active Work Packages Are Available
 	num_pkg = json_array_size(wrk);
 	if (num_pkg != 1) {
-		applog(LOG_INFO, "Unable to retrieve work for work_id %s", work_str);
+		applog(LOG_INFO, "Unable to retrieve source for work_id %s", work_str);
 		return false;
 	}
 
@@ -1515,7 +1535,8 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 		}
 		else {
 			sprintf(url, "%s?requestType=submitSolution", rpc_url);
-			sprintf(data, "deadline=3&work_id=%s&data=%s&multiplicator=%s&storage_id=%d&is_pow=true&hash=&secretPhrase=%s", req->work_str, submit_data_hex, req->mult, req->storage_id, passphrase);
+//			sprintf(data, "deadline=3&work_id=%s&data=%s&multiplicator=%s&storage_id=%d&is_pow=true&hash=&secretPhrase=%s", req->work_str, submit_data_hex, req->mult, req->storage_id, passphrase);
+			sprintf(data, "deadline=3&work_id=%s&data=%s&multiplicator=%s&storage_id=%d&is_pow=true&hash=%s&secretPhrase=%s", req->work_str, submit_data_hex, req->mult, req->storage_id, req->hash, passphrase);
 		}
 	}
 	else {
