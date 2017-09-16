@@ -1131,8 +1131,8 @@ static int decode_work(CURL *curl, const json_t *val, struct work *work) {
 
 
 		// Temp Fix
-		tgt = (char *)calloc(32, sizeof(char));
-		memset(tgt + 4, 0xFF, 28);
+		tgt = (char *)calloc(33, sizeof(char));
+		sprintf(tgt, "0000FFFFFFFFFFFFFFFFFFFFFFFFFFFF");
 		// Temp Fix
 
 
@@ -1170,7 +1170,7 @@ static int decode_work(CURL *curl, const json_t *val, struct work *work) {
 			work_package.block_id = strtoull(str, NULL, 10);
 //			str = (char *)json_string_value(json_object_get(pkg, "title"));
 //			strncpy(work_package.work_nm, str, 49);
-			work_package.bounty_limit = (uint32_t)json_integer_value(json_object_get(pkg, "bounty_limit"));
+			work_package.bounty_limit = (uint32_t)json_integer_value(json_object_get(pkg, "bounty_limit_per_iteration"));
 			work_package.bty_reward = (uint64_t)json_number_value(json_object_get(pkg, "xel_per_bounty"));
 			work_package.pow_reward = (uint64_t)json_number_value(json_object_get(pkg, "xel_per_pow"));
 			work_package.pending_bty_cnt = 0;
@@ -1338,7 +1338,8 @@ static int decode_work(CURL *curl, const json_t *val, struct work *work) {
 static bool get_work_source(CURL *curl, char *work_str, char *elastic_src) {
 	int err, rc;
 	char req[100], *str = NULL;
-	json_t *val;
+	size_t num_pkg;
+	json_t *val, *wrk, *pkg;
 	struct timeval tv_start, tv_end, diff;
 
 	sprintf(req, "requestType=getWork&work_id=%s&with_source=1&with_finished=0", work_str);
@@ -1363,8 +1364,24 @@ static bool get_work_source(CURL *curl, char *work_str, char *elastic_src) {
 		free(str);
 	}
 
+	wrk = json_object_get(val, "work_packages");
+
+	if (!wrk) {
+		applog(LOG_ERR, "Invalid JSON response to getWork request");
+		return 0;
+	}
+
+	// Check If Any Active Work Packages Are Available
+	num_pkg = json_array_size(wrk);
+	if (num_pkg != 1) {
+		applog(LOG_INFO, "Unable to retrieve work for work_id %s", work_str);
+		return false;
+	}
+
+	pkg = json_array_get(wrk, 0);
+
 	// Get Encrypted Source From JSON Message
-	str = (char *)json_string_value(json_object_get(val, "source_code"));
+	str = (char *)json_string_value(json_object_get(pkg, "source_code"));
 
 	// Extract The ElasticPL Source Code
 	if (!str || strlen(str) > MAX_SOURCE_SIZE || strlen(str) == 0) {
