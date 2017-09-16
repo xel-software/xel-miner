@@ -1120,13 +1120,21 @@ static int decode_work(CURL *curl, const json_t *val, struct work *work) {
 	for (i = 0; i<num_pkg; i++) {
 		pkg = json_array_get(wrk, i);
 		tgt = (char *)json_string_value(json_object_get(pkg, "target"));
-		str = (char *)json_string_value(json_object_get(pkg, "work_id"));
+//		str = (char *)json_string_value(json_object_get(pkg, "work_id"));
+		str = (char *)json_string_value(json_object_get(pkg, "id"));
 
 // TODO: Need To Add Current Iteration Number To Message
 
 		int iterations = (int)json_integer_value(json_object_get(pkg, "iterations"));
 		int iterations_left = (int)json_integer_value(json_object_get(pkg, "iterations_left"));
 		iteration_id = iterations - iterations_left;
+
+
+		// Temp Fix
+		tgt = (char *)calloc(32, sizeof(char));
+		memset(tgt + 4, 0xFF, 28);
+		// Temp Fix
+
 
 		if (!tgt || !str || (iteration_id < 0)) {
 			applog(LOG_ERR, "Unable to parse work package");
@@ -1160,8 +1168,8 @@ static int decode_work(CURL *curl, const json_t *val, struct work *work) {
 			strncpy(work_package.work_str, str, 21);
 			str = (char *)json_string_value(json_object_get(pkg, "block_id"));
 			work_package.block_id = strtoull(str, NULL, 10);
-			str = (char *)json_string_value(json_object_get(pkg, "title"));
-			strncpy(work_package.work_nm, str, 49);
+//			str = (char *)json_string_value(json_object_get(pkg, "title"));
+//			strncpy(work_package.work_nm, str, 49);
 			work_package.bounty_limit = (uint32_t)json_integer_value(json_object_get(pkg, "bounty_limit"));
 			work_package.bty_reward = (uint64_t)json_number_value(json_object_get(pkg, "xel_per_bounty"));
 			work_package.pow_reward = (uint64_t)json_number_value(json_object_get(pkg, "xel_per_pow"));
@@ -1347,6 +1355,12 @@ static bool get_work_source(CURL *curl, char *work_str, char *elastic_src) {
 	if (opt_protocol) {
 		timeval_subtract(&diff, &tv_end, &tv_start);
 		applog(LOG_DEBUG, "DEBUG: Time to get source: %.2f ms", (1000.0 * diff.tv_sec) + (0.001 * diff.tv_usec));
+	}
+
+	if (opt_protocol) {
+		str = json_dumps(val, JSON_INDENT(3));
+		applog(LOG_DEBUG, "DEBUG: JSON Response -\n%s", str);
+		free(str);
 	}
 
 	// Get Encrypted Source From JSON Message
