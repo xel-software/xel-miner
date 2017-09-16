@@ -1587,7 +1587,11 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 	}
 	else if (req->req_type == SUBMIT_POW) {
 		if (err_desc) {
-			if (strstr(err_desc, "Duplicate unconfirmed transaction:")) {
+			if (strstr(err_desc, "successfully submitted")) {
+				applog(LOG_NOTICE, "%s: %s***** POW Accepted :-) *****", thr_info[req->thr_id].name, CL_CYN);
+				g_pow_accepted_cnt++;
+			}
+			else if (strstr(err_desc, "Duplicate unconfirmed transaction:")) {
 				applog(LOG_NOTICE, "%s: %s***** POW Discarded! *****", thr_info[req->thr_id].name, CL_YLW);
 				applog(LOG_INFO, "Work ID: %s -%s", req->work_str, err_desc + 34);
 				g_pow_discarded_cnt++;
