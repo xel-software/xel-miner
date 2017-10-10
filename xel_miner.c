@@ -1072,6 +1072,8 @@ static bool get_work(CURL *curl) {
 	else {
 		g_cur_work_id = 0;
 		memset(&g_work, 0, sizeof(struct work));
+		g_work.package_id = -1;
+		g_work.iteration_id = -1;
 		restart_threads();
 	}
 
@@ -1220,6 +1222,7 @@ static int decode_work(CURL *curl, const json_t *val, struct work *work) {
 			work_package.storage_id = 0;
 			work_package.storage_sz = ast_submit_sz;	// Currently, Storage Size = Submit Size
 			work_package.storage_idx = ast_submit_idx;	// Currently, Storage Index = Submti Index
+			work_package.storage = malloc(ast_submit_sz * sizeof(uint32_t));
 
 			// Calculate WCET
 			work_package.WCET = calc_wcet();
@@ -1448,10 +1451,10 @@ static bool get_work_source(CURL *curl, char *work_str, char *elastic_src) {
 
 static int get_work_storage(CURL *curl, char *work_str, uint32_t *storage) {
 	int err;
-	uint32_t storage_id;
-	size_t max_str_len;
+	uint32_t storage_id, iteration_id;
+	size_t num_pkg, max_str_len;
 	char req[100], *str = NULL;
-	json_t *val;
+	json_t *val, *wrk, *pkg;
 	struct timeval tv_start, tv_end, diff;
 
 	sprintf(req, "requestType=getWork&work_id=%s&with_source=0&with_finished=0", work_str);
@@ -1470,19 +1473,55 @@ static int get_work_storage(CURL *curl, char *work_str, uint32_t *storage) {
 		applog(LOG_DEBUG, "DEBUG: Time to get storage: %.2f ms", (1000.0 * diff.tv_sec) + (0.001 * diff.tv_usec));
 	}
 
+	if (opt_protocol) {
+		str = json_dumps(val, JSON_INDENT(3));
+		applog(LOG_DEBUG, "DEBUG: JSON Response -\n%s", str);
+		free(str);
+	}
+
+	wrk = json_object_get(val, "work_packages");
+
+	if (!wrk) {
+		applog(LOG_ERR, "Invalid JSON response to getWork request");
+		return 0;
+	}
+
+	// Check If Any Active Work Packages Are Available
+	num_pkg = json_array_size(wrk);
+	if (num_pkg != 1) {
+		applog(LOG_INFO, "Unable to retrieve storage for work_id %s", work_str);
+		return false;
+	}
+
+	pkg = json_array_get(wrk, 0);
+
 	// Get Storage Values From JSON Message
-	str = (char *)json_string_value(json_object_get(val, "storage"));
-	storage_id = (uint32_t)json_integer_value(json_object_get(val, "storage_id"));
+	str = (char *)json_string_value(json_object_get(pkg, "storage"));
+	storage_id = (uint32_t)json_integer_value(json_object_get(pkg, "storage_id"));
+
+// TODO: Need To Add Current Iteration Number To Message
+
+	int iterations = (int)json_integer_value(json_object_get(pkg, "iterations"));
+	int iterations_left = (int)json_integer_value(json_object_get(pkg, "iterations_left"));
+	iteration_id = iterations - iterations_left;
+
+	// Storage Is Optional For Iteration 0
+	if (!str && (iteration_id == 0)) {
+		json_decref(val);
+		return 0xFFFF;
+	}
 
 	// Extract The ElasticPL Source Code
 	max_str_len = (size_t)(sizeof(storage) * 2); // Hex Representation Of Storage Is Twice The Size
-	if (!str || strlen(str) > max_str_len || strlen(str) == 0) {
+	if (!str || ( strlen(str) > max_str_len ) || ( strlen(str) == 0 ) ) {
 		applog(LOG_ERR, "ERROR: Invalid 'storage' for work_id: %s", work_str);
+		json_decref(val);
 		return -1;
 	}
 
 	if (!hex2ints(storage, sizeof(storage), str, max_str_len)) {
 		applog(LOG_ERR, "ERROR: Unable to convert 'storage' for work_id: %s", work_str);
+		json_decref(val);
 		return -1;
 	}
 
@@ -1732,10 +1771,12 @@ static void *cpu_miner_thread(void *userdata) {
 			iteration = g_work_package[work.package_id].iteration_id;
 
 			// Copy New Storage Values To VM
-			if (iteration && g_work_package[work.package_id].storage_sz)
-				memcpy(vm_s, g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
-			else
-				memset(vm_s, 0, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
+			if (g_work_package[work.package_id].storage_sz) {
+				if (g_work_package[work.package_id].storage_id < 0xFFFF)
+					memcpy(vm_s, g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
+				else
+					memset(vm_s, 0, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
+			}
 
 		}
 		// Otherwise, Just Update POW Target / Iteration / Storage
@@ -1923,7 +1964,7 @@ static void *gpu_miner_thread(void *userdata) {
 
 			// Copy New Storage Values To VM
 			if (g_work_package[work.package_id].storage_sz) {
-				if (g_work_package[work.package_id].iteration_id)
+				if (g_work_package[work.package_id].storage_id < 0xFFFF)
 					memcpy(vm_s, g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
 				else
 					memset(vm_s, 0, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
@@ -2577,6 +2618,10 @@ int main(int argc, char **argv) {
 	// Seed Random Number Generator
 	init_genrand((unsigned long)time(NULL));
 //	RAND_poll();
+
+	// Reset Package / Iteration
+	g_work.package_id = -1;
+	g_work.iteration_id = -1;
 
 #ifndef WIN32
 	/* Always catch Ctrl+C */
