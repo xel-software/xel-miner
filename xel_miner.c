@@ -2381,7 +2381,7 @@ static bool add_submit_req(struct work *work, uint32_t *data, enum submit_comman
 	bin2hex((unsigned char *)work->multiplicator, 32, g_submit_req[g_submit_req_cnt].mult, 65);
 	bin2hex((unsigned char *)work->pow_hash, 16, g_submit_req[g_submit_req_cnt].hash, 33);
 	g_submit_req[g_submit_req_cnt].iteration_id = work->iteration_id;
-	g_submit_req[g_submit_req_cnt].storage_id = g_work_package[work->package_id].storage_id;
+	g_submit_req[g_submit_req_cnt].storage_id = (g_work_package[work->package_id].storage_id < 0xFFFF) ? g_work_package[work->package_id].storage_id : 0;
 	g_submit_req[g_submit_req_cnt].submit_data_sz = g_work_package[work->package_id].submit_sz;
 	g_submit_req[g_submit_req_cnt].submit_data = data;
 	if (req_type != SUBMIT_POW) {
