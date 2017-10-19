@@ -248,9 +248,11 @@ void parse_arg(int key, char *arg)
 		break;
 	case 'd':
 		delay_sleep = atoi(arg);
+		applog(LOG_ERR, "Delaysleep has been set to '%s'", arg);
 		break;
 	case 'i':
 		ignore_mask = atoi(arg);
+		applog(LOG_ERR, "Ignoremask has been set to '%s'", arg);
 		break;
 	case 'h':
 		show_usage_and_exit(0);
@@ -906,6 +908,14 @@ static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work
 			printf("\nMD5 Message: ");
 			for (k = 0; k < 80; k++)
 				printf("%02X", tmp_msg[k]);
+			printf("\n");
+			printf("POW Target: ");
+			for (k = 0; k < 4; k++)
+				printf("%08X ", g_pow_target[k]);
+			printf("\n");
+			printf("POW Hash: ");
+			for (k = 0; k < 4; k++)
+				printf("%08X ", work->pow_hash[k]);
 			printf("\n");
 			return 2;
 		}
@@ -1827,7 +1837,11 @@ static void *cpu_miner_thread(void *userdata) {
 		}
 
 		// Submit Work That Meets Bounty Criteria
-		if (rc == 1 && ignore_mask&0x02==0) {
+		if (rc == 1 && (ignore_mask&2)==0) {
+
+			if(delay_sleep>0)
+				sleep(delay_sleep);
+
 			applog(LOG_NOTICE, "CPU%d: Submitting Bounty Solution", thr_id);
 
 			// Create Submit Request
@@ -1855,12 +1869,15 @@ static void *cpu_miner_thread(void *userdata) {
 				goto out;
 			}
 			
-			if(delay_sleep>0)
-				sleep(delay_sleep);
+		
 		}
 
 		// Submit Work That Meets POW Target
-		if (rc == 2 && ignore_mask&0x01==0) {
+		if (rc == 2 && (ignore_mask&1)==0) {
+
+			if(delay_sleep>0)
+				sleep(delay_sleep);
+
 			applog(LOG_NOTICE, "CPU%d: Submitting POW Solution", thr_id);
 			applog(LOG_DEBUG, "DEBUG: Hash - %08X%08X%08X...  Tgt - %s", work.pow_hash[0], work.pow_hash[1], work.pow_hash[2], g_pow_target_str);
 			applog(LOG_DEBUG, "DEBUG: First 4 Inputs were: %d, %d, %d, %d", work.vm_input[0], work.vm_input[1], work.vm_input[2], work.vm_input[3]);
@@ -1888,8 +1905,7 @@ static void *cpu_miner_thread(void *userdata) {
 				free(wc);
 				goto out;
 			}
-			if(delay_sleep>0)
-				sleep(delay_sleep);
+			
 		}
 	}
 
