@@ -73,6 +73,8 @@ int opt_n_threads = 0;
 static enum prefs opt_pref = PREF_PROFIT;
 char pref_workid[32];
 
+int delay_sleep = 0;
+int ignore_mask = 0;
 int num_cpus;
 bool g_need_work = false;
 char g_work_nm[50];
@@ -144,6 +146,8 @@ Options:\n\
   -c, --config <file>         Use JSON-formated configuration file\n\
   -D, --debug                 Display debug output\n\
       --debug-epl             Display EPL source code\n\
+  -d, --delaysleep	     	  Sleep x seconds after submitting POW: useful for burstless debugging\n \
+  -i, --ignoremask			  Debug only: ignore 0=nothing, 1=PoW, 2=Bty, 3=Both\n \
   -h, --help                  Display this help text and exit\n\
   -m, --mining PREF[:ID]      Mining preference for choosing work\n\
                                 profit       (Default) Estimate most profitable based on POW Reward / WCET\n\
@@ -180,8 +184,10 @@ static char const short_options[] = "c:Dk:hm:o:p:P:qr:R:s:St:T:u:vVX";
 static struct option const options[] = {
 	{ "config",			1, NULL, 'c' },
 	{ "debug",			0, NULL, 'D' },
+	{ "delaysleep",		1, NULL, 'd' },
 	{ "debug-epl",		0, NULL, 1007 },
 	{ "help",			0, NULL, 'h' },
+	{ "ignoremask",		1, NULL, 'i' },
 	{ "mining",			1, NULL, 'm' },
 	{ "no-color",		0, NULL, 1001 },
 	{ "no-renice",		0, NULL, 'X' },
@@ -239,6 +245,12 @@ void parse_arg(int key, char *arg)
 	switch (key) {
 	case 'D':
 		opt_debug = true;
+		break;
+	case 'd':
+		delay_sleep = atoi(arg);
+		break;
+	case 'i':
+		ignore_mask = atoi(arg);
 		break;
 	case 'h':
 		show_usage_and_exit(0);
@@ -1815,7 +1827,7 @@ static void *cpu_miner_thread(void *userdata) {
 		}
 
 		// Submit Work That Meets Bounty Criteria
-		if (rc == 1) {
+		if (rc == 1 && ignore_mask&0x02==0) {
 			applog(LOG_NOTICE, "CPU%d: Submitting Bounty Solution", thr_id);
 
 			// Create Submit Request
@@ -1842,12 +1854,17 @@ static void *cpu_miner_thread(void *userdata) {
 				free(wc);
 				goto out;
 			}
+			
+			if(delay_sleep>0)
+				sleep(delay_sleep);
 		}
 
 		// Submit Work That Meets POW Target
-		if (rc == 2) {
+		if (rc == 2 && ignore_mask&0x01==0) {
 			applog(LOG_NOTICE, "CPU%d: Submitting POW Solution", thr_id);
 			applog(LOG_DEBUG, "DEBUG: Hash - %08X%08X%08X...  Tgt - %s", work.pow_hash[0], work.pow_hash[1], work.pow_hash[2], g_pow_target_str);
+			applog(LOG_DEBUG, "DEBUG: First 4 Inputs were: %d, %d, %d, %d", work.vm_input[0], work.vm_input[1], work.vm_input[2], work.vm_input[3]);
+
 			wc = (struct workio_cmd *) calloc(1, sizeof(*wc));
 			if (!wc) {
 				applog(LOG_ERR, "ERROR: Unable to allocate workio_cmd.  Shutting down thread for CPU%d", thr_id);
@@ -1871,6 +1888,8 @@ static void *cpu_miner_thread(void *userdata) {
 				free(wc);
 				goto out;
 			}
+			if(delay_sleep>0)
+				sleep(delay_sleep);
 		}
 	}
 
@@ -1887,6 +1906,7 @@ out:
 
 	tq_freeze(mythr->q);
 
+	
 	return NULL;
 }
 
