@@ -72,6 +72,7 @@ int opt_timeout = 30;
 int opt_n_threads = 0;
 static enum prefs opt_pref = PREF_PROFIT;
 char pref_workid[32];
+bool opt_check_verify = false;
 
 int num_cpus;
 bool g_need_work = false;
@@ -141,6 +142,7 @@ extern uint32_t swap32(uint32_t a) {
 static char const usage[] = "\
 Usage: " PACKAGE_NAME " [OPTIONS]\n\
 Options:\n\
+      --check-verify          Compare logic between 'main' & 'verify' functions\n\
   -c, --config <file>         Use JSON-formated configuration file\n\
   -D, --debug                 Display debug output\n\
       --debug-epl             Display EPL source code\n\
@@ -178,6 +180,7 @@ Options while mining ----------------------------------------------------------\
 static char const short_options[] = "c:Dk:hm:o:p:P:qr:R:s:St:T:u:vVX";
 
 static struct option const options[] = {
+	{ "check-verify",	0, NULL, 1010 },
 	{ "config",			1, NULL, 'c' },
 	{ "debug",			0, NULL, 'D' },
 	{ "debug-epl",		0, NULL, 1007 },
@@ -406,6 +409,9 @@ void parse_arg(int key, char *arg)
 		else
 			opt_opencl_vwidth = v;
 		break;
+	case 1010:
+		opt_check_verify = true;
+		break;
 	default:
 		show_usage_and_exit(1);
 	}
@@ -511,6 +517,99 @@ static bool load_test_file(char *file_name, char *buf) {
 	return true;
 }
 
+bool check_elasticpl_source(int package_id, struct instance *inst) {
+	int i, rc;
+	uint32_t pow_hash_main[4], pow_hash_verify[4];
+	uint32_t bounty_found, pow_found;
+
+	int32_t *tmp_i = NULL;
+	uint32_t *tmp_m = NULL, *tmp_u = NULL, *tmp_s = NULL;
+	int64_t *tmp_l = NULL;
+	uint64_t *tmp_ul = NULL;
+	float *tmp_f = NULL;
+	double *tmp_d = NULL;
+
+	// Randomize Contents Of m[]
+	tmp_m = calloc(VM_M_ARRAY_SIZE, sizeof(uint32_t));
+	for (i = 0; i < VM_M_ARRAY_SIZE; i++)
+		tmp_m[i] = (uint32_t)genrand_int32();
+
+	// Randomize Contents Of i[]
+	if (g_work_package[0].vm_ints) {
+		tmp_i = calloc(g_work_package[0].vm_ints, sizeof(int32_t));
+		for (i = 0; i < g_work_package[package_id].vm_ints; i++)
+			tmp_i[i] = (int32_t)genrand_int32();
+	}
+
+	// Randomize Contents Of u[]
+	if (g_work_package[0].vm_uints) {
+		tmp_u = calloc(g_work_package[0].vm_uints, sizeof(uint32_t));
+		for (i = 0; i < g_work_package[package_id].vm_uints; i++)
+			tmp_u[i] = (uint32_t)genrand_int32();
+	}
+
+	// Randomize Contents Of l[]
+	if (g_work_package[0].vm_longs) {
+		tmp_l = calloc(g_work_package[0].vm_longs, sizeof(int64_t));
+		for (i = 0; i < g_work_package[package_id].vm_longs; i++)
+			tmp_l[i] = (int64_t)genrand_int32();
+	}
+
+	// Randomize Contents Of ul[]
+	if (g_work_package[0].vm_ulongs) {
+		tmp_ul = calloc(g_work_package[0].vm_ulongs, sizeof(uint64_t));
+		for (i = 0; i < g_work_package[package_id].vm_ulongs; i++)
+			tmp_ul[i] = (uint64_t)genrand_int32();
+	}
+
+	// Randomize Contents Of f[]
+	if (g_work_package[0].vm_floats) {
+		tmp_f = calloc(g_work_package[0].vm_floats, sizeof(float));
+		for (i = 0; i < g_work_package[package_id].vm_floats; i++)
+			tmp_f[i] = (float)genrand_int32();
+	}
+
+	// Randomize Contents Of d[]
+	if (g_work_package[0].vm_doubles) {
+		tmp_d = calloc(g_work_package[0].vm_doubles, sizeof(double));
+		for (i = 0; i < g_work_package[package_id].vm_doubles; i++)
+			tmp_d[i] = (double)genrand_int32();
+	}
+
+	// Randomize Contents Of s[]
+	if (g_work_package[0].storage_sz) {
+		tmp_s = calloc(g_work_package[0].storage_sz, sizeof(uint32_t));
+		for (i = 0; i < g_work_package[package_id].storage_sz; i++)
+			vm_s[i] = (uint32_t)genrand_int32();
+	}
+
+	// Copy Randomized Input To VM Memory
+	memcpy(vm_m, tmp_m, VM_M_ARRAY_SIZE * sizeof(uint32_t));
+	if (g_work_package[0].vm_ints) memcpy(vm_i, tmp_i, g_work_package[0].vm_ints * sizeof(int32_t));
+	if (g_work_package[0].vm_uints) memcpy(vm_u, tmp_u, g_work_package[0].vm_uints * sizeof(uint32_t));
+	if (g_work_package[0].vm_longs) memcpy(vm_l, tmp_l, g_work_package[0].vm_longs * sizeof(int64_t));
+	if (g_work_package[0].vm_ulongs) memcpy(vm_ul, tmp_ul, g_work_package[0].vm_ulongs * sizeof(uint64_t));
+	if (g_work_package[0].vm_floats) memcpy(vm_f, tmp_f, g_work_package[0].vm_floats * sizeof(float));
+	if (g_work_package[0].vm_doubles) memcpy(vm_d, tmp_d, g_work_package[0].vm_doubles * sizeof(double));
+	if (g_work_package[0].storage_sz) memcpy(vm_s, tmp_s, g_work_package[0].storage_sz * sizeof(uint32_t));
+
+	// Run "main" Function
+	rc = inst->execute(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, pow_hash_main);
+	printf("'main' Hash:   %08X %08X %08X %08X\n", pow_hash_main[0], pow_hash_main[1], pow_hash_main[2], pow_hash_main[3]);
+
+	rc = inst->verify(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, pow_hash_verify);
+	printf("'verify' Hash: %08X %08X %08X %08X\n", pow_hash_verify[0], pow_hash_verify[1], pow_hash_verify[2], pow_hash_verify[3]);
+
+	for (i = 0; i < 4; i++) {
+		if (pow_hash_verify[i] != pow_hash_main[i]) {
+			printf("Error found in 'main' and 'verify'...verification logic is not consistant\n");
+			return false;
+		}
+	}
+
+	return true;
+}
+
 static void *test_vm_thread(void *userdata) {
 	struct thr_info *mythr = (struct thr_info *) userdata;
 	int thr_id = mythr->id;
@@ -595,7 +694,7 @@ static void *test_vm_thread(void *userdata) {
 	if (g_work_package[0].vm_ulongs) vm_ul = calloc(g_work_package[0].vm_ulongs, sizeof(uint64_t));
 	if (g_work_package[0].vm_floats) vm_f = calloc(g_work_package[0].vm_floats, sizeof(float));
 	if (g_work_package[0].vm_doubles) vm_d = calloc(g_work_package[0].vm_doubles, sizeof(double));
-	if (g_work_package[0].storage_sz) vm_s = calloc(g_work_package[0].storage_sz, sizeof(int32_t));
+	if (g_work_package[0].storage_sz) vm_s = calloc(g_work_package[0].storage_sz, sizeof(uint32_t));
 
 	if ((g_work_package[0].vm_ints && !vm_i) ||
 		(g_work_package[0].vm_uints && !vm_u) ||
@@ -721,6 +820,12 @@ static void *test_vm_thread(void *userdata) {
 		inst = calloc(1, sizeof(struct instance));
 		create_instance(inst, g_work_package[0].work_str);
 		inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d, vm_s);
+
+		// Temp logic to confirm verify...
+		if (opt_check_verify)
+			check_elasticpl_source(0, inst);
+
+
 
 		// Execute The VM Logic
 //		rc = inst->verify(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, work.pow_hash);
@@ -1605,7 +1710,7 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 	err_desc = (char *)json_string_value(json_object_get(val, "errorDescription"));
 
 	if (err_desc)
-		applog(LOG_DEBUG, "DEBUG: Submit response error - %s", err_desc);
+		applog(LOG_DEBUG, "DEBUG: Submit response - %s", err_desc);
 
 	if (req->req_type == SUBMIT_BOUNTY) {
 		if (err_desc) {
@@ -1627,7 +1732,7 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 	else if (req->req_type == SUBMIT_POW) {
 		if (err_desc) {
 			if (strstr(err_desc, "successfully submitted")) {
-				applog(LOG_NOTICE, "%s: %s***** POW Accepted :-) *****", thr_info[req->thr_id].name, CL_CYN);
+				applog(LOG_NOTICE, "%s: %s***** POW Accepted *****", thr_info[req->thr_id].name, CL_CYN);
 				g_pow_accepted_cnt++;
 			}
 			else if (strstr(err_desc, "Duplicate unconfirmed transaction:")) {
