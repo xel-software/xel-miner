@@ -597,6 +597,16 @@ bool check_elasticpl_source(int package_id, struct instance *inst) {
 	rc = inst->execute(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, pow_hash_main);
 	printf("'main' Hash:   %08X %08X %08X %08X\n", pow_hash_main[0], pow_hash_main[1], pow_hash_main[2], pow_hash_main[3]);
 
+	// Reset Randomized Input In VM Memory
+	memcpy(vm_m, tmp_m, VM_M_ARRAY_SIZE * sizeof(uint32_t));
+	if (g_work_package[0].vm_ints) memcpy(vm_i, tmp_i, g_work_package[0].vm_ints * sizeof(int32_t));
+	if (g_work_package[0].vm_uints) memcpy(vm_u, tmp_u, g_work_package[0].vm_uints * sizeof(uint32_t));
+	if (g_work_package[0].vm_longs) memcpy(vm_l, tmp_l, g_work_package[0].vm_longs * sizeof(int64_t));
+	if (g_work_package[0].vm_ulongs) memcpy(vm_ul, tmp_ul, g_work_package[0].vm_ulongs * sizeof(uint64_t));
+	if (g_work_package[0].vm_floats) memcpy(vm_f, tmp_f, g_work_package[0].vm_floats * sizeof(float));
+	if (g_work_package[0].vm_doubles) memcpy(vm_d, tmp_d, g_work_package[0].vm_doubles * sizeof(double));
+	if (g_work_package[0].storage_sz) memcpy(vm_s, tmp_s, g_work_package[0].storage_sz * sizeof(uint32_t));
+
 	rc = inst->verify(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, pow_hash_verify);
 	printf("'verify' Hash: %08X %08X %08X %08X\n", pow_hash_verify[0], pow_hash_verify[1], pow_hash_verify[2], pow_hash_verify[3]);
 
