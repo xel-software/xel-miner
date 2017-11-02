@@ -7,6 +7,8 @@
 #define USER_AGENT PACKAGE_NAME "/" PACKAGE_VERSION
 #define MAX_CPUS 16
 
+#define MAX_POW_PER_BLOCK 10
+
 #include <curl/curl.h>
 #include <jansson.h>
 #include <pthread.h>

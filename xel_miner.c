@@ -79,6 +79,8 @@ bool g_need_work = false;
 char g_work_nm[50];
 char g_work_id[22];
 uint64_t g_cur_work_id;
+uint64_t g_cur_block_id;
+uint64_t g_cur_pow_cnt;
 unsigned char g_pow_target_str[33];
 uint32_t g_pow_target[4];
 
@@ -1076,6 +1078,10 @@ static bool get_work(CURL *curl) {
 		memcpy(g_pow_target, work.pow_target, 4 * sizeof(uint32_t));
 		memcpy(&g_work, &work, sizeof(struct work));
 
+		// Reset POW Counter When Block Changes
+		if (work.block_id != g_cur_block_id)
+			g_cur_pow_cnt = 0;
+
 		// Restart Miner Threads If Work Package Changes
 		if (work.work_id != g_cur_work_id) {
 			applog(LOG_NOTICE, "Switching to work_id: %s (target: %s)", work.work_str, g_pow_target_str);
@@ -1083,9 +1089,12 @@ static bool get_work(CURL *curl) {
 		}
 
 		g_cur_work_id = work.work_id;
+		g_cur_block_id = work.block_id;
 	}
 	else {
 		g_cur_work_id = 0;
+		g_cur_block_id = 0;
+		g_cur_pow_cnt = 0;
 		memset(&g_work, 0, sizeof(struct work));
 		g_work.package_id = -1;
 		g_work.iteration_id = -1;
@@ -1672,7 +1681,8 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 }
 
 bool validate_work_source(int package_id, struct instance *inst) {
-	int i, rc;
+	int rc;
+	uint32_t i;
 	uint32_t pow_hash_main1[4], pow_hash_main2[4], pow_hash_verify1[4], pow_hash_verify2[4];
 	uint32_t bounty_found, pow_found;
 
@@ -1718,7 +1728,7 @@ bool validate_work_source(int package_id, struct instance *inst) {
 		tmp_d[i] = (double)genrand_int32();
 
 	for (i = 0; i < g_work_package[package_id].storage_sz; i++)
-		tmp_s[i] = (double)genrand_int32();
+		tmp_s[i] = (uint32_t)genrand_int32();
 
 	// Initialize m[] & s[] Arrays With Their Test Data
 	memcpy(vm_m, tmp_m, VM_M_ARRAY_SIZE * sizeof(uint32_t));
@@ -2519,6 +2529,18 @@ static void *workio_thread(void *userdata)
 }
 
 static bool add_submit_req(struct work *work, uint32_t *data, enum submit_commands req_type) {
+
+	if (req_type == SUBMIT_POW) {
+		// Ignore Stale Submissions
+		if (work->block_id != g_cur_block_id)
+			return true;
+
+		// Don't Exceed Max POW Sumbissions Per Block
+		if (++g_cur_pow_cnt > MAX_POW_PER_BLOCK) {
+			applog(LOG_DEBUG, "Maximum POW per block reached...POW submission ignored");
+			return true;
+		}
+	}
 
 	pthread_mutex_lock(&submit_lock);
 
