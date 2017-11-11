@@ -7,6 +7,8 @@
 #define USER_AGENT PACKAGE_NAME "/" PACKAGE_VERSION
 #define MAX_CPUS 16
 
+#define MAX_POW_PER_BLOCK 10
+
 #include <curl/curl.h>
 #include <jansson.h>
 #include <pthread.h>
@@ -344,6 +346,7 @@ static bool get_work(CURL *curl);
 static int decode_work(CURL *curl, const json_t *val, struct work *work);
 static bool get_work_source(CURL *curl, char *work_str, char *elastic_src);
 static int get_work_storage(CURL *curl, char *work_str, uint32_t *storage);
+static bool validate_work_source(int package_id, struct instance *inst);
 static double calc_diff(uint32_t *target);
 extern bool add_work_package(struct work_package *work_package);
 static void update_pending_cnt(uint64_t work_id, bool add);

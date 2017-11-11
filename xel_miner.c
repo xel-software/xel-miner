@@ -72,6 +72,7 @@ int opt_timeout = 30;
 int opt_n_threads = 0;
 static enum prefs opt_pref = PREF_PROFIT;
 char pref_workid[32];
+bool opt_validate_work = false;
 
 int delay_sleep = 0;
 int ignore_mask = 0;
@@ -80,6 +81,8 @@ bool g_need_work = false;
 char g_work_nm[50];
 char g_work_id[22];
 uint64_t g_cur_work_id;
+uint64_t g_cur_block_id;
+uint64_t g_cur_pow_cnt;
 unsigned char g_pow_target_str[33];
 uint32_t g_pow_target[4];
 
@@ -171,6 +174,7 @@ Options:\n\
   -t, --threads <n>           Number of miner threads (Default: Number of CPUs)\n\
   -u, --user <username>       Username for mining server\n\
   -T, --timeout <n>           Timeout for rpc calls (Default: 30 sec)\n\
+      --validate              Validate logic in 'main' & 'verify' functions\n\
   -v, --version               Display version information and exit\n\
   -X  --no-renice             Do not lower the priority of miner threads\n\
 Options while mining ----------------------------------------------------------\n\n\
@@ -208,6 +212,7 @@ static struct option const options[] = {
 	{ "timeout",		1, NULL, 'T' },
 	{ "url",			1, NULL, 'o' },
 	{ "user",			1, NULL, 'u' },
+	{ "validate",		0, NULL, 1010 },
 	{ "version",		0, NULL, 'v' },
 	{ 0, 0, 0, 0 }
 };
@@ -420,6 +425,9 @@ void parse_arg(int key, char *arg)
 		else
 			opt_opencl_vwidth = v;
 		break;
+	case 1010:
+		opt_validate_work = true;
+		break;
 	default:
 		show_usage_and_exit(1);
 	}
@@ -609,7 +617,7 @@ static void *test_vm_thread(void *userdata) {
 	if (g_work_package[0].vm_ulongs) vm_ul = calloc(g_work_package[0].vm_ulongs, sizeof(uint64_t));
 	if (g_work_package[0].vm_floats) vm_f = calloc(g_work_package[0].vm_floats, sizeof(float));
 	if (g_work_package[0].vm_doubles) vm_d = calloc(g_work_package[0].vm_doubles, sizeof(double));
-	if (g_work_package[0].storage_sz) vm_s = calloc(g_work_package[0].storage_sz, sizeof(int32_t));
+	if (g_work_package[0].storage_sz) vm_s = calloc(g_work_package[0].storage_sz, sizeof(uint32_t));
 
 	if ((g_work_package[0].vm_ints && !vm_i) ||
 		(g_work_package[0].vm_uints && !vm_u) ||
@@ -735,6 +743,15 @@ static void *test_vm_thread(void *userdata) {
 		inst = calloc(1, sizeof(struct instance));
 		create_instance(inst, g_work_package[0].work_str);
 		inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d, vm_s);
+
+		// Temporary Logic For Miner To Validate 'main' & 'verify'
+		// This Should Be Done Prior To Author Submitting The Job By The Node
+		if (opt_validate_work) {
+			if (!validate_work_source(0, inst)) {
+				applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
+				exit(EXIT_FAILURE);
+			}
+		}
 
 		// Execute The VM Logic
 //		rc = inst->verify(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, work.pow_hash);
@@ -1083,6 +1100,10 @@ static bool get_work(CURL *curl) {
 		memcpy(g_pow_target, work.pow_target, 4 * sizeof(uint32_t));
 		memcpy(&g_work, &work, sizeof(struct work));
 
+		// Reset POW Counter When Block Changes
+		if (work.block_id != g_cur_block_id)
+			g_cur_pow_cnt = 0;
+
 		// Restart Miner Threads If Work Package Changes
 		if (work.work_id != g_cur_work_id) {
 			applog(LOG_NOTICE, "Switching to work_id: %s (target: %s)", work.work_str, g_pow_target_str);
@@ -1090,9 +1111,12 @@ static bool get_work(CURL *curl) {
 		}
 
 		g_cur_work_id = work.work_id;
+		g_cur_block_id = work.block_id;
 	}
 	else {
 		g_cur_work_id = 0;
+		g_cur_block_id = 0;
+		g_cur_pow_cnt = 0;
 		memset(&g_work, 0, sizeof(struct work));
 		g_work.package_id = -1;
 		g_work.iteration_id = -1;
@@ -1627,7 +1651,7 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 	err_desc = (char *)json_string_value(json_object_get(val, "errorDescription"));
 
 	if (err_desc)
-		applog(LOG_DEBUG, "DEBUG: Submit response error - %s", err_desc);
+		applog(LOG_DEBUG, "DEBUG: Submit response - %s", err_desc);
 
 	if (req->req_type == SUBMIT_BOUNTY) {
 		if (err_desc) {
@@ -1649,7 +1673,7 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 	else if (req->req_type == SUBMIT_POW) {
 		if (err_desc) {
 			if (strstr(err_desc, "successfully submitted")) {
-				applog(LOG_NOTICE, "%s: %s***** POW Accepted :-) *****", thr_info[req->thr_id].name, CL_CYN);
+				applog(LOG_NOTICE, "%s: %s***** POW Accepted *****", thr_info[req->thr_id].name, CL_CYN);
 				g_pow_accepted_cnt++;
 			}
 			else if (strstr(err_desc, "Duplicate unconfirmed transaction:")) {
@@ -1674,6 +1698,150 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 	free(url);
 	if (data) free(data);
 	if (submit_data_hex) free(submit_data_hex);
+
+	return true;
+}
+
+bool validate_work_source(int package_id, struct instance *inst) {
+	int rc;
+	uint32_t i;
+	uint32_t pow_hash_main1[4], pow_hash_main2[4], pow_hash_verify1[4], pow_hash_verify2[4];
+	uint32_t bounty_found, pow_found;
+
+	int32_t *tmp_i = NULL;
+	uint32_t *tmp_m = NULL, *tmp_u = NULL, *tmp_s = NULL;
+	int64_t *tmp_l = NULL;
+	uint64_t *tmp_ul = NULL;
+	float *tmp_f = NULL;
+	double *tmp_d = NULL;
+
+	applog(LOG_DEBUG, "Validate Work - Checking 'main' and 'verify' logic...");
+
+	// Declare Arrays To Store Randomized Test Data
+	tmp_m = calloc(VM_M_ARRAY_SIZE, sizeof(uint32_t));
+	if (g_work_package[package_id].vm_ints) tmp_i = calloc(g_work_package[package_id].vm_ints, sizeof(int32_t));
+	if (g_work_package[package_id].vm_uints) tmp_u = calloc(g_work_package[package_id].vm_uints, sizeof(uint32_t));
+	if (g_work_package[package_id].vm_longs) tmp_l = calloc(g_work_package[package_id].vm_longs, sizeof(int64_t));
+	if (g_work_package[package_id].vm_ulongs) tmp_ul = calloc(g_work_package[package_id].vm_ulongs, sizeof(uint64_t));
+	if (g_work_package[package_id].vm_floats) tmp_f = calloc(g_work_package[package_id].vm_floats, sizeof(float));
+	if (g_work_package[package_id].vm_doubles) tmp_d = calloc(g_work_package[package_id].vm_doubles, sizeof(double));
+	if (g_work_package[package_id].storage_sz) tmp_s = calloc(g_work_package[package_id].storage_sz, sizeof(uint32_t));
+
+	// Create Random Test Data
+	for (i = 0; i < VM_M_ARRAY_SIZE; i++)
+		tmp_m[i] = (uint32_t)genrand_int32();
+
+	for (i = 0; i < g_work_package[package_id].vm_ints; i++)
+		tmp_i[i] = (int32_t)genrand_int32();
+
+	for (i = 0; i < g_work_package[package_id].vm_uints; i++)
+		tmp_u[i] = (uint32_t)genrand_int32();
+
+	for (i = 0; i < g_work_package[package_id].vm_longs; i++)
+		tmp_l[i] = (int64_t)genrand_int32();
+
+	for (i = 0; i < g_work_package[package_id].vm_ulongs; i++)
+		tmp_ul[i] = (uint64_t)genrand_int32();
+
+	for (i = 0; i < g_work_package[package_id].vm_floats; i++)
+		tmp_f[i] = (float)genrand_int32();
+
+	for (i = 0; i < g_work_package[package_id].vm_doubles; i++)
+		tmp_d[i] = (double)genrand_int32();
+
+	for (i = 0; i < g_work_package[package_id].storage_sz; i++)
+		tmp_s[i] = (uint32_t)genrand_int32();
+
+	// Initialize m[] & s[] Arrays With Their Test Data
+	memcpy(vm_m, tmp_m, VM_M_ARRAY_SIZE * sizeof(uint32_t));
+
+	if (g_work_package[0].storage_sz)
+		memcpy(vm_s, tmp_s, g_work_package[0].storage_sz * sizeof(uint32_t));
+
+	// Intialize All Other Variable Arrays w/ Zeros
+	if (g_work_package[package_id].vm_ints) memset(vm_i, 0, g_work_package[package_id].vm_ints * sizeof(int32_t));
+	if (g_work_package[package_id].vm_uints) memset(vm_u, 0, g_work_package[package_id].vm_uints * sizeof(uint32_t));
+	if (g_work_package[package_id].vm_longs) memset(vm_l, 0, g_work_package[package_id].vm_longs * sizeof(int64_t));
+	if (g_work_package[package_id].vm_ulongs) memset(vm_ul, 0, g_work_package[package_id].vm_ulongs * sizeof(uint64_t));
+	if (g_work_package[package_id].vm_floats) memset(vm_f, 0, g_work_package[package_id].vm_floats * sizeof(float));
+	if (g_work_package[package_id].vm_doubles) memset(vm_d, 0, g_work_package[package_id].vm_doubles * sizeof(double));
+
+	// Run "main" Function
+	rc = inst->execute(g_work_package[package_id].work_id, &bounty_found, 1, &pow_found, g_pow_target, pow_hash_main1);
+	applog(LOG_DEBUG, "\tValidate Work - 'main'   Hash1: %08X %08X %08X %08X", pow_hash_main1[0], pow_hash_main1[1], pow_hash_main1[2], pow_hash_main1[3]);
+
+	// Now copy the random test data to the variable arrays, if a different
+	// hash is returned, we know there are uninitialized variables being used
+	memcpy(vm_m, tmp_m, VM_M_ARRAY_SIZE * sizeof(uint32_t));
+	if (g_work_package[0].vm_ints) memcpy(vm_i, tmp_i, g_work_package[0].vm_ints * sizeof(int32_t));
+	if (g_work_package[0].vm_uints) memcpy(vm_u, tmp_u, g_work_package[0].vm_uints * sizeof(uint32_t));
+	if (g_work_package[0].vm_longs) memcpy(vm_l, tmp_l, g_work_package[0].vm_longs * sizeof(int64_t));
+	if (g_work_package[0].vm_ulongs) memcpy(vm_ul, tmp_ul, g_work_package[0].vm_ulongs * sizeof(uint64_t));
+	if (g_work_package[0].vm_floats) memcpy(vm_f, tmp_f, g_work_package[0].vm_floats * sizeof(float));
+	if (g_work_package[0].vm_doubles) memcpy(vm_d, tmp_d, g_work_package[0].vm_doubles * sizeof(double));
+	if (g_work_package[0].storage_sz) memcpy(vm_s, tmp_s, g_work_package[0].storage_sz * sizeof(uint32_t));
+
+	// Run "main" Function Again
+	rc = inst->execute(g_work_package[package_id].work_id, &bounty_found, 1, &pow_found, g_pow_target, pow_hash_main2);
+	applog(LOG_DEBUG, "\tValidate Work - 'main'   Hash2: %08X %08X %08X %08X", pow_hash_main2[0], pow_hash_main2[1], pow_hash_main2[2], pow_hash_main2[3]);
+
+	// Compare Hashes
+	for (i = 0; i < 4; i++) {
+		if (pow_hash_main1[i] != pow_hash_main2[i]) {
+			applog(LOG_ERR, "Validate Work - ElasticPL 'main' function is using uninitialized values");
+			return false;
+		}
+	}
+
+	// Initialize m[] & s[] Arrays With Their Test Data
+	memcpy(vm_m, tmp_m, VM_M_ARRAY_SIZE * sizeof(uint32_t));
+
+	if (g_work_package[0].storage_sz)
+		memcpy(vm_s, tmp_s, g_work_package[0].storage_sz * sizeof(uint32_t));
+
+	// Intialize All Other Variable Arrays w/ Zeros
+	if (g_work_package[package_id].vm_ints) memset(vm_i, 0, g_work_package[package_id].vm_ints * sizeof(int32_t));
+	if (g_work_package[package_id].vm_uints) memset(vm_u, 0, g_work_package[package_id].vm_uints * sizeof(uint32_t));
+	if (g_work_package[package_id].vm_longs) memset(vm_l, 0, g_work_package[package_id].vm_longs * sizeof(int64_t));
+	if (g_work_package[package_id].vm_ulongs) memset(vm_ul, 0, g_work_package[package_id].vm_ulongs * sizeof(uint64_t));
+	if (g_work_package[package_id].vm_floats) memset(vm_f, 0, g_work_package[package_id].vm_floats * sizeof(float));
+	if (g_work_package[package_id].vm_doubles) memset(vm_d, 0, g_work_package[package_id].vm_doubles * sizeof(double));
+
+	// Run "verify" Function
+	rc = inst->verify(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, pow_hash_verify1);
+	applog(LOG_DEBUG, "\tValidate Work - 'verify' Hash1: %08X %08X %08X %08X", pow_hash_verify1[0], pow_hash_verify1[1], pow_hash_verify1[2], pow_hash_verify1[3]);
+
+	// Copy Randomized Input To VM Memory
+	memcpy(vm_m, tmp_m, VM_M_ARRAY_SIZE * sizeof(uint32_t));
+	if (g_work_package[0].vm_ints) memcpy(vm_i, tmp_i, g_work_package[0].vm_ints * sizeof(int32_t));
+	if (g_work_package[0].vm_uints) memcpy(vm_u, tmp_u, g_work_package[0].vm_uints * sizeof(uint32_t));
+	if (g_work_package[0].vm_longs) memcpy(vm_l, tmp_l, g_work_package[0].vm_longs * sizeof(int64_t));
+	if (g_work_package[0].vm_ulongs) memcpy(vm_ul, tmp_ul, g_work_package[0].vm_ulongs * sizeof(uint64_t));
+	if (g_work_package[0].vm_floats) memcpy(vm_f, tmp_f, g_work_package[0].vm_floats * sizeof(float));
+	if (g_work_package[0].vm_doubles) memcpy(vm_d, tmp_d, g_work_package[0].vm_doubles * sizeof(double));
+	if (g_work_package[0].storage_sz) memcpy(vm_s, tmp_s, g_work_package[0].storage_sz * sizeof(uint32_t));
+
+	// Run "verify" Function Again
+	rc = inst->verify(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, pow_hash_verify2);
+	applog(LOG_DEBUG, "\tValidate Work - 'verify' Hash2: %08X %08X %08X %08X", pow_hash_verify2[0], pow_hash_verify2[1], pow_hash_verify2[2], pow_hash_verify2[3]);
+
+	// Compare Hashes
+	for (i = 0; i < 4; i++) {
+		if (pow_hash_verify1[i] != pow_hash_verify2[i]) {
+			applog(LOG_ERR, "Validate Work - ElasticPL 'verify' function is using uninitialized values");
+			return false;
+		}
+	}
+
+	// Compare "main" Hash to "verify"
+	for (i = 0; i < 4; i++) {
+		if (pow_hash_verify2[i] != pow_hash_main2[i]) {
+			applog(LOG_ERR, "Validate Work - ElasticPL 'main' & 'verify' functions return conflicting results");
+			return false;
+		}
+	}
+
+	applog(LOG_DEBUG, "Validate Work - Success");
 
 	return true;
 }
@@ -2397,6 +2565,18 @@ static void *workio_thread(void *userdata)
 }
 
 static bool add_submit_req(struct work *work, uint32_t *data, enum submit_commands req_type) {
+
+	if (req_type == SUBMIT_POW) {
+		// Ignore Stale Submissions
+		if (work->block_id != g_cur_block_id)
+			return true;
+
+		// Don't Exceed Max POW Sumbissions Per Block
+		if (++g_cur_pow_cnt > MAX_POW_PER_BLOCK) {
+			applog(LOG_DEBUG, "Maximum POW per block reached...POW submission ignored");
+			return true;
+		}
+	}
 
 	pthread_mutex_lock(&submit_lock);
 
