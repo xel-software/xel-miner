@@ -906,7 +906,7 @@ static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work
 		if (pow_found) {
 			int k;
 			printf("\nMD5 Message: ");
-			for (k = 0; k < 80; k++)
+			for (k = 0; k < 96/2; k++)
 				printf("%02X", tmp_msg[k]);
 			printf("\n");
 			printf("POW Target: ");
