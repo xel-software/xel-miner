@@ -1079,8 +1079,10 @@ static bool get_work(CURL *curl) {
 		memcpy(&g_work, &work, sizeof(struct work));
 
 		// Reset POW Counter When Block Changes
-		if (work.block_id != g_cur_block_id)
-			g_cur_pow_cnt = 0;
+		//if (work.block_id != g_cur_block_id) {
+		//	g_cur_pow_cnt = 0;
+		//	applog(LOG_DEBUG, "New Block - now mining block: %llu", work.block_id);
+		//}
 
 		// Restart Miner Threads If Work Package Changes
 		if (work.work_id != g_cur_work_id) {
@@ -2388,6 +2390,10 @@ static void *longpoll_thread(void *userdata)
 					pthread_mutex_lock(&longpoll_lock);
 					g_new_block = true;
 					nosleep = true;
+
+					// Reset POW Counter When Block Changes
+					g_cur_pow_cnt = 0;
+
 					pthread_mutex_unlock(&longpoll_lock);
 				}
 			}
@@ -2415,6 +2421,10 @@ static void *longpoll_thread(void *userdata)
 						pthread_mutex_lock(&longpoll_lock);
 						g_new_block = true;
 						nosleep = true;
+
+						// Reset POW Counter When Block Changes
+						g_cur_pow_cnt = 0;
+
 						pthread_mutex_unlock(&longpoll_lock);
 					}
 				}
@@ -2530,19 +2540,27 @@ static void *workio_thread(void *userdata)
 
 static bool add_submit_req(struct work *work, uint32_t *data, enum submit_commands req_type) {
 
+	pthread_mutex_lock(&submit_lock);
+
 	if (req_type == SUBMIT_POW) {
 		// Ignore Stale Submissions
-		if (work->block_id != g_cur_block_id)
+		if (work->block_id != g_cur_block_id) {
+			pthread_mutex_unlock(&submit_lock);
 			return true;
+		}
 
 		// Don't Exceed Max POW Sumbissions Per Block
-		if (++g_cur_pow_cnt > MAX_POW_PER_BLOCK) {
+		if (g_cur_pow_cnt < MAX_POW_PER_BLOCK) {
+			pthread_mutex_lock(&longpoll_lock);
+			g_cur_pow_cnt++;
+			pthread_mutex_unlock(&longpoll_lock);
+		}
+		else {
 			applog(LOG_DEBUG, "Maximum POW per block reached...POW submission ignored");
+			pthread_mutex_unlock(&submit_lock);
 			return true;
 		}
 	}
-
-	pthread_mutex_lock(&submit_lock);
 
 	g_submit_req = realloc(g_submit_req, (g_submit_req_cnt + 1) * sizeof(struct submit_req));
 	if (!g_submit_req) {
