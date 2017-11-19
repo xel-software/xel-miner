@@ -1179,8 +1179,8 @@ static int decode_work(CURL *curl, const json_t *val, struct work *work) {
 
 
 		// Temp Fix
-		tgt = (char *)calloc(33, sizeof(char));
-		sprintf(tgt, "00000FFFFFFFFFFFFFFFFFFFFFFFFFFF");
+//		tgt = (char *)calloc(33, sizeof(char));
+//		sprintf(tgt, "00000FFFFFFFFFFFFFFFFFFFFFFFFFFF");
 		// Temp Fix
 
 
