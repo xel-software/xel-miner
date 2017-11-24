@@ -524,12 +524,9 @@ static bool convert_node(ast* node) {
 			if (node->right->type == NODE_BLOCK)
 				sprintf(str, "%s}\n%selse {\n", tab[tabs - 1], tab[tabs - 1]);
 			else
-				sprintf(str, "%s}\n%selse\n", tab[tabs - 1], tab[tabs - 1]);
+				sprintf(str, "%s\n%selse\n", tab[tabs - 1], tab[tabs - 1]);
 		}
-		else if (node->right->type == NODE_BLOCK)
 			sprintf(str, "%selse {\n", tab[tabs - 1]);
-		else
-			sprintf(str, "%selse\n", tab[tabs - 1]);
 		break;
 	case NODE_REPEAT:
 		str = malloc(strlen(lstr) + 256);
@@ -859,6 +856,13 @@ static bool convert_node(ast* node) {
 		sprintf(tmp, "%s%s;\n", tab[tabs], str);
 		free(str);
 		push_code(tmp);
+
+		// Add Closing Bracket To IF / ELSE That Don't Have Them
+		if (node->parent && ((node->parent->type == NODE_IF) || (node->parent->type == NODE_ELSE)) && node->parent->right != NODE_BLOCK) {
+			tmp = malloc(25);
+			sprintf(tmp, "%s}\n", tab[tabs-1]);
+			push_code(tmp);
+		}
 	}
 	else {
 		push_code(str);
