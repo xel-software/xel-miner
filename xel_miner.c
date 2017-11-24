@@ -1591,8 +1591,13 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 			}
 		}
 
-		if (!ints2hex(req->submit_data, req->submit_data_sz, submit_data_hex, submit_data_sz))
-			return false;
+		if (req->submit_data_sz) {
+			if(!ints2hex(req->submit_data, req->submit_data_sz, submit_data_hex, submit_data_sz))
+				return false;
+		}
+		else {
+			submit_data_hex = calloc(1, sizeof(char));
+		}
 		
 		if (req->req_type == SUBMIT_BOUNTY) {
 			sprintf(url, "%s?requestType=submitSolution", rpc_url);
