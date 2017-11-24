@@ -526,6 +526,7 @@ static bool convert_node(ast* node) {
 			else
 				sprintf(str, "%s\n%selse\n", tab[tabs - 1], tab[tabs - 1]);
 		}
+		else
 			sprintf(str, "%selse {\n", tab[tabs - 1]);
 		break;
 	case NODE_REPEAT:
