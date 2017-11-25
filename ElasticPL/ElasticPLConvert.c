@@ -279,7 +279,16 @@ static bool convert_function(ast* root) {
 			else {
 				ast_ptr = ast_ptr->parent;
 				if ((ast_ptr->type == NODE_IF) || (ast_ptr->type == NODE_ELSE) || (ast_ptr->type == NODE_REPEAT)) {
+
 					if (tabs) tabs--;
+
+					// Add Closing Bracket If Needed
+					if ((ast_ptr->parent->parent && (ast_ptr->parent->parent->type != NODE_FUNCTION)) && (ast_ptr->right && (ast_ptr->right->type != NODE_BLOCK)) && (ast_ptr->parent && (ast_ptr->parent->type != NODE_BLOCK))) {
+						char *str;
+						str = malloc(25);
+						sprintf(str, "%s}\n", tab[tabs]);
+						push_code(str);
+					}
 				}
 				else if (ast_ptr->type == NODE_BLOCK) {
 					if ((ast_ptr->parent->type == NODE_IF) || (ast_ptr->parent->type == NODE_ELSE) || (ast_ptr->parent->type == NODE_REPEAT) || (ast_ptr->parent->type == NODE_FUNCTION)) {
@@ -519,8 +528,11 @@ static bool convert_node(ast* node) {
 	case NODE_ELSE:
 		if (tabs < 1) tabs = 1;
 		str = malloc(25);
-		// Always Wrap "ELSE" In Brackets
-		sprintf(str, "%selse {\n", tab[tabs - 1]);
+		// Check If "IF" Has Closing Bracket - If Not, Add Closing Bracket
+		if ((node->right) && (node->right->type != NODE_BLOCK))
+			sprintf(str, "%s}\n%selse {\n", tab[tabs - 1], tab[tabs - 1]);
+		else
+			sprintf(str, "%selse {\n", tab[tabs - 1]);
 		break;
 	case NODE_REPEAT:
 		str = malloc(strlen(lstr) + 256);
@@ -545,8 +557,18 @@ static bool convert_node(ast* node) {
 			else
 				sprintf(str, "}\n");
 		}
-		else
-			sprintf(str, "%s}\n", tab[tabs-1]);
+		else if (node->parent->type == NODE_REPEAT) {
+			if (tabs > 0)
+				sprintf(str, "%s}\n", tab[tabs - 1]);
+			else
+				sprintf(str, "%s}\n", tab[0]);
+		}
+		else {
+			if (tabs > 0)
+				sprintf(str, "%s}\n", tab[tabs - 1]);
+			else
+				sprintf(str, "%s}\n", tab[0]);
+		}
 		break;
 	case NODE_BREAK:
 		str = malloc(10);
@@ -850,13 +872,6 @@ static bool convert_node(ast* node) {
 		sprintf(tmp, "%s%s;\n", tab[tabs], str);
 		free(str);
 		push_code(tmp);
-
-		// Add Closing Bracket To IF / ELSE That Don't Have Them
-		if (node->parent && node->parent->right && (node->parent->right != NODE_BLOCK) && ((node->parent->type == NODE_IF) || (node->parent->type == NODE_ELSE))) {
-			tmp = malloc(25);
-			sprintf(tmp, "%s}\n", tab[tabs-1]);
-			push_code(tmp);
-		}
 	}
 	else {
 		push_code(str);
