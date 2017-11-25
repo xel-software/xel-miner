@@ -519,15 +519,8 @@ static bool convert_node(ast* node) {
 	case NODE_ELSE:
 		if (tabs < 1) tabs = 1;
 		str = malloc(25);
-		// Check If "IF" Has Closing Bracket - If Not, Add Closing Bracket
-		if (node->left->type != NODE_BLOCK) {
-			if (node->right->type == NODE_BLOCK)
-				sprintf(str, "%s}\n%selse {\n", tab[tabs - 1], tab[tabs - 1]);
-			else
-				sprintf(str, "%s\n%selse\n", tab[tabs - 1], tab[tabs - 1]);
-		}
-		else
-			sprintf(str, "%selse {\n", tab[tabs - 1]);
+		// Always Wrap "ELSE" In Brackets
+		sprintf(str, "%selse {\n", tab[tabs - 1]);
 		break;
 	case NODE_REPEAT:
 		str = malloc(strlen(lstr) + 256);
@@ -553,7 +546,7 @@ static bool convert_node(ast* node) {
 				sprintf(str, "}\n");
 		}
 		else
-			sprintf(str, "%s}\n", tab[tabs]);
+			sprintf(str, "%s}\n", tab[tabs-1]);
 		break;
 	case NODE_BREAK:
 		str = malloc(10);
@@ -859,7 +852,7 @@ static bool convert_node(ast* node) {
 		push_code(tmp);
 
 		// Add Closing Bracket To IF / ELSE That Don't Have Them
-		if (node->parent && ((node->parent->type == NODE_IF) || (node->parent->type == NODE_ELSE)) && node->parent->right != NODE_BLOCK) {
+		if (node->parent && node->parent->right && (node->parent->right != NODE_BLOCK) && ((node->parent->type == NODE_IF) || (node->parent->type == NODE_ELSE))) {
 			tmp = malloc(25);
 			sprintf(tmp, "%s}\n", tab[tabs-1]);
 			push_code(tmp);
