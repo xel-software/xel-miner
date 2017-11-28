@@ -628,13 +628,7 @@ static bool convert_node(ast* node) {
 		case NODE_RSHIFT:		sprintf(op, "%s", ">>");	break;
 		}
 		str = malloc(strlen(lstr) + strlen(rstr) + 25);
-		get_cast(lcast, rcast, node->left->data_type, node->right->data_type, false);
-		if (lcast[0])
-			sprintf(str, "(%s)(%s) %s (%s)", lcast, lstr, op, rstr);
-		else if (rcast[0])
-			sprintf(str, "(%s) %s (%s)(%s)", lstr, op, rcast, rstr);
-		else
-			sprintf(str, "(%s) %s (%s)", lstr, op, rstr);
+		sprintf(str, "(%s) %s (%s)", lstr, op, rstr);
 		break;
 
 	case NODE_DIV:
