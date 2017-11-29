@@ -285,17 +285,16 @@ static bool convert_function(ast* root) {
 					if(tabs) tabs--;
 
 					// Add Closing Bracket If Needed
-					if (tabs && (ast_ptr->right && (ast_ptr->right->type != NODE_BLOCK))) {
+					if ((ast_ptr->type != NODE_ELSE) && (ast_ptr->right && (ast_ptr->right->type != NODE_BLOCK))) {
 						char *str;
 						str = malloc(25);
 						sprintf(str, "%s}\n", tab[tabs]);
 						push_code(str);
 					}
 
-					// Not Sure Why This Works
-					if ((tabs == 0) && (ast_ptr->parent && (ast_ptr->parent->type == NODE_BLOCK)))
+					// Indent Else Statements To Match Corresponding IF
+					if (ast_ptr->type == NODE_ELSE)
 						tabs++;
-
 				}
 				else if (ast_ptr->type == NODE_BLOCK) {
 					if ((ast_ptr->parent->type == NODE_IF) || (ast_ptr->parent->type == NODE_ELSE) || (ast_ptr->parent->type == NODE_REPEAT) || (ast_ptr->parent->type == NODE_FUNCTION)) {
@@ -569,6 +568,9 @@ static bool convert_node(ast* node) {
 				sprintf(str, "%s}\n", tab[tabs - 1]);
 			else
 				sprintf(str, "%s}\n", tab[0]);
+		}
+		else if ((node->parent->type == NODE_ELSE) && (node == node->parent->right)) {
+			sprintf(str, "");
 		}
 		else {
 			if (tabs > 0)
