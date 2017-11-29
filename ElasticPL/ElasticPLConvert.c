@@ -24,7 +24,8 @@ int stack_code_idx;
 char job_suffix[22];
 
 // Hard Coded Tabs...Could Make This Dynamic
-char *tab[] = { "\t", "\t\t", "\t\t\t", "\t\t\t\t", "\t\t\t\t\t", "\t\t\t\t\t\t", "\t\t\t\t\t\t\t", "\t\t\t\t\t\t\t" };
+char *tab[] = { "", "\t", "\t\t", "\t\t\t", "\t\t\t\t", "\t\t\t\t\t", "\t\t\t\t\t\t", "\t\t\t\t\t\t\t", "\t\t\t\t\t\t\t" };
+//char *tab[] = { "\t", "\t\t", "\t\t\t", "\t\t\t\t", "\t\t\t\t\t", "\t\t\t\t\t\t", "\t\t\t\t\t\t\t", "\t\t\t\t\t\t\t" };
 int tabs;
 
 
@@ -226,6 +227,7 @@ static bool convert_function(ast* root) {
 		return false;
 
 	ast_ptr = root;
+	tabs++;
 
 	while (ast_ptr) {
 
@@ -280,15 +282,20 @@ static bool convert_function(ast* root) {
 				ast_ptr = ast_ptr->parent;
 				if ((ast_ptr->type == NODE_IF) || (ast_ptr->type == NODE_ELSE) || (ast_ptr->type == NODE_REPEAT)) {
 
-					if (tabs) tabs--;
+					if(tabs) tabs--;
 
 					// Add Closing Bracket If Needed
-					if ((ast_ptr->parent->parent && (ast_ptr->parent->parent->type != NODE_FUNCTION)) && (ast_ptr->right && (ast_ptr->right->type != NODE_BLOCK)) && (ast_ptr->parent && (ast_ptr->parent->type != NODE_BLOCK))) {
+					if (tabs && (ast_ptr->right && (ast_ptr->right->type != NODE_BLOCK))) {
 						char *str;
 						str = malloc(25);
 						sprintf(str, "%s}\n", tab[tabs]);
 						push_code(str);
 					}
+
+					// Not Sure Why This Works
+					if ((tabs == 0) && (ast_ptr->parent && (ast_ptr->parent->type == NODE_BLOCK)))
+						tabs++;
+
 				}
 				else if (ast_ptr->type == NODE_BLOCK) {
 					if ((ast_ptr->parent->type == NODE_IF) || (ast_ptr->parent->type == NODE_ELSE) || (ast_ptr->parent->type == NODE_REPEAT) || (ast_ptr->parent->type == NODE_FUNCTION)) {
@@ -529,7 +536,7 @@ static bool convert_node(ast* node) {
 		if (tabs < 1) tabs = 1;
 		str = malloc(25);
 		// Check If "IF" Has Closing Bracket - If Not, Add Closing Bracket
-		if ((node->right) && (node->right->type != NODE_BLOCK))
+		if ((node->left) && (node->left->type != NODE_BLOCK))
 			sprintf(str, "%s}\n%selse {\n", tab[tabs - 1], tab[tabs - 1]);
 		else
 			sprintf(str, "%selse {\n", tab[tabs - 1]);
