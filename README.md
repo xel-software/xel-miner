@@ -1,5 +1,9 @@
-<h1><b>Miner		v0.9.6</b></h1>
-<h1><b>ElasticPL 	v0.9.1</b></h1>
+<h1><b>I no longer have time / desire to work on the Elastic project after all the fud and negative critisim of the project</b></h1>
+
+<b>I was just helping out with the project trying to push it forward after the intial issues it faced when the original dev left...maybe someone else can take what I've done with the miner / elasticpl and improve upon it.</b>
+
+Miner		v0.9.6
+ElasticPL 	v0.9.1
 
 <i>This code is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 See the GNU General Public License for more details.</i>
