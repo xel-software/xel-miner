@@ -1,6 +1,8 @@
-<h1><b>I no longer have time / desire to work on the Elastic project after all the fud and negative critisim of the project</b></h1>
+<h1><b>For updates on the Elastic Project, please check Evil-Knievel's github</b></h1>
 
-<b>I was just helping out with the project trying to push it forward after the intial issues it faced when the original dev left...maybe someone else can take what I've done with the miner / elasticpl and improve upon it.</b>
+https://github.com/OrdinaryDude?tab=repositories
+
+<b>The miner in this github should be fully functional; however, I won't be making any additional updates to it.  Hopefully others can improve upon what I have done.</b>
 
 Miner		v0.9.6
 ElasticPL 	v0.9.1
