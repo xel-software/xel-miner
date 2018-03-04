@@ -24,16 +24,16 @@ array_uint   1000;
  *
  *  - Storage declarations are optional
  *  - The Unsigned Int array must be declared before declaring storage
- *  - If used, both storage_cnt & storage_idx are required and must fit
+ *  - If used, both storage_sz & storage_idx are required and must fit
  *    within the u[] size.
  *
- *  storage_cnt <number of unsigned ints to store>;
- *  storage_idx <starting index of u[] to extract storage from>;
+ *  submit_sz <number of unsigned ints to store>;
+ *  submit_idx <starting index of u[] to extract storage from>;
  *
  *****************************************************************************/
 
-storage_cnt 32;
-storage_idx 0;
+submit_sz 32;
+submit_idx 0;
 
 
 /******************************************************************************
@@ -68,6 +68,7 @@ function example_function_2 {
  * Main Function
  *
  *  - Main Function is required
+ *  - Must call verify() or contain verify_bty and verify_pow
  *  - This is the entry point for the ElasticPL job
  *
  *  function main { }
@@ -90,6 +91,8 @@ function main {
   // Call an example function
   example_function_2();
 
+  verify();
+
 }
 
 
@@ -97,17 +100,17 @@ function main {
  *
  * Verify Function
  *
- *  - Verify Function is required
- *  - This is the logic to determine if a Bounty Solution has been found
+ *  - Verify Function contains the logic to determine if a Bounty Solution
+ *    has been found, and is required
+ *  - It must contain a verify_bty and a verify_pow calls
  *
- *  function main { }
+ *  function verify { }
  *
  *****************************************************************************/
 
 function verify {
-
   u[200] = u[0] + u[1];
-
-  result (u[200] < 1000);
+  verify_bty(u[200] < 1000);
+  verify_pow(u[0], u[1], u[2], u[3]);
 
 }
