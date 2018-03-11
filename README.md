@@ -1,5 +1,11 @@
-<h1><b>Miner		v0.9.5</b></h1>
-<h1><b>ElasticPL 	v0.9.1</b></h1>
+<h1><b>For updates on the Elastic Project, please check Evil-Knievel's github</b></h1>
+
+https://github.com/OrdinaryDude?tab=repositories
+
+<b>The miner in this github should be fully functional; however, I won't be making any additional updates to it.  Hopefully others can improve upon what I have done.</b>
+
+Miner		v0.9.6
+ElasticPL 	v0.9.1
 
 <i>This code is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 See the GNU General Public License for more details.</i>

@@ -103,7 +103,6 @@ static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_vm_mem, bool
 	return e;
 }
 
-
 static void push_op(int token_id) {
 	stack_op[++stack_op_idx] = token_id;
 	top_op = token_id;
@@ -142,7 +141,6 @@ static ast* pop_exp() {
 
 	return exp;
 }
-
 
 static bool validate_inputs(SOURCE_TOKEN *token, int token_num, NODE_TYPE node_type) {
 
@@ -889,10 +887,10 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 				right = pop_exp();
 			left = pop_exp();
 
-			if (node_type == NODE_FUNCTION) {
-				svalue = left->svalue;
-				left = NULL;
-			}
+if (node_type == NODE_FUNCTION) {
+	svalue = left->svalue;
+	left = NULL;
+}
 		}
 		// Repeat Statements
 		else if (node_type == NODE_REPEAT) {
@@ -978,7 +976,7 @@ extern bool parse_token_list(SOURCE_TOKEN_LIST *token_list) {
 					(token_list->token[top_op].type == TOKEN_VAR_BEGIN) ||
 					(token_list->token[top_op].type == TOKEN_IF) ||
 					(token_list->token[top_op].type == TOKEN_ELSE) ||
-					(token_list->token[top_op].type == TOKEN_REPEAT) ) {
+					(token_list->token[top_op].type == TOKEN_REPEAT)) {
 					break;
 				}
 
@@ -989,29 +987,31 @@ extern bool parse_token_list(SOURCE_TOKEN_LIST *token_list) {
 		}
 
 		// Process If/Else/Repeat Operators On Stack
-		while ((top_op >= 0) && (stack_exp_idx >= 1) &&
-			((token_list->token[top_op].type == TOKEN_IF) || (token_list->token[top_op].type == TOKEN_ELSE) || (token_list->token[top_op].type == TOKEN_REPEAT))) {
+		if ((stack_exp_idx >= 0) && (stack_exp[stack_exp_idx]->type != NODE_IF)) {
+			while ((top_op >= 0) && (stack_exp_idx >= 1) &&
+				((token_list->token[top_op].type == TOKEN_IF) || (token_list->token[top_op].type == TOKEN_ELSE) || (token_list->token[top_op].type == TOKEN_REPEAT))) {
 
-			// Validate That If/Repeat Condition Is On The Stack
-			if (((token_list->token[top_op].type == TOKEN_IF) || (token_list->token[top_op].type == TOKEN_REPEAT)) &&
-				((stack_exp[stack_exp_idx - 1]->token_num < top_op) || (stack_exp[stack_exp_idx - 1]->end_stmnt)))
-				break;
+				// Validate That If/Repeat Condition Is On The Stack
+				if (((token_list->token[top_op].type == TOKEN_IF) || (token_list->token[top_op].type == TOKEN_REPEAT)) &&
+					((stack_exp[stack_exp_idx - 1]->token_num < top_op) || (stack_exp[stack_exp_idx - 1]->end_stmnt)))
+					break;
 
-			// Validate That Else Left Statement Is On The Stack
-			if ((token_list->token[top_op].type == TOKEN_ELSE) && (!stack_exp[stack_exp_idx - 1]->end_stmnt))
-				break;
+				// Validate That Else Left Statement Is On The Stack
+				if ((token_list->token[top_op].type == TOKEN_ELSE) && (!stack_exp[stack_exp_idx - 1]->end_stmnt))
+					break;
 
-			// Validate That If/Else/Repeat Statement Is On The Stack
-			if ((stack_exp[stack_exp_idx]->token_num < top_op) || (!stack_exp[stack_exp_idx]->end_stmnt))
-				break;
+				// Validate That If/Else/Repeat Statement Is On The Stack
+				if ((stack_exp[stack_exp_idx]->token_num < top_op) || (!stack_exp[stack_exp_idx]->end_stmnt))
+					break;
 
-			// Add If/Else/Repeat Expression To Stack
-			token_id = pop_op();
-			if (!create_exp(&token_list->token[token_id], token_id)) return false;
+				// Add If/Else/Repeat Expression To Stack
+				token_id = pop_op();
+				if (!create_exp(&token_list->token[token_id], token_id)) return false;
 
-			// Only Process A Single Statement When "Else" Token Arrives.  Still Need To Process Rest Of Else
-			if (token_list->token[i].type == TOKEN_ELSE)
-				break;
+				// Only Process A Single Statement When "Else" Token Arrives.  Still Need To Process Rest Of Else
+				if (token_list->token[i].type == TOKEN_ELSE)
+					break;
+			}
 		}
 
 		// Process Token
@@ -1105,6 +1105,10 @@ extern bool parse_token_list(SOURCE_TOKEN_LIST *token_list) {
 					token_id = pop_op();
 				if (!create_exp(&token_list->token[token_id], token_id))
 					return false;
+
+				// Stop Linking If An Else Is The Next Statement
+				if ((i < (token_list->num - 1)) && (token_list->token[i + 1].type == TOKEN_ELSE))
+					break;
 			}
 			break;
 

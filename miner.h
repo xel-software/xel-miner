@@ -2,9 +2,9 @@
 #define __MINER_H__
 
 #define PACKAGE_NAME "xel_miner"
-#define MINER_VERSION "0.9.5"
+#define MINER_VERSION "0.9.6"
 
-#define USER_AGENT PACKAGE_NAME "/" PACKAGE_VERSION
+#define USER_AGENT PACKAGE_NAME "/" MINER_VERSION
 #define MAX_CPUS 16
 
 #define MAX_POW_PER_BLOCK 10

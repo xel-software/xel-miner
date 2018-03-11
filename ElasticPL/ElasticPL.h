@@ -10,7 +10,7 @@
 #ifndef ELASTICPL_H_
 #define ELASTICPL_H_
 
-#define ELASTICPL_VERSION "0.9.1"
+#define ELASTICPL_VERSION "0.9.4"
 
 #include <stdbool.h>
 #include <stdlib.h>
