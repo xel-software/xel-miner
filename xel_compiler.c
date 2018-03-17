@@ -179,7 +179,7 @@ bool compile_library(char *work_str) {
 	ret = system(str);
 #else
 	ret = system("gcc -I./crypto -c -march=native -Ofast -fPIC ./work/work_lib.c -o ./work/work_lib.o");
-	sprintf(str, "gcc -shared -Wl,-soname,./work/%s.so.1 -o ./work/%s.so ./work/work_lib.o -L./ElasticPL -L./crypto -lElasticPLFunctions -lcrypto", lib_name, lib_name);
+	sprintf(str, "gcc -shared -W -o ./work/%s.so ./work/work_lib.o -L./ElasticPL -L./crypto -lElasticPLFunctions -lcrypto", lib_name, lib_name);
 	ret = system(str);
 #endif
 #endif
