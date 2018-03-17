@@ -793,6 +793,8 @@ static void *test_vm_thread(void *userdata) {
 	if (vm_f) free(vm_f);
 	if (vm_d) free(vm_d);
 	if (vm_s) free(vm_s);
+	if (test_code)
+		free(test_code);
 
 	tq_freeze(mythr->q);
 
