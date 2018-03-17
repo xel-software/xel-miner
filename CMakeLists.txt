@@ -1,5 +1,12 @@
 cmake_minimum_required (VERSION 2.8)
 set(CMAKE_BUILD_TYPE Debug)
+
+
+# THIS HAS TO COME BEFORE THE PROJECT LINE
+set(CMAKE_C_COMPILER "gcc")
+set(CMAKE_CXX_COMPILER "g++")
+# THIS HAS TO COME BEFORE THE PROJECT LINE
+
 project(xel_miner)
 
 message(STATUS "CMAKE - xel_miner")
