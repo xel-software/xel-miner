@@ -536,7 +536,7 @@ static bool load_test_file(char *file_name, char *buf) {
 static void *test_vm_thread(void *userdata) {
 	struct thr_info *mythr = (struct thr_info *) userdata;
 	int thr_id = mythr->id;
-	char test_code[MAX_SOURCE_SIZE];
+	char *test_code = calloc(MAX_SOURCE_SIZE, sizeof(char));
 	struct work work = { 0 };
 	struct work_package work_package = { 0 };
 	struct instance *inst = NULL;
