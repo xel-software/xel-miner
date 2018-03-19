@@ -139,6 +139,13 @@ struct work_restart *work_restart = NULL;
 struct opencl_device *gpu;
 #endif
 
+// Test related stuff
+long var_test_block = 123456789;
+long var_test_work = 987654321;
+int var_test_target[] = {0x0FFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF};
+unsigned char var_test_multiplicator[32];
+unsigned char var_test_publickey[32];
+
 extern uint32_t swap32(uint32_t a) {
 	return ((a << 24) | ((a << 8) & 0x00FF0000) | ((a >> 8) & 0x0000FF00) | ((a >> 24) & 0x000000FF));
 }
@@ -169,8 +176,13 @@ Options:\n\
                               (Default: Retry indefinitely)\n\
   -R, --retry-pause <n>       Time to pause between retries (Default: 10 sec)\n\
   -s, --scan-time <n>         Max time to scan work before requesting new work (Default: 60 sec)\n\
-      --test-miner <file>     Run the Miner using JSON formatted work in <file>\n\
+  		--test-miner <file>     Run the Miner using JSON formatted work in <file>\n\
       --test-vm <file>        Run the Parser / Compiler using the ElasticPL source code in <file>\n\
+			--test-block <block>		Block-id for test run\n\
+			--test-work <work>			Work-id for test run\n\
+			--test-multiplicator <32-byte-hex>		Multiplicator for testrun: must be exactly 32 hex chars\n\
+			--test-publickey <32-byte-hex>		Publickey for testrun: must be exactly 32 hex chars\n\
+			--test-target <16-byte-hex>		Target for test run: must be exactly 16 hex chars\n\
   -t, --threads <n>           Number of miner threads (Default: Number of CPUs)\n\
   -u, --user <username>       Username for mining server\n\
   -T, --timeout <n>           Timeout for rpc calls (Default: 30 sec)\n\
@@ -208,6 +220,11 @@ static struct option const options[] = {
 	{ "scan-time",		1, NULL, 's' },
 	{ "test-miner",		1, NULL, 1004 },
 	{ "test-vm",		1, NULL, 1005 },
+	{ "test-block",	1, NULL, 1011 },
+	{ "test-work",	1, NULL, 1012 },
+	{ "test-multiplicator",	1, NULL, 1013 },
+	{ "test-publickey",	1, NULL, 1014 },
+	{ "test-target",	1, NULL, 1015 },
 	{ "threads",		1, NULL, 't' },
 	{ "timeout",		1, NULL, 'T' },
 	{ "url",			1, NULL, 'o' },
@@ -246,6 +263,7 @@ void parse_arg(int key, char *arg)
 {
 	char *p, *ap, *nm;
 	int v, i;
+	long xx;
 
 	switch (key) {
 	case 'D':
@@ -319,7 +337,8 @@ void parse_arg(int key, char *arg)
 	case 'P':
 		passphrase = strdup(arg);
 		strhide(arg);
-
+	if (v < 256 || v > 10240)
+				show_usage_and_exit(1);
 		// Generate publickey From Secret Phrase
 		char* hash_sha256 = (char*)malloc(32 * sizeof(char));
 		sha256(passphrase, strlen(passphrase), hash_sha256);
@@ -428,6 +447,46 @@ void parse_arg(int key, char *arg)
 	case 1010:
 		opt_validate_work = true;
 		break;
+	case 1011:
+			xx = atol(arg);
+			if (v < 0)
+				show_usage_and_exit(1);
+			var_test_block = v;
+			break;
+	case 1012:
+			if (!arg)
+				show_usage_and_exit(1);
+			xx = atol(arg);
+			if (v < 0)
+				show_usage_and_exit(1);
+			var_test_work = v;
+			break;
+	case 1013:
+			if (!arg && strlen(arg)!=64)
+				show_usage_and_exit(1);
+
+			test_filename = malloc(strlen(arg) + 1);
+			const char *pos = test_filename;
+
+			strcpy(test_filename, arg);
+			for (size_t count = 0; count < sizeof test_filename/sizeof *test_filename; count++) {
+        sscanf(pos, "%2hhx", &var_test_multiplicator[count]);
+        pos += 2;
+      }
+			break;
+	case 1014:
+					if (!arg && strlen(arg)!=64)
+						show_usage_and_exit(1);
+
+					test_filename = malloc(strlen(arg) + 1);
+					const char *pos2 = test_filename;
+
+					strcpy(test_filename, arg);
+					for (size_t count = 0; count < sizeof test_filename/sizeof *test_filename; count++) {
+						sscanf(pos2, "%2hhx", &var_test_publickey[count]);
+						pos2 += 2;
+					}
+					break;
 	default:
 		show_usage_and_exit(1);
 	}
@@ -480,7 +539,7 @@ static void thread_low_priority() {
 #else
 	// TODO: implement for non posix platforms
 	// Possibly: Use SetThreadPriority() on windows
-#endif
+#endif// Create Test Work
 }
 
 static bool load_test_file(char *file_name, char *buf) {
@@ -549,18 +608,24 @@ static void *test_vm_thread(void *userdata) {
 	// Create Test Work
 	work.package_id = 0;
 	work.iteration_id = 0;
-	work.block_id = 123456789;
-	work.work_id = 12345;
+	work.block_id = var_test_block;
+	work.work_id = var_test_work;
+
+	// load multiplicator
+	for(int i=0; i<32; ++i)
+		work.multiplicator[i] = var_test_multiplicator[i];
+
+	// TODO: generate the VM_M input here based on PUBKEY in var_test_publickey
 
 	// Set The Target For The Work
-	g_pow_target[0] = 0x0FFFFFFF;
-	g_pow_target[1] = 0xFFFFFFFF;
-	g_pow_target[2] = 0xFFFFFFFF;
-	g_pow_target[3] = 0xFFFFFFFF;
+	g_pow_target[0] = var_test_target[0];
+	g_pow_target[1] = var_test_target[1];
+	g_pow_target[2] = var_test_target[2];
+	g_pow_target[3] = var_test_target[3];
 
 	// Create A Test Work Package
 	work_package.work_id = work.work_id;
-	sprintf(work_package.work_str, "%llu", work_package.work_id);
+	sprintf(work_package.work_str, "%lu", work_package.work_id);
 
 	applog(LOG_DEBUG, "DEBUG: Loading Test File '%s'", test_filename);
 	if (!load_test_file(test_filename, test_code))
@@ -981,7 +1046,7 @@ static void dump_vm(int idx) {
 		printf("\n\t   Longs:\n");
 		for (i = 0; i < g_work_package[idx].vm_longs; i++) {
 			if (vm_l[i])
-				printf("\t\t  vm_l[%*d] = %*lld\t%08X\n", 4, i, 10, vm_l[i], vm_l[i]);
+				printf("\t\t  vm_l[%*d] = %*ld\t%08lX\n", 4, i, 10, vm_l[i], vm_l[i]);
 		}
 	}
 
@@ -989,7 +1054,7 @@ static void dump_vm(int idx) {
 		printf("\n\t   Unsigned Longs:\n");
 		for (i = 0; i < g_work_package[idx].vm_ulongs; i++) {
 			if (vm_ul[i])
-				printf("\t\t  vm_ul[%*d]= %*llu\t%08X\n", 4, i, 10, vm_ul[i], vm_ul[i]);
+				printf("\t\t  vm_ul[%*d]= %*lu\t%08lX\n", 4, i, 10, vm_ul[i], vm_ul[i]);
 		}
 	}
 
@@ -1622,7 +1687,7 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 		else {
 			submit_data_hex = calloc(1, sizeof(char));
 		}
-		
+
 		if (req->req_type == SUBMIT_BOUNTY) {
 			sprintf(url, "%s?requestType=submitSolution", rpc_url);
 			sprintf(data, "deadline=3&work_id=%s&data=%s&multiplicator=%s&storage_id=%d&is_pow=false&hash=%s&secretPhrase=%s", req->work_str, submit_data_hex, req->mult, req->storage_id, req->hash, passphrase);
@@ -2045,8 +2110,8 @@ static void *cpu_miner_thread(void *userdata) {
 				free(wc);
 				goto out;
 			}
-			
-		
+
+
 		}
 
 		// Submit Work That Meets POW Target
@@ -2082,7 +2147,7 @@ static void *cpu_miner_thread(void *userdata) {
 				free(wc);
 				goto out;
 			}
-			
+
 		}
 	}
 
@@ -2099,7 +2164,7 @@ out:
 
 	tq_freeze(mythr->q);
 
-	
+
 	return NULL;
 }
 
