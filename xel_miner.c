@@ -462,30 +462,48 @@ void parse_arg(int key, char *arg)
 			var_test_work = v;
 			break;
 	case 1013:
-			if (!arg && strlen(arg)!=64)
+			if (!arg || strlen(arg)!=64)
 				show_usage_and_exit(1);
 
 			test_filename = malloc(strlen(arg) + 1);
 			const char *pos = test_filename;
 
 			strcpy(test_filename, arg);
-			for (size_t count = 0; count < sizeof test_filename/sizeof *test_filename; count++) {
-        sscanf(pos, "%2hhx", &var_test_multiplicator[count]);
-        pos += 2;
-      }
+			for (size_t count = 0; count < 32; count++) {
+				sscanf(pos, "%2hhx", &var_test_multiplicator[count]);
+				pos += 2;
+			}
 			break;
 	case 1014:
-					if (!arg && strlen(arg)!=64)
+					if (!arg || strlen(arg)!=64)
 						show_usage_and_exit(1);
 
 					test_filename = malloc(strlen(arg) + 1);
 					const char *pos2 = test_filename;
 
 					strcpy(test_filename, arg);
-					for (size_t count = 0; count < sizeof test_filename/sizeof *test_filename; count++) {
+					for (size_t count = 0; count < 32; count++) {
 						sscanf(pos2, "%2hhx", &var_test_publickey[count]);
+						publickey[count] = var_test_publickey[count];
 						pos2 += 2;
 					}
+					break;
+	case 1015:
+					if (!arg || strlen(arg)!=32)
+						show_usage_and_exit(1);
+
+					test_filename = malloc(strlen(arg) + 1);
+					const char *pos3 = test_filename;
+					unsigned char temp[16];
+					strcpy(test_filename, arg);
+					for (size_t count = 0; count < 16; count++) {
+						sscanf(pos3, "%2hhx", &temp[count]);
+						pos3 += 2;
+					}
+					var_test_target[0] = temp[0]<<24 | temp[1]<<16 | temp[2]<<8 | temp[3];
+					var_test_target[1] = temp[4]<<24 | temp[5]<<16 | temp[6]<<8 | temp[7];
+					var_test_target[2] = temp[8]<<24 | temp[9]<<16 | temp[10]<<8 | temp[11];
+					var_test_target[3] = temp[12]<<24 | temp[13]<<16 | temp[14]<<8 | temp[15];
 					break;
 	default:
 		show_usage_and_exit(1);
@@ -592,6 +610,35 @@ static bool load_test_file(char *file_name, char *buf) {
 	return true;
 }
 
+void tohex(unsigned char * in, size_t insz, char * out, size_t outsz)
+{
+    unsigned char * pin = in;
+    const char * hex = "0123456789ABCDEF";
+    char * pout = out;
+    for(; pin < in+insz; pout +=2, pin++){
+        pout[0] = hex[(*pin>>4) & 0xF];
+        pout[1] = hex[ *pin     & 0xF];
+    }
+    pout[outsz-1] = 0;
+}
+void tohex_int(unsigned int * in, size_t insz, char * out, size_t outsz)
+{
+    unsigned int * pin = in;
+    const char * hex = "0123456789ABCDEF";
+    char * pout = out;
+    for(; pin < in+insz; pout +=8, pin++){
+        pout[0] = hex[ (*pin>>28) & 0xF];
+        pout[1] = hex[ (*pin>>24)     & 0xF];
+		pout[2] = hex[ (*pin>>20)     & 0xF];
+		pout[3] = hex[ (*pin>>16)     & 0xF];
+		pout[4] = hex[ (*pin>>12)     & 0xF];
+		pout[5] = hex[ (*pin>>8)     & 0xF];
+		pout[6] = hex[ (*pin>>4)     & 0xF];
+		pout[7] = hex[ *pin     & 0xF];
+    }
+    pout[outsz-1] = 0;
+}
+
 static void *test_vm_thread(void *userdata) {
 	struct thr_info *mythr = (struct thr_info *) userdata;
 	int thr_id = mythr->id;
@@ -611,9 +658,21 @@ static void *test_vm_thread(void *userdata) {
 	work.block_id = var_test_block;
 	work.work_id = var_test_work;
 
+	applog(LOG_DEBUG, "DEBUG: TestVM: block id '%ld'", work.block_id);
+	applog(LOG_DEBUG, "DEBUG: TestVM: work id '%ld'", work.work_id);
+
 	// load multiplicator
 	for(int i=0; i<32; ++i)
 		work.multiplicator[i] = var_test_multiplicator[i];
+
+	char temp_mult[65];
+	tohex(work.multiplicator, 32, temp_mult, 65);
+	applog(LOG_DEBUG, "DEBUG: TestVM: multiplicator '%s'", temp_mult);
+
+	char temp_pub[65];
+	tohex(publickey, 32, temp_pub, 65);
+	applog(LOG_DEBUG, "DEBUG: TestVM: pubkey '%s'", temp_pub);
+
 
 	// TODO: generate the VM_M input here based on PUBKEY in var_test_publickey
 
@@ -623,9 +682,16 @@ static void *test_vm_thread(void *userdata) {
 	g_pow_target[2] = var_test_target[2];
 	g_pow_target[3] = var_test_target[3];
 
+	char temp_tgt[33];
+	tohex_int(g_pow_target, 4, temp_tgt, 33);
+	applog(LOG_DEBUG, "DEBUG: TestVM: target '%s'", temp_tgt);
+
 	// Create A Test Work Package
 	work_package.work_id = work.work_id;
 	sprintf(work_package.work_str, "%lu", work_package.work_id);
+
+	// Initialize ints
+	get_vm_input(&work);
 
 	applog(LOG_DEBUG, "DEBUG: Loading Test File '%s'", test_filename);
 	if (!load_test_file(test_filename, test_code))
@@ -648,6 +714,8 @@ static void *test_vm_thread(void *userdata) {
 	work_package.submit_idx = ast_submit_idx;
 	work_package.storage_sz = ast_submit_sz;	// Currently Storage Uses Same Size As Submit
 	work_package.storage_idx = ast_submit_idx;	// Currently Storage Uses Same Index As Submit
+
+
 
 	// Calculate WCET
 	if (!calc_wcet()) {
@@ -676,6 +744,8 @@ static void *test_vm_thread(void *userdata) {
 
 	// Initialize Global Variables
 	vm_m = calloc(VM_M_ARRAY_SIZE, sizeof(uint32_t));
+	memcpy(vm_m, work.vm_input, VM_M_ARRAY_SIZE * sizeof(uint32_t));
+
 	if (g_work_package[0].vm_ints) vm_i = calloc(g_work_package[0].vm_ints, sizeof(int32_t));
 	if (g_work_package[0].vm_uints) vm_u = calloc(g_work_package[0].vm_uints, sizeof(uint32_t));
 	if (g_work_package[0].vm_longs) vm_l = calloc(g_work_package[0].vm_longs, sizeof(int64_t));
