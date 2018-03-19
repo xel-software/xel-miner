@@ -457,9 +457,7 @@ void parse_arg(int key, char *arg)
 			if (!arg)
 				show_usage_and_exit(1);
 			xx = atol(arg);
-			if (v < 0)
-				show_usage_and_exit(1);
-			var_test_work = v;
+			var_test_work = xx;
 			break;
 	case 1013:
 			if (!arg || strlen(arg)!=64)
@@ -964,8 +962,17 @@ static bool get_vm_input(struct work *work) {
 	memcpy(tmp_msg, msg, 80);
 	// fix
 
+	char tempin[161];
+	tohex(tmp_msg,80,tempin,161);
+	applog(LOG_DEBUG, "DEBUG: Input to int generator: %s", tempin);
+
+
 	// Hash The Inputs
 	MD5(msg, 80, hash);
+
+	char tempmsg[33];
+	tohex(msg,16,tempmsg,33);
+	applog(LOG_DEBUG, "DEBUG: Digest: %s", tempmsg);
 
 	// Randomize Inputs m[0]-m[9]
 	for (i = 0; i < 10; i++) {
