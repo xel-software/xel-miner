@@ -96,7 +96,6 @@ bool create_c_source(char *work_str) {
 	fprintf(f, "\tfor (i = 0; i < 8; i++)\n");
 	fprintf(f, "\t\tmsg32[i+4] = m[i];\n\n");
 	fprintf(f, "\tMD5(msg, 48, (unsigned char *)hash);\n\n");
-
 	fprintf(f, "\tfor (i = 0; i < 4; i++) {\n");
 	fprintf(f, "\t\tif (hash[i] > target[i])\n");
 	fprintf(f, "\t\t\treturn 0;\n");

@@ -15,9 +15,17 @@
 #include "ElasticPL.h"
 #include "../miner.h"
 
-extern uint32_t calc_wcet() {
+extern uint64_t get_verify_wcet() {
+	return stack_exp[ast_verify_idx]->wcet_value;
+}
+extern uint64_t get_main_wcet() {
+	return stack_exp[ast_main_idx]->wcet_value;
+}
+
+extern uint64_t calc_wcet() {
 	int i, call_depth = 0;
-	uint32_t ast_depth, wcet;
+	uint32_t ast_depth;
+	uint64_t wcet;
 
 	// Get Max Function Call Depth
 	for (i = ast_func_idx; i <= stack_exp_idx; i++) {
@@ -38,21 +46,22 @@ extern uint32_t calc_wcet() {
 					return 0;
 				}
 
-				// Store WCET Value In Function's 'fvalue' Field
-				stack_exp[i]->fvalue = wcet;
+				// Store WCET Value In Function's 'wcet_value' Field
+				stack_exp[i]->wcet_value = wcet;
 			}
 		}
 		call_depth--;
 	}
 
-	applog(LOG_DEBUG, "DEBUG: Total WCET = %10.1f", stack_exp[ast_main_idx]->fvalue);
+	applog(LOG_DEBUG, "DEBUG: Total WCET = %lu", stack_exp[ast_main_idx]->wcet_value);
 
-	return (uint32_t)stack_exp[ast_main_idx]->fvalue;
+	return (uint64_t)stack_exp[ast_main_idx]->wcet_value;
 }
 
-static uint32_t calc_function_weight(ast* root, uint32_t *ast_depth) {
-	uint32_t depth = 0,  weight = 0, total_weight = 0;
-	uint32_t block_weight[REPEAT_STACK_SIZE];
+static uint64_t calc_function_weight(ast* root, uint32_t *ast_depth) {
+	uint32_t depth = 0;
+	uint64_t  weight = 0, total_weight = 0;
+	uint64_t block_weight[REPEAT_STACK_SIZE];
 	int block_level = -1;
 	bool downward = true;
 	ast *ast_ptr = NULL;
@@ -150,9 +159,9 @@ static uint32_t calc_function_weight(ast* root, uint32_t *ast_depth) {
 		// Get Total weight For The "Repeat" Block
 		if ((!downward) && (block_level >= 0) && (ast_ptr->type == NODE_REPEAT)) {
 			if (block_level == 0)
-				total_weight += ((uint32_t)ast_ptr->ivalue * block_weight[block_level]);
+				total_weight += ((uint64_t)ast_ptr->ivalue * block_weight[block_level]);
 			else
-				block_weight[block_level - 1] += ((uint32_t)ast_ptr->ivalue * block_weight[block_level]);
+				block_weight[block_level - 1] += ((uint64_t)ast_ptr->ivalue * block_weight[block_level]);
 			block_level--;
 		}
 	}
@@ -160,8 +169,8 @@ static uint32_t calc_function_weight(ast* root, uint32_t *ast_depth) {
 	return total_weight;
 }
 
-static uint32_t get_node_weight(ast* node) {
-	uint32_t weight = 1;
+static uint64_t get_node_weight(ast* node) {
+	uint64_t weight = 1;
 
 	if (!node)
 		return 0;
@@ -275,7 +284,7 @@ static uint32_t get_node_weight(ast* node) {
 
 		// Function Calls (4 + Weight Of Called Function)
 		case NODE_CALL_FUNCTION:
-			return 4 + (uint32_t)stack_exp[node->uvalue]->fvalue;
+			return 4 + (uint64_t)stack_exp[node->uvalue]->wcet_value;
 
 		case NODE_BLOCK:
 		case NODE_PARAM:

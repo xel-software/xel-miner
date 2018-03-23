@@ -90,7 +90,7 @@ extern bool create_epl_ast(char *source) {
 		return false;
 	}
 
-	if (opt_debug_epl) {
+	/*if (opt_debug_epl) {
 		fprintf(stdout, "\n*********************************************************\n");
 		fprintf(stdout, "AST Dump\n");
 		fprintf(stdout, "*********************************************************\n");
@@ -98,7 +98,7 @@ extern bool create_epl_ast(char *source) {
 			dump_vm_ast(stack_exp[i]);
 			fprintf(stdout, "---------------------------------------------------------\n");
 		}
-	}
+	}*/
 
 	return true;
 }

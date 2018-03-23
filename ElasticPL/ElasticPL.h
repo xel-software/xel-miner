@@ -295,6 +295,7 @@ typedef struct AST {
 	int64_t ivalue;
 	uint64_t uvalue;
 	double fvalue;
+	uint64_t wcet_value;
 	unsigned char *svalue;
 	int token_num;
 	int line_num;
@@ -351,8 +352,10 @@ static bool convert_node(ast* node);
 static void get_cast(char *lcast, char *rcast, DATA_TYPE ldata_type, DATA_TYPE rdata_type, bool right_only);
 static bool get_node_inputs(ast* node, char **lstr, char **rstr);
 
-extern uint32_t calc_wcet();
-static uint32_t calc_function_weight(ast* root, uint32_t *depth);
-static uint32_t get_node_weight(ast* node);
+extern uint64_t calc_wcet();
+extern uint64_t get_verify_wcet();
+extern uint64_t get_main_wcet();
+static uint64_t calc_function_weight(ast* root, uint32_t *depth);
+static uint64_t get_node_weight(ast* node);
 
 #endif // ELASTICPL_H_

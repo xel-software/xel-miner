@@ -96,7 +96,7 @@ struct work_package {
 	uint64_t work_id;
 	unsigned char work_str[22];
 	unsigned char work_nm[50];
-	uint32_t WCET;
+	uint64_t WCET;
 	uint64_t bounty_limit;
 	uint64_t pow_reward;
 	uint64_t bty_reward;

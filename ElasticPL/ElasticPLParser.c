@@ -1411,12 +1411,12 @@ static bool validate_function_calls() {
 	ast *call_stack[CALL_STACK_SIZE];
 	ast *rpt_stack[REPEAT_STACK_SIZE];
 
-	if (opt_debug_epl) {
+	/*if (opt_debug_epl) {
 		fprintf(stdout, "\n*********************************************************\n");
 		fprintf(stdout, "Function Calls\n");
 		fprintf(stdout, "*********************************************************\n");
 		fprintf(stdout, "Call Function: 'main()'\n");
-	}
+	}*/
 
 	// First Validate 'main' Then 'verify'
 	for (j = 0; j < 2; j++) {
@@ -1466,8 +1466,8 @@ static bool validate_function_calls() {
 							return false;
 						}
 
-						if (opt_debug_epl)
-							fprintf(stdout, "\tBegin Repeat (Line #%d)\t- Depth: %d\n", ast_ptr->line_num, rpt_idx);
+						//if (opt_debug_epl)
+						//	fprintf(stdout, "\tBegin Repeat (Line #%d)\t- Depth: %d\n", ast_ptr->line_num, rpt_idx);
 					}
 				}
 
@@ -1476,8 +1476,8 @@ static bool validate_function_calls() {
 					if (ast_ptr->left)
 						ast_ptr = ast_ptr->left;
 
-					if (opt_debug_epl)
-						fprintf(stdout, "Call Function: '%s()'\n", ast_ptr->svalue);
+					//if (opt_debug_epl)
+					//	fprintf(stdout, "Call Function: '%s()'\n", ast_ptr->svalue);
 
 					// Get AST Index For The Function
 					if (!ast_ptr->uvalue) {
@@ -1545,8 +1545,8 @@ static bool validate_function_calls() {
 							return false;
 						}
 
-						if (opt_debug_epl)
-							fprintf(stdout, "\tBegin Repeat (Line #%d)\t- Depth: %d\n", ast_ptr->line_num, rpt_idx);
+						//if (opt_debug_epl)
+						//	fprintf(stdout, "\tBegin Repeat (Line #%d)\t- Depth: %d\n", ast_ptr->line_num, rpt_idx);
 					}
 				}
 				// Otherwise, Print Current Node & Navigate Back Up The Tree
@@ -1564,8 +1564,8 @@ static bool validate_function_calls() {
 
 				// Remove 'Repeat' From Stack
 				if (ast_ptr->type == NODE_REPEAT) {
-					if (opt_debug_epl)
-						fprintf(stdout, "\t  End Repeat (Line #%d)\n", ast_ptr->line_num);
+					//if (opt_debug_epl)
+					//	fprintf(stdout, "\t  End Repeat (Line #%d)\n", ast_ptr->line_num);
 					rpt_stack[rpt_idx--] = 0;
 				}
 
@@ -1573,8 +1573,8 @@ static bool validate_function_calls() {
 				if (ast_ptr->parent->type == NODE_FUNCTION) {
 					call_stack[call_idx--] = 0;
 					ast_ptr = call_stack[call_idx];
-					if (opt_debug_epl)
-						fprintf(stdout, "Return From:   '%s()'\n", call_stack[call_idx]->svalue);
+					//if (opt_debug_epl)
+					//	fprintf(stdout, "Return From:   '%s()'\n", call_stack[call_idx]->svalue);
 				}
 				else {
 					// Check If We Need To Navigate Back Down A Right Branch

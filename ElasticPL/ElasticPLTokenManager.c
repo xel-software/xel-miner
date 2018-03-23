@@ -482,8 +482,8 @@ extern bool get_token_list(char *str, SOURCE_TOKEN_LIST *token_list) {
 	if (!validate_tokens(token_list))
 		return false;
 
-	if (opt_debug_epl)
-		dump_token_list(token_list);
+	//if (opt_debug_epl)
+	//	dump_token_list(token_list);
 
 	return true;
 }

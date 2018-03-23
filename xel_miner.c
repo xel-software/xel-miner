@@ -65,6 +65,13 @@ static int opt_fail_pause = 10;
 static int opt_scantime = 60;  // Get New Work From Server At Least Every 60s
 bool opt_test_miner = false;
 bool opt_test_vm = false;
+bool opt_verify_only = false;
+bool opt_test_wcet_main = false;
+bool opt_test_wcet_verify = false;
+
+uint64_t opt_wcet_main = 0;
+uint64_t opt_wcet_verify = 0;
+
 bool opt_opencl = false;
 int opt_opencl_gthreads = 0;
 int opt_opencl_vwidth = 0;
@@ -176,17 +183,20 @@ Options:\n\
                               (Default: Retry indefinitely)\n\
   -R, --retry-pause <n>       Time to pause between retries (Default: 10 sec)\n\
   -s, --scan-time <n>         Max time to scan work before requesting new work (Default: 60 sec)\n\
-  		--test-miner <file>     Run the Miner using JSON formatted work in <file>\n\
+  	  --test-miner <file>     Run the Miner using JSON formatted work in <file>\n\
       --test-vm <file>        Run the Parser / Compiler using the ElasticPL source code in <file>\n\
-			--test-block <block>		Block-id for test run\n\
-			--test-work <work>			Work-id for test run\n\
-			--test-multiplicator <32-byte-hex>		Multiplicator for testrun: must be exactly 32 hex chars\n\
-			--test-publickey <32-byte-hex>		Publickey for testrun: must be exactly 32 hex chars\n\
-			--test-target <16-byte-hex>		Target for test run: must be exactly 16 hex chars\n\
+	  --test-block <block>		Block-id for test run\n\
+	  --test-work <work>			Work-id for test run\n\
+	  --test-multiplicator <32-byte-hex>		Multiplicator for testrun: must be exactly 32 hex chars\n\
+	  --test-publickey <32-byte-hex>		Publickey for testrun: must be exactly 32 hex chars\n\
+	  --test-target <16-byte-hex>		Target for test run: must be exactly 16 hex chars\n\
+	  --test-wcet-main <WCET in 20000s>			  Do not ignore WCET limits of main function in Test-Vm run\n\
+	  --test-wcet-verify <WCET in 20000s>			  Do not ignore WCET limits of verify function in Test-Vm run\n\
   -t, --threads <n>           Number of miner threads (Default: Number of CPUs)\n\
   -u, --user <username>       Username for mining server\n\
   -T, --timeout <n>           Timeout for rpc calls (Default: 30 sec)\n\
       --validate              Validate logic in 'main' & 'verify' functions\n\
+	  --verify-only           Use verify instead of main\n\
   -v, --version               Display version information and exit\n\
   -X  --no-renice             Do not lower the priority of miner threads\n\
 Options while mining ----------------------------------------------------------\n\n\
@@ -225,11 +235,14 @@ static struct option const options[] = {
 	{ "test-multiplicator",	1, NULL, 1013 },
 	{ "test-publickey",	1, NULL, 1014 },
 	{ "test-target",	1, NULL, 1015 },
+	{ "test-wcet-main",	1, NULL, 1017 },
+	{ "test-wcet-verify",	1, NULL, 1018 },
 	{ "threads",		1, NULL, 't' },
 	{ "timeout",		1, NULL, 'T' },
 	{ "url",			1, NULL, 'o' },
 	{ "user",			1, NULL, 'u' },
 	{ "validate",		0, NULL, 1010 },
+	{ "verify-only",	0, NULL, 1016 },
 	{ "version",		0, NULL, 'v' },
 	{ 0, 0, 0, 0 }
 };
@@ -263,7 +276,7 @@ void parse_arg(int key, char *arg)
 {
 	char *p, *ap, *nm;
 	int v, i;
-	long xx;
+	uint64_t xx;
 
 	switch (key) {
 	case 'D':
@@ -404,6 +417,9 @@ void parse_arg(int key, char *arg)
 	case 1001:
 		use_colors = false;
 		break;
+	case 1016:
+		opt_verify_only = true;
+		break;
 	case 1003:
 		opt_protocol = true;
 		break;
@@ -446,6 +462,20 @@ void parse_arg(int key, char *arg)
 		break;
 	case 1010:
 		opt_validate_work = true;
+		break;
+	case 1017:
+		xx = atol(arg);
+		if (v < 0)
+			show_usage_and_exit(1);
+		opt_test_wcet_main = true;
+		opt_wcet_main = xx;
+		break;
+	case 1018:
+		xx = atol(arg);
+		if (v < 0)
+			show_usage_and_exit(1);
+		opt_test_wcet_verify = true;
+		opt_wcet_verify = xx;
 		break;
 	case 1011:
 			xx = atol(arg);
@@ -659,6 +689,16 @@ static void *test_vm_thread(void *userdata) {
 	applog(LOG_DEBUG, "DEBUG: TestVM: block id '%ld'", work.block_id);
 	applog(LOG_DEBUG, "DEBUG: TestVM: work id '%ld'", work.work_id);
 
+	applog(LOG_DEBUG, "DEBUG: WCET main tester status: %s", opt_test_wcet_main?"ON":"OFF");
+	applog(LOG_DEBUG, "DEBUG: WCET verify tester status: %s", opt_test_wcet_verify?"ON":"OFF");
+
+	if(opt_test_wcet_main){
+		applog(LOG_DEBUG, "DEBUG: main WCET abortion above: %d*20000", opt_wcet_main);
+	}
+	if(opt_test_wcet_verify){
+		applog(LOG_DEBUG, "DEBUG: verify WCET abortion above: %d*20000", opt_wcet_verify);
+	}
+
 	// load multiplicator
 	for(int i=0; i<32; ++i)
 		work.multiplicator[i] = var_test_multiplicator[i];
@@ -720,6 +760,29 @@ static void *test_vm_thread(void *userdata) {
 		applog(LOG_ERR, "ERROR: Unable to calculate WCET.  Exiting 'test_vm'\n");
 		exit(EXIT_FAILURE);
 	}
+
+	uint64_t wcet = 0;	
+	if(opt_test_wcet_main){
+		wcet = get_main_wcet();
+			if(wcet > opt_wcet_main*20000){
+				applog(LOG_ERR, "ERROR: The main WCET of %lu is above the threshold of %lu*20000.  Exiting 'test_vm'", wcet, opt_wcet_main);
+				exit(EXIT_FAILURE);
+			}else{
+				applog(LOG_DEBUG, "GOOD: The main WCET of %lu is below the threshold of %lu*20000.", wcet, opt_wcet_main);
+			}
+	}
+	
+	if(opt_test_wcet_verify){
+		wcet = get_verify_wcet();
+			if(wcet > opt_wcet_verify*20000){
+				applog(LOG_ERR, "ERROR: The verify WCET of %lu is above the threshold of %lu*20000.  Exiting 'test_vm'", wcet, opt_wcet_verify);
+				exit(EXIT_FAILURE);
+			}else{
+				applog(LOG_DEBUG, "GOOD: The verify WCET of %lu is below the threshold of %lu*20000.", wcet, opt_wcet_verify);
+			}
+	}
+	
+	applog(LOG_DEBUG, "DEBUG: storage size: %d", ast_submit_sz);
 
 	// Convert The ElasticPL Source Into a C or OpenCL Program
 	use_elasticpl_math = false;
@@ -888,7 +951,10 @@ static void *test_vm_thread(void *userdata) {
 
 		// Execute The VM Logic
 //		rc = inst->verify(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, work.pow_hash);
-		rc = inst->execute(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, work.pow_hash);
+		if(!opt_verify_only)
+			rc = inst->execute(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, work.pow_hash);
+		else
+			rc = inst->verify(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, work.pow_hash);
 
 		// Run A Continuous Test
 		//uint32_t rnd;
@@ -904,7 +970,7 @@ static void *test_vm_thread(void *userdata) {
 		//		break;
 		//	}
 
-		dump_vm(0);
+		// dump_vm(0);
 	}
 
 	applog(LOG_DEBUG, "DEBUG: Bounty Found: %s", (bounty_found == 1) ? "true" : "false");
@@ -929,7 +995,7 @@ static void *test_vm_thread(void *userdata) {
 	if (test_code)
 		free(test_code);
 
-	tq_freeze(mythr->q);
+	//tq_freeze(mythr->q);
 
 	return NULL;
 }
@@ -1057,30 +1123,12 @@ static int execute_vm(int thr_id, uint32_t *rnd, uint32_t iteration, struct work
 		}
 
 		// Bounty or POW Found, Exit Immediately
-		//if (bounty_found)
-		//	return 1;
-		//else if (pow_found)
-		//	return 2;
-
-
-// Fix
-		if (pow_found) {
-			int k;
-			printf("\nMD5 Message: ");
-			for (k = 0; k < 96/2; k++)
-				printf("%02X", tmp_msg[k]);
-			printf("\n");
-			printf("POW Target: ");
-			for (k = 0; k < 4; k++)
-				printf("%08X ", g_pow_target[k]);
-			printf("\n");
-			printf("POW Hash: ");
-			for (k = 0; k < 4; k++)
-				printf("%08X ", work->pow_hash[k]);
-			printf("\n");
+		if (bounty_found)
+			return 1;
+		else if (pow_found)
 			return 2;
-		}
-// Fix
+
+
 
 
 		(*hashes_done)++;
@@ -1298,7 +1346,8 @@ static double calc_diff(uint32_t *target) {
 static int decode_work(CURL *curl, const json_t *val, struct work *work) {
 	int i, j, rc, num_pkg, best_pkg, bty_rcvd, work_pkg_id, iteration_id;
 	uint64_t work_id;
-	uint32_t storage_id, best_wcet = 0xFFFFFFFF, pow_tgt[4];
+	uint32_t storage_id, pow_tgt[4];
+	uint64_t best_wcet = 0xFFFFFFFF;
 	double difficulty, best_profit = 0, profit = 0;
 	char *tgt = NULL, *src = NULL, *str = NULL, *best_src = NULL, *best_tgt = NULL, *elastic_src = NULL;
 	json_t *wrk = NULL, *pkg = NULL;
