@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
-
+#include <limits.h>
 #include "ElasticPL.h"
 #include "../miner.h"
 
