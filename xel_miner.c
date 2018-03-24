@@ -68,8 +68,10 @@ bool opt_test_vm = false;
 bool opt_verify_only = false;
 bool opt_test_wcet_main = false;
 bool opt_test_wcet_verify = false;
+bool opt_test_stdin = false;
 bool went_through = false;
 
+int opt_limit_storage = -1;
 uint64_t opt_wcet_main = 0;
 uint64_t opt_wcet_verify = 0;
 int opt_deadswitch = 0;
@@ -219,8 +221,10 @@ Options:\n\
       --test-vm <file>        Run the Parser / Compiler using the ElasticPL source code in <file>\n\
 	  --test-block <block>		Block-id for test run\n\
 	  --test-work <work>			Work-id for test run\n\
+	  --test-limit-storage <ints>			Only allow storage sizes up to <int>\n\
 	  --test-multiplicator <32-byte-hex>		Multiplicator for testrun: must be exactly 32 hex chars\n\
 	  --test-publickey <32-byte-hex>		Publickey for testrun: must be exactly 32 hex chars\n\
+	  --test-stdin		     Read storage values from stdin\n\
 	  --test-target <16-byte-hex>		Target for test run: must be exactly 16 hex chars\n\
 	  --test-wcet-main <WCET in 20000s>			  Do not ignore WCET limits of main function in Test-Vm run\n\
 	  --test-wcet-verify <WCET in 20000s>			  Do not ignore WCET limits of verify function in Test-Vm run\n\
@@ -265,8 +269,10 @@ static struct option const options[] = {
 	{ "test-vm",		1, NULL, 1005 },
 	{ "test-block",	1, NULL, 1011 },
 	{ "test-work",	1, NULL, 1012 },
+	{ "test-limit-storage",	1, NULL, 1021 },
 	{ "test-multiplicator",	1, NULL, 1013 },
 	{ "test-publickey",	1, NULL, 1014 },
+	{ "test-stdin",	0, NULL, 1020 },
 	{ "test-target",	1, NULL, 1015 },
 	{ "test-wcet-main",	1, NULL, 1017 },
 	{ "test-wcet-verify",	1, NULL, 1018 },
@@ -414,6 +420,12 @@ void parse_arg(int key, char *arg)
 			show_usage_and_exit(1);
 		opt_retries = v;
 		break;
+	case 1021:
+		v = atoi(arg);
+		if (v < -1 || v > 9999)
+			show_usage_and_exit(1);
+		opt_limit_storage = v;
+		break;
 	case 'R':
 		v = atoi(arg);
 		if (v < 1 || v > 9999)
@@ -501,6 +513,9 @@ void parse_arg(int key, char *arg)
 		break;
 	case 1010:
 		opt_validate_work = true;
+		break;
+	case 1020:
+		opt_test_stdin = true;
 		break;
 	case 1017:
 		xx = atol(arg);
@@ -846,6 +861,13 @@ static void *test_vm_thread(void *userdata) {
 	vm_m = calloc(VM_M_ARRAY_SIZE, sizeof(uint32_t));
 	memcpy(vm_m, work.vm_input, VM_M_ARRAY_SIZE * sizeof(uint32_t));
 
+	if(opt_limit_storage!=-1){
+		if(g_work_package[0].storage_sz>opt_limit_storage){
+			applog(LOG_ERR, "ERROR: Your work uses too much storage. You requested %d, but allowed is only up to %d.", g_work_package[0].storage_sz, opt_limit_storage);
+				exit(EXIT_FAILURE);
+		}
+	}
+
 	if (g_work_package[0].vm_ints) vm_i = calloc(g_work_package[0].vm_ints, sizeof(int32_t));
 	if (g_work_package[0].vm_uints) vm_u = calloc(g_work_package[0].vm_uints, sizeof(uint32_t));
 	if (g_work_package[0].vm_longs) vm_l = calloc(g_work_package[0].vm_longs, sizeof(int64_t));
@@ -853,6 +875,45 @@ static void *test_vm_thread(void *userdata) {
 	if (g_work_package[0].vm_floats) vm_f = calloc(g_work_package[0].vm_floats, sizeof(float));
 	if (g_work_package[0].vm_doubles) vm_d = calloc(g_work_package[0].vm_doubles, sizeof(double));
 	if (g_work_package[0].storage_sz) vm_s = calloc(g_work_package[0].storage_sz, sizeof(uint32_t));
+
+	if(opt_test_stdin && g_work_package[0].storage_sz>0){
+		applog(LOG_DEBUG, "DEBUG: We will now fill the storage from stdin");
+		int counter = 0;
+		char *line = NULL;
+		size_t size;
+		char *ptr;
+		for(i=0;i<g_work_package[0].storage_sz;++i){
+			errno = 0;
+			if (getline(&line, &size, stdin) == -1) {
+				applog(LOG_ERR, "ERROR: Your provided only %d storage lines in stdin. This is not enough, should be %d.", counter, g_work_package[0].storage_sz);
+				exit(EXIT_FAILURE);
+			} else {
+				uint32_t val = (uint32_t)strtoul(line, &ptr, 10);
+
+				if (line == ptr)
+					{ applog(LOG_ERR, "ERROR: number : %lu  invalid  (no digits found, 0 returned)\n", val); exit(EXIT_FAILURE); }
+				else if (errno == ERANGE && val == LONG_MIN)
+					{ applog(LOG_ERR, "ERROR: number : %lu  invalid  (underflow occurred)\n", val); exit(EXIT_FAILURE); }
+				else if (errno == ERANGE && val == LONG_MAX)
+					{ applog(LOG_ERR, "ERROR: number : %lu  invalid  (overflow occurred)\n", val); exit(EXIT_FAILURE); }
+				else if (errno == EINVAL)  /* not in all c99 implementations - gcc OK */
+					{ applog(LOG_ERR, "ERROR: number : %lu  invalid  (base contains unsupported value)\n", val); exit(EXIT_FAILURE); }
+				else if (errno != 0 && val == 0)
+					{ applog(LOG_ERR, "ERROR: number : %lu  invalid  (unspecified error occurred)\n", val); exit(EXIT_FAILURE); }
+				/*else if (errno == 0 && line && !*ptr)
+					{ applog(LOG_ERR, "ERROR: number : %lu    valid  (and represents all characters read)\n", val); exit(EXIT_FAILURE); }
+				else if (errno == 0 && line && *ptr != 0)
+					{ applog(LOG_ERR, "ERROR: number : %lu    valid  (but additional characters remain)\n", val); exit(EXIT_FAILURE); }*/
+
+				
+				vm_s[counter] = val;
+				counter++;
+
+			}
+			
+		}
+		applog(LOG_DEBUG, "DEBUG: We have successfully read %d items from stdin and placed them into vm_s.", g_work_package[0].storage_sz);
+	}
 
 	if ((g_work_package[0].vm_ints && !vm_i) ||
 		(g_work_package[0].vm_uints && !vm_u) ||
