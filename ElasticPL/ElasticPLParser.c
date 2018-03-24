@@ -770,7 +770,7 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 					// Convert Binary Numbers
 					else if ((len > 2) && (token->literal[0] == '0') && (token->literal[1] == 'b')) {
 						if (len > 66) {
-							applog(LOG_ERR, "Syntax Error: Line: %d - Binary value exceeds 64 bits", token->line_num);
+							applog(LOG_ERR, "Syntax Error: Line: %d - Hex value exceeds 64 bits (%s)", token->line_num, token->literal);
 							return false;
 						}
 						else if (len < 35) {
@@ -791,7 +791,7 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 							val_uint64 = strtoull(&token->literal[0], NULL, 10);
 
 						if (errno) {
-							applog(LOG_ERR, "Syntax Error: Line: %d - Integer value exceeds 64 bits", token->line_num);
+							applog(LOG_ERR, "Syntax Error: Line: %d - Hex value exceeds 64 bits (%s)", token->line_num, token->literal);
 							return false;
 						}
 
