@@ -754,7 +754,7 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 					// Convert Hex Numbers
 					if ((len > 2) && (token->literal[0] == '0') && (token->literal[1] == 'x')) {
 						if (len > 18) {
-							applog(LOG_ERR, "Syntax Error: Line: %d - Hex value exceeds 64 bits (%s, len %d)", token->line_num, token->literal, len);
+							applog(LOG_ERR, "Syntax Error: Line: %d - Hex value exceeds 64 bits (%s, len %d, errno %d)", token->line_num, token->literal, len, errno);
 							return false;
 						}
 						else if (len < 11) {
@@ -770,7 +770,7 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 					// Convert Binary Numbers
 					else if ((len > 2) && (token->literal[0] == '0') && (token->literal[1] == 'b')) {
 						if (len > 66) {
-							applog(LOG_ERR, "Syntax Error: Line: %d - Binary value exceeds 64 bits (%s, len %d)", token->line_num, token->literal, len);
+							applog(LOG_ERR, "Syntax Error: Line: %d - Binary value exceeds 64 bits (%s, len %d, errno %d)", token->line_num, token->literal, len, errno);
 							return false;
 						}
 						else if (len < 35) {
@@ -791,7 +791,7 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 							val_uint64 = strtoull(&token->literal[0], NULL, 10);
 
 						if (errno) {
-							applog(LOG_ERR, "Syntax Error: Line: %d - Integer value exceeds 64 bits (%s, len %d)", token->line_num, token->literal, len);
+							applog(LOG_ERR, "Syntax Error: Line: %d - Integer value exceeds 64 bits (%s, len %d, errno %d)", token->line_num, token->literal, len, errno);
 							return false;
 						}
 
@@ -818,7 +818,7 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 					val_double = strtod(&token->literal[0], NULL);
 
 					if (errno) {
-						applog(LOG_ERR, "Syntax Error: Line: %d - Decimal value exceeds 64 bits (%s, len %d)", token->line_num, token->literal, len);
+						applog(LOG_ERR, "Syntax Error: Line: %d - Decimal value exceeds 64 bits (%s, len %d, errno %d)", token->line_num, token->literal, len, errno);
 						return false;
 					}
 
