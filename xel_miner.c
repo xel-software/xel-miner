@@ -3195,10 +3195,12 @@ int main(int argc, char **argv) {
 		}
 
 		pthread_join(thr_info[0].pth, NULL);
-		pthread_mutex_lock(&went_through_lock);
-		went_through=true;
-		pthread_mutex_unlock(&went_through_lock);
-		pthread_join(thr_deadswitch->pth, NULL);
+		if(opt_deadswitch>0){
+			pthread_mutex_lock(&went_through_lock);
+			went_through=true;
+			pthread_mutex_unlock(&went_through_lock);
+			pthread_join(thr_deadswitch->pth, NULL);
+		}
 		free(test_filename);
 		return 0;
 	}
