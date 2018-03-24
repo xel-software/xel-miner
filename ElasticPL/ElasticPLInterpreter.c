@@ -15,6 +15,46 @@
 #include "ElasticPL.h"
 #include "../miner.h"
 
+uint64_t overflow_safe_mul(uint64_t lhs, uint64_t rhs)
+{
+        const uint64_t HALFSIZE_MAX = (1ul << LONG_BIT/2) - 1ul;
+        uint64_t lhs_high = lhs >> LONG_BIT/2;
+        uint64_t lhs_low  = lhs & HALFSIZE_MAX;
+        uint64_t rhs_high = rhs >> LONG_BIT/2;
+        uint64_t rhs_low  = rhs & HALFSIZE_MAX;
+		uint64_t result = 0;
+        uint64_t bot_bits = lhs_low * rhs_low;
+        if (!(lhs_high || rhs_high)) {
+            return bot_bits;
+        }
+        bool overflowed = lhs_high && rhs_high;
+        unsigned long mid_bits1 = lhs_low * rhs_high;
+        unsigned long mid_bits2 = lhs_high * rhs_low;
+
+        result = bot_bits + ((mid_bits1+mid_bits2) << LONG_BIT/2);
+        if(overflowed || result < bot_bits
+            || (mid_bits1 >> LONG_BIT/2) != 0
+            || (mid_bits2 >> LONG_BIT/2) != 0){
+				applog(LOG_ERR, "ERROR: WCET overflowed, your program is way to complex. Exiting.");
+				exit(EXIT_FAILURE);
+		}
+
+		// no overflow
+		return result;
+}
+
+
+uint64_t overflow_safe_add (uint64_t a, uint64_t b)
+{
+    if (b > UINT64_MAX - a) {
+        applog(LOG_ERR, "ERROR: WCET overflowed, your program is way to complex. Exiting.");
+		exit(EXIT_FAILURE);
+    }
+
+    // no underflow
+    return a+b;
+}
+
 extern uint64_t get_verify_wcet() {
 	return stack_exp[ast_verify_idx]->wcet_value;
 }
@@ -92,7 +132,7 @@ static uint64_t calc_function_weight(ast* root, uint32_t *ast_depth) {
 				// Check For "Repeat" Blocks
 				if (ast_ptr->type == NODE_REPEAT) {
 					weight = get_node_weight(ast_ptr);
-					weight += get_node_weight(ast_ptr->left);
+					weight = overflow_safe_add(weight, get_node_weight(ast_ptr->left));
 					block_level++;
 					block_weight[block_level] = 0;
 					break;
@@ -134,7 +174,7 @@ static uint64_t calc_function_weight(ast* root, uint32_t *ast_depth) {
 				// Check For "Repeat" Blocks
 				if (ast_ptr->type == NODE_REPEAT) {
 					weight = get_node_weight(ast_ptr);
-					weight += get_node_weight(ast_ptr->left);
+					weight = overflow_safe_add(weight, get_node_weight(ast_ptr->left));
 					block_level++;
 					block_weight[block_level] = 0;
 					ast_ptr = ast_ptr->right;
@@ -152,16 +192,16 @@ static uint64_t calc_function_weight(ast* root, uint32_t *ast_depth) {
 		}
 
 		if ((block_level >= 0) && (ast_ptr->parent->type != NODE_REPEAT))
-			block_weight[block_level] += weight;
+			block_weight[block_level] = overflow_safe_add(block_weight[block_level], weight);
 		else
-			total_weight += (total_weight < (0xFFFFFFFF - weight) ? weight : 0);
+			total_weight = overflow_safe_add(total_weight, (total_weight < (0xFFFFFFFF - weight) ? weight : 0)); // TODO, what is that???
 
 		// Get Total weight For The "Repeat" Block
 		if ((!downward) && (block_level >= 0) && (ast_ptr->type == NODE_REPEAT)) {
 			if (block_level == 0)
-				total_weight += ((uint64_t)ast_ptr->ivalue * block_weight[block_level]);
+				total_weight = overflow_safe_add(total_weight, overflow_safe_mul((uint64_t)ast_ptr->ivalue, block_weight[block_level]));
 			else
-				block_weight[block_level - 1] += ((uint64_t)ast_ptr->ivalue * block_weight[block_level]);
+				block_weight[block_level - 1] = overflow_safe_add(block_weight[block_level - 1], overflow_safe_mul((uint64_t)ast_ptr->ivalue, block_weight[block_level])); // TODO: what is ivalue?
 			block_level--;
 		}
 	}
