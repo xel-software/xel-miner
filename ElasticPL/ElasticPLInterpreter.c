@@ -15,6 +15,11 @@
 #include "ElasticPL.h"
 #include "../miner.h"
 
+#ifndef LONG_BIT
+#define LONG_BIT 64
+// assume 64bit
+#endif
+
 uint64_t overflow_safe_mul(uint64_t lhs, uint64_t rhs)
 {
         const uint64_t HALFSIZE_MAX = (1ul << LONG_BIT/2) - 1ul;
