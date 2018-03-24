@@ -68,10 +68,11 @@ bool opt_test_vm = false;
 bool opt_verify_only = false;
 bool opt_test_wcet_main = false;
 bool opt_test_wcet_verify = false;
+bool went_through = false;
 
 uint64_t opt_wcet_main = 0;
 uint64_t opt_wcet_verify = 0;
-
+int opt_deadswitch = 0;
 bool opt_opencl = false;
 int opt_opencl_gthreads = 0;
 int opt_opencl_vwidth = 0;
@@ -108,6 +109,8 @@ pthread_mutex_t applog_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t work_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t submit_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t longpoll_lock = PTHREAD_MUTEX_INITIALIZER;
+pthread_mutex_t went_through_lock = PTHREAD_MUTEX_INITIALIZER;
+
 
 uint8_t *rpc_url = NULL;
 uint8_t *rpc_user = NULL;
@@ -157,10 +160,39 @@ extern uint32_t swap32(uint32_t a) {
 	return ((a << 24) | ((a << 8) & 0x00FF0000) | ((a >> 8) & 0x0000FF00) | ((a >> 24) & 0x000000FF));
 }
 
+
+
+void *deadswitch(void *arg)
+{
+	applog(LOG_DEBUG, "Activated hard deadswitch at %d seconds", opt_deadswitch);
+    time_t start_time = time(NULL);
+	for (;;)
+	{
+
+		usleep(100000);
+		pthread_mutex_lock(&went_through_lock);
+		if(went_through)
+			break;
+		pthread_mutex_unlock(&went_through_lock);
+
+		time_t now = time(NULL);
+		time_t diff = now - start_time;
+
+		if (diff >= opt_deadswitch && !went_through)
+		{
+			applog(LOG_ERR, "ERROR: Deadswitch will kill the instance now. Program did not terminate in time.", opt_deadswitch);
+			exit(EXIT_FAILURE);
+		}
+
+	}
+	applog(LOG_DEBUG, "Deadswitch suspended due to correct termination of work package", opt_deadswitch);
+}
+
 static char const usage[] = "\
 Usage: " PACKAGE_NAME " [OPTIONS]\n\
 Options:\n\
   -c, --config <file>         Use JSON-formated configuration file\n\
+      --deadswitch <seconds>  Hardkill the instance after x seconds\n\
   -D, --debug                 Display debug output\n\
       --debug-epl             Display EPL source code\n\
   -d, --delaysleep	     	  Sleep x seconds after submitting POW: useful for burstless debugging\n \
@@ -209,6 +241,7 @@ static char const short_options[] = "c:Dk:hm:o:p:P:qr:R:s:St:T:u:vVX";
 
 static struct option const options[] = {
 	{ "config",			1, NULL, 'c' },
+	{ "deadswitch",		1, NULL, 1019 },
 	{ "debug",			0, NULL, 'D' },
 	{ "delaysleep",		1, NULL, 'd' },
 	{ "debug-epl",		0, NULL, 1007 },
@@ -452,6 +485,12 @@ void parse_arg(int key, char *arg)
 		if (v < 256 || v > 10240)
 			show_usage_and_exit(1);
 		opt_opencl_gthreads = v;
+		break;
+	case 1019:
+		v = atoi(arg);
+		if (v < 0)
+			show_usage_and_exit(1);
+		opt_deadswitch = v;
 		break;
 	case 1009:
 		v = atoi(arg);
@@ -765,7 +804,7 @@ static void *test_vm_thread(void *userdata) {
 	if(opt_test_wcet_main){
 		wcet = get_main_wcet();
 			if(wcet > opt_wcet_main*20000){
-				applog(LOG_ERR, "ERROR: The main WCET of %lu is above the threshold of %lu*20000.  Exiting 'test_vm'", wcet, opt_wcet_main);
+				applog(LOG_ERR, "ERROR: The main WCET of %lu is above the threshold of %lu*20000. Your program is too complex! Exiting 'test_vm'", wcet, opt_wcet_main);
 				exit(EXIT_FAILURE);
 			}else{
 				applog(LOG_DEBUG, "GOOD: The main WCET of %lu is below the threshold of %lu*20000.", wcet, opt_wcet_main);
@@ -775,7 +814,7 @@ static void *test_vm_thread(void *userdata) {
 	if(opt_test_wcet_verify){
 		wcet = get_verify_wcet();
 			if(wcet > opt_wcet_verify*20000){
-				applog(LOG_ERR, "ERROR: The verify WCET of %lu is above the threshold of %lu*20000.  Exiting 'test_vm'", wcet, opt_wcet_verify);
+				applog(LOG_ERR, "ERROR: The verify WCET of %lu is above the threshold of %lu*20000. Your program is too complex! Exiting 'test_vm'", wcet, opt_wcet_verify);
 				exit(EXIT_FAILURE);
 			}else{
 				applog(LOG_DEBUG, "GOOD: The verify WCET of %lu is below the threshold of %lu*20000.", wcet, opt_wcet_verify);
@@ -2980,7 +3019,7 @@ static int thread_create(struct thr_info *thr, void* func)
 }
 
 int main(int argc, char **argv) {
-	struct thr_info *thr;
+	struct thr_info *thr, *thr_deadswitch = NULL;
 	int i, err, thr_idx, num_gpus = 0;
 
 	fprintf(stdout, "** Elastic Compute Engine **\n");
@@ -2988,6 +3027,8 @@ int main(int argc, char **argv) {
 	fprintf(stdout, "   ElasticPL Version: " ELASTICPL_VERSION"\n");
 
 	pthread_mutex_init(&applog_lock, NULL);
+	if(opt_deadswitch>0)
+		pthread_mutex_init(&went_through_lock, NULL);
 
 #if defined(WIN32)
 	SYSTEM_INFO sysinfo;
@@ -3077,12 +3118,26 @@ int main(int argc, char **argv) {
 		thr->q = tq_new();
 		if (!thr->q)
 			return 1;
+
+		if(opt_deadswitch > 0){
+			thr_deadswitch = (struct thr_info*) calloc(1, sizeof(*thr_deadswitch));
+			if (thread_create(thr_deadswitch, deadswitch)) {
+				applog(LOG_ERR, "Test VM thread create failed!");
+				return 1;
+			}
+
+		}
+
 		if (thread_create(thr, test_vm_thread)) {
 			applog(LOG_ERR, "Test VM thread create failed!");
 			return 1;
 		}
 
 		pthread_join(thr_info[0].pth, NULL);
+		pthread_mutex_lock(&went_through_lock);
+		went_through=true;
+		pthread_mutex_unlock(&went_through_lock);
+		pthread_join(thr_deadswitch->pth, NULL);
 		free(test_filename);
 		return 0;
 	}
