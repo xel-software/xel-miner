@@ -759,10 +759,12 @@ static void *test_vm_thread(void *userdata) {
 
 	char temp_mult[65];
 	tohex(work.multiplicator, 32, temp_mult, 65);
+	temp_mult[64] = 0;
 	applog(LOG_DEBUG, "DEBUG: TestVM: multiplicator '%s'", temp_mult);
 
 	char temp_pub[65];
 	tohex(publickey, 32, temp_pub, 65);
+	temp_pub[64] = 0;
 	applog(LOG_DEBUG, "DEBUG: TestVM: pubkey '%s'", temp_pub);
 
 
@@ -776,6 +778,7 @@ static void *test_vm_thread(void *userdata) {
 
 	char temp_tgt[33];
 	tohex_int(g_pow_target, 4, temp_tgt, 33);
+	temp_tgt[64] = 0;
 	applog(LOG_DEBUG, "DEBUG: TestVM: target '%s'", temp_tgt);
 
 	// Create A Test Work Package
