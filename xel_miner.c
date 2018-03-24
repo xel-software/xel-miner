@@ -778,7 +778,7 @@ static void *test_vm_thread(void *userdata) {
 
 	char temp_tgt[33];
 	tohex_int(g_pow_target, 4, temp_tgt, 33);
-	temp_tgt[64] = 0;
+	temp_tgt[32] = 0;
 	applog(LOG_DEBUG, "DEBUG: TestVM: target '%s'", temp_tgt);
 
 	// Create A Test Work Package
@@ -1133,6 +1133,7 @@ static bool get_vm_input(struct work *work) {
 
 	char tempin[161];
 	tohex(tmp_msg,80,tempin,161);
+	tempin[160] = 0;
 	applog(LOG_DEBUG, "DEBUG: Input to int generator: %s", tempin);
 
 
@@ -1141,6 +1142,7 @@ static bool get_vm_input(struct work *work) {
 
 	char tempmsg[33];
 	tohex(msg,16,tempmsg,33);
+	tempmsg[32]=0;
 	applog(LOG_DEBUG, "DEBUG: Digest: %s", tempmsg);
 
 	// Randomize Inputs m[0]-m[9]
