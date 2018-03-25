@@ -354,6 +354,7 @@ extern bool get_token_list(char *str, SOURCE_TOKEN_LIST *token_list) {
 				if (literal_idx > 0) {
 
 					// Check If '-' Token Needs To Be Moved To Literal
+					printf("SHIT %d\n",token_list->num);
 					if (token_list->token[token_list->num - 1].type == TOKEN_NEG) {
 						for (i = MAX_LITERAL_SIZE - 2; i > 0; i--)
 							literal[i] = literal[i - 1];
