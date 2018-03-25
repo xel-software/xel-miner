@@ -369,6 +369,10 @@ extern bool get_token_list(char *str, SOURCE_TOKEN_LIST *token_list) {
 					else if (token_list->num > 0 && token_list->token[token_list->num - 2].type == TOKEN_CALL_FUNCTION) {
 						data_type = DT_STRING;
 					}
+					else if(token_list->num == 0){
+						applog(LOG_ERR, "Syntax Error - Invalid Literal: '%s'  Line: %d", literal, line_num);
+							return false;
+					}
 					else {
 						data_type = validate_literal(literal);
 						if (data_type == DT_NONE) {
