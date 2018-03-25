@@ -389,8 +389,7 @@ void parse_arg(int key, char *arg)
 	case 'P':
 		passphrase = strdup(arg);
 		strhide(arg);
-	if (v < 256 || v > 10240)
-				show_usage_and_exit(1);
+
 		// Generate publickey From Secret Phrase
 		char* hash_sha256 = (char*)malloc(32 * sizeof(char));
 		sha256(passphrase, strlen(passphrase), hash_sha256);
