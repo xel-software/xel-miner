@@ -402,6 +402,11 @@ void parse_arg(int key, char *arg)
 		// Do "donna"
 		curve25519_donna(publickey, hash_sha256, basepoint);
 
+		char temp_pub[65];
+		tohex(publickey, 32, temp_pub, 65);
+		temp_pub[64] = 0;
+		applog(LOG_INFO, "Provided pubkey '%s'", temp_pub);
+
 		//printf("Public Key: ");
 		//for (i = 0; i < 32; i++)
 		//	printf("%02X", publickey[i]);
@@ -531,10 +536,10 @@ void parse_arg(int key, char *arg)
 		opt_wcet_verify = xx;
 		break;
 	case 1011:
-			xx = atol(arg);
-			if (v < 0)
+			if (!arg)
 				show_usage_and_exit(1);
-			var_test_block = v;
+			xx = atol(arg);
+			var_test_block = xx;
 			break;
 	case 1012:
 			if (!arg)
@@ -739,8 +744,8 @@ static void *test_vm_thread(void *userdata) {
 	work.block_id = var_test_block;
 	work.work_id = var_test_work;
 
-	applog(LOG_DEBUG, "DEBUG: TestVM: block id '%ld'", work.block_id);
-	applog(LOG_DEBUG, "DEBUG: TestVM: work id '%ld'", work.work_id);
+	applog(LOG_DEBUG, "DEBUG: TestVM: block id '%lu'", work.block_id);
+	applog(LOG_DEBUG, "DEBUG: TestVM: work id '%lu'", work.work_id);
 
 	applog(LOG_DEBUG, "DEBUG: WCET main tester status: %s", opt_test_wcet_main?"ON":"OFF");
 	applog(LOG_DEBUG, "DEBUG: WCET verify tester status: %s", opt_test_wcet_verify?"ON":"OFF");
@@ -1133,7 +1138,7 @@ static bool get_vm_input(struct work *work) {
 	char tempin[161];
 	tohex(tmp_msg,80,tempin,161);
 	tempin[160] = 0;
-	applog(LOG_DEBUG, "DEBUG: Input to int generator: %s", tempin);
+	//applog(LOG_DEBUG, "DEBUG: Input to int generator: %s", tempin);
 
 
 	// Hash The Inputs
@@ -1142,7 +1147,7 @@ static bool get_vm_input(struct work *work) {
 	char tempmsg[33];
 	tohex(msg,16,tempmsg,33);
 	tempmsg[32]=0;
-	applog(LOG_DEBUG, "DEBUG: Digest: %s", tempmsg);
+	//applog(LOG_DEBUG, "DEBUG: Digest: %s", tempmsg);
 
 	// Randomize Inputs m[0]-m[9]
 	for (i = 0; i < 10; i++) {
@@ -1962,6 +1967,10 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 			if (strstr(err_desc, "Duplicate unconfirmed transaction:")) {
 				applog(LOG_NOTICE, "%s: %s***** Bounty Discarded *****", thr_info[req->thr_id].name, CL_YLW);
 				applog(LOG_DEBUG, "Work ID: %s - Work is already closed, you missed the reveal period", req->work_str, err_desc);
+			}
+			else if (strstr(err_desc, "successfully")){
+				applog(LOG_NOTICE, "%s: %s***** Bounty Claimed! *****", thr_info[req->thr_id].name, CL_GRN);
+				g_bounty_accepted_cnt++;
 			}
 			else {
 				applog(LOG_NOTICE, "%s: %s***** Bounty Rejected! *****", thr_info[req->thr_id].name, CL_RED);
