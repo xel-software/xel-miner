@@ -50,8 +50,9 @@ extern bool convert_ast_to_c(char *work_str) {
 	sprintf(file_name, "./work/job_%s.h", job_suffix);
 
 	FILE* f = fopen(file_name, "w");
-	if (!f)
+	if (!f){
 		return false;
+	}
 
 	// Write Function Declarations
 	for (i = ast_func_idx; i <= stack_exp_idx; i++) {
