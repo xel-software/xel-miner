@@ -1686,6 +1686,8 @@ static int decode_work(CURL *curl, const json_t *val, struct work *work) {
 		if (storage_id < 0) {
 			applog(LOG_ERR, "ERROR: Unable to get 'storage' for work_id: %s", g_work_package[best_pkg].work_str);
 			return 0;
+		}else{
+			applog(LOG_DEBUG, "First storage int for work_id %s is %u", g_work_package[best_pkg].work_str, g_work_package[best_pkg].storage[0]);
 		}
 
 		g_work_package[best_pkg].storage_id = storage_id;
@@ -1803,11 +1805,11 @@ static int get_work_storage(CURL *curl, char *work_str, uint32_t *storage) {
 	int err;
 	uint32_t storage_id, iteration_id;
 	size_t num_pkg, max_str_len;
-	char req[100], *str = NULL;
+	char req[250], *str = NULL;
 	json_t *val, *wrk, *pkg;
 	struct timeval tv_start, tv_end, diff;
 
-	sprintf(req, "requestType=getWork&work_id=%s&with_source=0&with_finished=0", work_str);
+	sprintf(req, "requestType=getWork&work_id=%s&with_source=false&with_finished=false&with_storage=true", work_str);
 
 	gettimeofday(&tv_start, NULL);
 	val = json_rpc_call(curl, rpc_url, rpc_userpass, req, &err);
@@ -1861,15 +1863,14 @@ static int get_work_storage(CURL *curl, char *work_str, uint32_t *storage) {
 		return 0xFFFF;
 	}
 
-	// Extract The ElasticPL Source Code
-	max_str_len = (size_t)(sizeof(storage) * 2); // Hex Representation Of Storage Is Twice The Size
-	if (!str || ( strlen(str) > max_str_len ) || ( strlen(str) == 0 ) ) {
+	if (!str) {
 		applog(LOG_ERR, "ERROR: Invalid 'storage' for work_id: %s", work_str);
 		json_decref(val);
 		return -1;
 	}
+		applog(LOG_ERR, "STORAGE IS %s", str);
 
-	if (!hex2ints(storage, sizeof(storage), str, max_str_len)) {
+	if (!hex2ints(storage, sizeof(*storage), str, max_str_len)) {
 		applog(LOG_ERR, "ERROR: Unable to convert 'storage' for work_id: %s", work_str);
 		json_decref(val);
 		return -1;
