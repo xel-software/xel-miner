@@ -850,6 +850,7 @@ static void *test_vm_thread(void *userdata) {
 		applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
 		// let us clean the ast now
 		clean_up_ast();
+		free_up();
 		if(test_code)
 			free(test_code);
 		exit(EXIT_FAILURE);
@@ -886,6 +887,7 @@ static void *test_vm_thread(void *userdata) {
 				applog(LOG_ERR, "ERROR: The main WCET of %lu is above the threshold of %lu*20000. Your program is too complex! Exiting 'test_vm'", wcet, opt_wcet_main);
 				// let us clean the ast now
 				clean_up_ast();
+				free_up();
 				if(test_code)
 					free(test_code);
 				exit(EXIT_FAILURE);
@@ -900,6 +902,7 @@ static void *test_vm_thread(void *userdata) {
 				applog(LOG_ERR, "ERROR: The verify WCET of %lu is above the threshold of %lu*20000. Your program is too complex! Exiting 'test_vm'", wcet, opt_wcet_verify);
 				// let us clean the ast now
 				clean_up_ast();
+				free_up();
 				if(test_code)
 					free(test_code);
 				exit(EXIT_FAILURE);
@@ -917,6 +920,7 @@ static void *test_vm_thread(void *userdata) {
 			applog(LOG_ERR, "ERROR: Unable to convert 'source' to OpenC.  Exiting 'test_vm'\n");
 			// let us clean the ast now
 			clean_up_ast();
+			free_up();
 			if(test_code)
 				free(test_code);
 			exit(EXIT_FAILURE);
@@ -927,6 +931,7 @@ static void *test_vm_thread(void *userdata) {
 			applog(LOG_ERR, "ERROR: Unable to convert 'source' to C.  Exiting 'test_vm'\n");
 			// let us clean the ast now
 			clean_up_ast();
+			free_up();
 			if(test_code)
 				free(test_code);
 			exit(EXIT_FAILURE);
@@ -947,6 +952,9 @@ static void *test_vm_thread(void *userdata) {
 	if(opt_limit_storage!=-1){
 		if(g_work_package[0].storage_sz>opt_limit_storage){
 			applog(LOG_ERR, "ERROR: Your work uses too much storage. You requested %d, but allowed is only up to %d.", g_work_package[0].storage_sz, opt_limit_storage);
+			free_up();
+			if(test_code)
+				free(test_code);
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -1008,6 +1016,7 @@ static void *test_vm_thread(void *userdata) {
 		(g_work_package[0].vm_floats && !vm_f) ||
 		(g_work_package[0].vm_doubles && !vm_d) ||
 		(g_work_package[0].storage_sz && !vm_s)) {
+			free_up();
 			if(test_code)
 				free(test_code);
 		applog(LOG_ERR, "%s: Unable to allocate VM memory", "'test-vm'");
@@ -1117,6 +1126,9 @@ static void *test_vm_thread(void *userdata) {
 		// Compile The C Program Library
 		if (!compile_library(g_work_package[0].work_str)) {
 			applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
+			free_up();
+			if(test_code)
+				free(test_code);
 			exit(EXIT_FAILURE);
 		}
 
@@ -1133,6 +1145,8 @@ static void *test_vm_thread(void *userdata) {
 			if (!validate_work_source(0, inst)) {
 				applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
 				free_up();
+				if(test_code)
+					free(test_code);
 				exit(EXIT_FAILURE);
 			}
 		}
@@ -3181,7 +3195,6 @@ static void free_up(){
 		if (rpc_url) free(rpc_url);
 		if (rpc_user) free(rpc_user);
 		if (rpc_pass) free(rpc_pass);
-		if (rpc_url) free(rpc_url);
 		if (rpc_userpass) free(rpc_userpass);
 
 		if (test_filename)
