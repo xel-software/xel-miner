@@ -708,7 +708,7 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 	unsigned char *svalue = NULL;
 	NODE_TYPE node_type = NODE_ERROR;
 	DATA_TYPE data_type;
-	ast *exp, *left = NULL, *right = NULL;
+	ast *exp, *tmp = NULL, *left = NULL, *right = NULL;
 
 	node_type = get_node_type(token, token_num);
 	data_type = token->data_type;
@@ -903,10 +903,15 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 		// Repeat Statements
 		else if (node_type == NODE_REPEAT) {
 			right = pop_exp();				// Block
-			val_int64 = pop_exp()->uvalue;	// Max # Of Iterations
+			tmp = pop_exp();
+			val_int64 = tmp->uvalue;	// Max # Of Iterations
+			clean_up_ast_internal(tmp, false);
 			left = pop_exp();				// # Of Iterations
-			val_uint64 = pop_exp()->uvalue;	// Loop Counter
-
+			tmp = pop_exp();
+			val_uint64 = tmp->uvalue;	// Loop Counter
+			clean_up_ast_internal(tmp, false);
+			tmp = NULL;
+			
 			if (val_int64 <= 0) {
 				applog(LOG_ERR, "Syntax Error: Line: %d - Invalid value for max iterations", token->line_num);
 				return false;
@@ -934,19 +939,10 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 				exp = add_exp(NODE_PARAM, EXP_EXPRESSION, false, false, 0, 0, 0.0, NULL, 0, 0, DT_NONE, left, right);
 				push_exp(exp);
 			}
-
-			// do not forget to free left
-			if(left) free(left);
-
 			left = NULL;
 			right = pop_exp();
 		}
 		else {
-
-			// do not forget to free left=right
-			if(left) free(left);
-			if(right) free(right);
-
 			left = NULL;
 			right = NULL;
 		}
