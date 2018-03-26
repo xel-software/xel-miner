@@ -2183,6 +2183,8 @@ bool validate_work_source(int package_id, struct instance *inst) {
 	if (g_work_package[package_id].vm_floats) memset(vm_f, 0, g_work_package[package_id].vm_floats * sizeof(float));
 	if (g_work_package[package_id].vm_doubles) memset(vm_d, 0, g_work_package[package_id].vm_doubles * sizeof(double));
 
+
+
 	// Run "main" Function
 	rc = inst->execute(g_work_package[package_id].work_id, &bounty_found, 1, &pow_found, g_pow_target, pow_hash_main1);
 	applog(LOG_DEBUG, "\tValidate Work - 'main'   Hash1: %08X %08X %08X %08X", pow_hash_main1[0], pow_hash_main1[1], pow_hash_main1[2], pow_hash_main1[3]);
@@ -2197,6 +2199,9 @@ bool validate_work_source(int package_id, struct instance *inst) {
 	if (g_work_package[0].vm_floats) memcpy(vm_f, tmp_f, g_work_package[0].vm_floats * sizeof(float));
 	if (g_work_package[0].vm_doubles) memcpy(vm_d, tmp_d, g_work_package[0].vm_doubles * sizeof(double));
 	if (g_work_package[0].storage_sz) memcpy(vm_s, tmp_s, g_work_package[0].storage_sz * sizeof(uint32_t));
+
+
+
 
 	// Run "main" Function Again
 	rc = inst->execute(g_work_package[package_id].work_id, &bounty_found, 1, &pow_found, g_pow_target, pow_hash_main2);
@@ -2241,6 +2246,15 @@ bool validate_work_source(int package_id, struct instance *inst) {
 	// Run "verify" Function Again
 	rc = inst->verify(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, pow_hash_verify2);
 	applog(LOG_DEBUG, "\tValidate Work - 'verify' Hash2: %08X %08X %08X %08X", pow_hash_verify2[0], pow_hash_verify2[1], pow_hash_verify2[2], pow_hash_verify2[3]);
+
+	if(tmp_i) free(tmp_i);
+	if(tmp_u) free(tmp_u);
+	if(tmp_l) free(tmp_l);
+	if(tmp_ul) free(tmp_ul);
+	if(tmp_f) free(tmp_f);
+	if(tmp_d) free(tmp_d);
+	if(tmp_s) free(tmp_s);
+	if(tmp_m) free(tmp_m);
 
 	// Compare Hashes
 	for (i = 0; i < 4; i++) {
