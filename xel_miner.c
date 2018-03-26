@@ -3181,6 +3181,9 @@ static void free_up(){
 		if (rpc_url) free(rpc_url);
 		if (rpc_user) free(rpc_user);
 		if (rpc_pass) free(rpc_pass);
+		if (rpc_url) free(rpc_url);
+		if (rpc_userpass) free(rpc_userpass);
+
 		if (test_filename)
 			free(test_filename);
 		clear_all_workpackages();
