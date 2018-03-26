@@ -886,7 +886,7 @@ static void *test_vm_thread(void *userdata) {
 	if(opt_limit_storage!=-1){
 		if(g_work_package[0].storage_sz>opt_limit_storage){
 			applog(LOG_ERR, "ERROR: Your work uses too much storage. You requested %d, but allowed is only up to %d.", g_work_package[0].storage_sz, opt_limit_storage);
-				exit(EXIT_FAILURE);
+			exit(EXIT_FAILURE);
 		}
 	}
 
