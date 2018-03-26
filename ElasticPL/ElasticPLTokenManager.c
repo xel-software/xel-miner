@@ -320,6 +320,9 @@ static bool validate_tokens(SOURCE_TOKEN_LIST *token_list) {
 	return true;
 }
 
+extern void revert_token_list() {
+
+}
 extern bool get_token_list(char *str, SOURCE_TOKEN_LIST *token_list) {
 	char c, *cmnt, literal[MAX_LITERAL_SIZE];
 	int i, idx, len, token_id, line_num, token_list_sz, literal_idx;
@@ -345,7 +348,7 @@ extern bool get_token_list(char *str, SOURCE_TOKEN_LIST *token_list) {
 			else
 				literal_str = false;
 		}
-		
+
 		if (!literal_str) {
 
 			// Remove Whitespace
@@ -371,12 +374,14 @@ extern bool get_token_list(char *str, SOURCE_TOKEN_LIST *token_list) {
 					}
 					else if(token_list->num == 0){
 						applog(LOG_ERR, "Syntax Error - Invalid Literal: '%s'  Line: %d", literal, line_num);
-							return false;
+						delete_token_list(token_list); // free up memory as much as we can
+						return false;
 					}
 					else {
 						data_type = validate_literal(literal);
 						if (data_type == DT_NONE) {
 							applog(LOG_ERR, "Syntax Error - Invalid Literal: '%s'  Line: %d", literal, line_num);
+							delete_token_list(token_list); // free up memory as much as we can
 							return false;
 						}
 					}
@@ -421,6 +426,7 @@ extern bool get_token_list(char *str, SOURCE_TOKEN_LIST *token_list) {
 				cmnt = strstr(&str[idx], "*/");
 				if (!cmnt) {
 					applog(LOG_ERR, "Syntax Error - Missing '*/'  Line: %d", line_num);
+					delete_token_list(token_list); // free up memory as much as we can
 					return false;
 				}
 
@@ -459,6 +465,7 @@ extern bool get_token_list(char *str, SOURCE_TOKEN_LIST *token_list) {
 					data_type = validate_literal(literal);
 					if (data_type == DT_NONE) {
 						applog(LOG_ERR, "Syntax Error - Invalid Literal: '%s'  Line: %d", literal, line_num);
+						delete_token_list(token_list); // free up memory as much as we can
 						return false;
 					}
 				}
@@ -478,13 +485,17 @@ extern bool get_token_list(char *str, SOURCE_TOKEN_LIST *token_list) {
 
 			if (literal_idx > MAX_LITERAL_SIZE) {
 				applog(LOG_ERR, "Syntax Error - Invalid Literal: '%s'  Line: %d", literal, line_num);
+				delete_token_list(token_list); // free up memory as much as we can
 				return false;
 			}
 		}
 	}
 
-	if (!validate_tokens(token_list))
+	if (!validate_tokens(token_list)){
+		delete_token_list(token_list); // free up memory as much as we can
 		return false;
+	}
+
 
 	//if (opt_debug_epl)
 	//	dump_token_list(token_list);

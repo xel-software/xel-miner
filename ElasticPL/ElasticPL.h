@@ -320,7 +320,7 @@ ast **stack_exp;	// List Of Expresions For Parsing / Final Expression List
 
 // Function Declarations
 extern bool create_epl_ast(char *source);
-
+extern void revert_token_list();
 extern bool init_token_list(SOURCE_TOKEN_LIST *token_list, size_t size);
 static DATA_TYPE validate_literal(char *str);
 static bool validate_tokens(SOURCE_TOKEN_LIST *token_list);

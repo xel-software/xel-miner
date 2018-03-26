@@ -145,6 +145,8 @@ uint32_t g_pow_discarded_cnt = 0;
 
 int work_thr_id;
 struct thr_info *thr_info;
+struct thr_info *thr_deadswitch = NULL;
+
 struct work_restart *work_restart = NULL;
 
 #ifdef USE_OPENCL
@@ -301,6 +303,7 @@ static void parse_cmdline(int argc, char *argv[])
 	if (optind < argc) {
 		fprintf(stderr, "%s: unsupported non-option argument -- '%s'\n",
 			argv[0], argv[optind]);
+		free_up();
 		show_usage_and_exit(1);
 	}
 }
@@ -313,7 +316,7 @@ static void strhide(char *s)
 
 void parse_arg(int key, char *arg)
 {
-	char *p, *ap, *nm;
+	char *p = NULL, *ap = NULL, *nm = NULL;
 	int v, i;
 	uint64_t xx;
 
@@ -330,6 +333,7 @@ void parse_arg(int key, char *arg)
 		applog(LOG_ERR, "Ignoremask has been set to '%s'", arg);
 		break;
 	case 'h':
+	  free_up();
 		show_usage_and_exit(0);
 	case 'm':
 		for (i = 0; i < PREF_COUNT; i++) {
@@ -341,12 +345,14 @@ void parse_arg(int key, char *arg)
 		}
 		if (i == PREF_COUNT) {
 			applog(LOG_ERR, "Unknown mining preference '%s'", arg);
+			free_up();
 			show_usage_and_exit(1);
 		}
 		if (opt_pref == PREF_WORKID) {
 			p = strchr(arg, ':');
 			if (!p) {
 				fprintf(stderr, "Invalid MiningPreference:ID pair -- '%s'\n", arg);
+				free_up();
 				show_usage_and_exit(1);
 			}
 			if (p)
@@ -360,6 +366,7 @@ void parse_arg(int key, char *arg)
 		if (ap != arg) {
 			if (strncasecmp(arg, "http://", 7) && strncasecmp(arg, "https://", 8)) {
 				fprintf(stderr, "ERROR: Invalid protocol -- '%s'\n", arg);
+				free_up();
 				show_usage_and_exit(1);
 			}
 			free(rpc_url);
@@ -368,6 +375,7 @@ void parse_arg(int key, char *arg)
 		else {
 			if (*ap == '\0' || *ap == '/') {
 				fprintf(stderr, "ERROR: Invalid URL -- '%s'\n", arg);
+				free_up();
 				show_usage_and_exit(1);
 			}
 			free(rpc_url);
@@ -420,38 +428,50 @@ void parse_arg(int key, char *arg)
 		break;
 	case 'r':
 		v = atoi(arg);
-		if (v < -1 || v > 9999)
+		if (v < -1 || v > 9999){
+			free_up();
 			show_usage_and_exit(1);
+		}
 		opt_retries = v;
 		break;
 	case 1021:
 		v = atoi(arg);
-		if (v < -1 || v > 9999)
+		if (v < -1 || v > 9999){
+			free_up();
 			show_usage_and_exit(1);
+		}
 		opt_limit_storage = v;
 		break;
 	case 'R':
 		v = atoi(arg);
-		if (v < 1 || v > 9999)
+		if (v < 1 || v > 9999){
+			free_up();
 			show_usage_and_exit(1);
+		}
 		opt_fail_pause = v;
 		break;
 	case 's':
 		v = atoi(arg);
-		if (v < 1 || v > 9999)
+		if (v < 1 || v > 9999){
+			free_up();
 			show_usage_and_exit(1);
+		}
 		opt_scantime = v;
 		break;
 	case 't':
 		v = atoi(arg);
-		if (v < 1 || v > 9999)
+		if (v < 1 || v > 9999){
+			free_up();
 			show_usage_and_exit(1);
+		}
 		opt_n_threads = v;
 		break;
 	case 'T':
 		v = atoi(arg);
-		if (v < 1 || v > 9999)
+		if (v < 1 || v > 9999){
+			free_up();
 			show_usage_and_exit(1);
+		}
 		opt_timeout = v;
 		break;
 	case 'u':
@@ -473,15 +493,19 @@ void parse_arg(int key, char *arg)
 		opt_protocol = true;
 		break;
 	case 1004:
-		if (!arg)
+		if (!arg){
+			free_up();
 			show_usage_and_exit(1);
+		}
 		test_filename = malloc(strlen(arg) + 1);
 		strcpy(test_filename, arg);
 		opt_test_miner = true;
 		break;
 	case 1005:
-		if (!arg)
+		if (!arg){
+			free_up();
 			show_usage_and_exit(1);
+		}
 		test_filename = malloc(strlen(arg) + 1);
 		strcpy(test_filename, arg);
 		opt_test_vm = true;
@@ -498,20 +522,26 @@ void parse_arg(int key, char *arg)
 		break;
 	case 1008:
 		v = atoi(arg);
-		if (v < 256 || v > 10240)
+		if (v < 256 || v > 10240){
+			free_up();
 			show_usage_and_exit(1);
+		}
 		opt_opencl_gthreads = v;
 		break;
 	case 1019:
 		v = atoi(arg);
-		if (v < 0)
+		if (v < 0){
+			free_up();
 			show_usage_and_exit(1);
+		}
 		opt_deadswitch = v;
 		break;
 	case 1009:
 		v = atoi(arg);
-		if (v < 1 || v > 256)
+		if (v < 1 || v > 256){
+			free_up();
 			show_usage_and_exit(1);
+		}
 		else
 			opt_opencl_vwidth = v;
 		break;
@@ -523,33 +553,43 @@ void parse_arg(int key, char *arg)
 		break;
 	case 1017:
 		xx = atol(arg);
-		if (v < 0)
+		if (v < 0){
+			free_up();
 			show_usage_and_exit(1);
+		}
 		opt_test_wcet_main = true;
 		opt_wcet_main = xx;
 		break;
 	case 1018:
 		xx = atol(arg);
-		if (v < 0)
+		if (v < 0){
+			free_up();
 			show_usage_and_exit(1);
+		}
 		opt_test_wcet_verify = true;
 		opt_wcet_verify = xx;
 		break;
 	case 1011:
-			if (!arg)
+			if (!arg){
+				free_up();
 				show_usage_and_exit(1);
+			}
 			xx = atol(arg);
 			var_test_block = xx;
 			break;
 	case 1012:
-			if (!arg)
+			if (!arg){
+				free_up();
 				show_usage_and_exit(1);
+			}
 			xx = atol(arg);
 			var_test_work = xx;
 			break;
 	case 1013:
-			if (!arg || strlen(arg)!=64)
-				show_usage_and_exit(1);
+			if (!arg || strlen(arg)!=64){
+					free_up();
+					show_usage_and_exit(1);
+				}
 
 			test_filename = malloc(strlen(arg) + 1);
 			const char *pos = test_filename;
@@ -561,8 +601,10 @@ void parse_arg(int key, char *arg)
 			}
 			break;
 	case 1014:
-					if (!arg || strlen(arg)!=64)
+					if (!arg || strlen(arg)!=64){
+						free_up();
 						show_usage_and_exit(1);
+					}
 
 					test_filename = malloc(strlen(arg) + 1);
 					const char *pos2 = test_filename;
@@ -575,8 +617,10 @@ void parse_arg(int key, char *arg)
 					}
 					break;
 	case 1015:
-					if (!arg || strlen(arg)!=32)
+					if (!arg || strlen(arg)!=32){
+						free_up();
 						show_usage_and_exit(1);
+					}
 
 					test_filename = malloc(strlen(arg) + 1);
 					const char *pos3 = test_filename;
@@ -592,6 +636,7 @@ void parse_arg(int key, char *arg)
 					var_test_target[3] = temp[12]<<24 | temp[13]<<16 | temp[14]<<8 | temp[15];
 					break;
 	default:
+		free_up();
 		show_usage_and_exit(1);
 	}
 }
@@ -793,14 +838,20 @@ static void *test_vm_thread(void *userdata) {
 	get_vm_input(&work);
 
 	applog(LOG_DEBUG, "DEBUG: Loading Test File '%s'", test_filename);
-	if (!load_test_file(test_filename, test_code))
+	if (!load_test_file(test_filename, test_code)){
+		free_up();
+		if(test_code)
+			free(test_code);
 		exit(EXIT_FAILURE);
+	}
 
 	// Convert The Source Code Into ElasticPL AST
 	if (!create_epl_ast(test_code)) {
 		applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
 		// let us clean the ast now
 		clean_up_ast();
+		if(test_code)
+			free(test_code);
 		exit(EXIT_FAILURE);
 	}
 
@@ -823,6 +874,8 @@ static void *test_vm_thread(void *userdata) {
 		applog(LOG_ERR, "ERROR: Unable to calculate WCET.  Exiting 'test_vm'\n");
 		// let us clean the ast now
 		clean_up_ast();
+		if(test_code)
+			free(test_code);
 		exit(EXIT_FAILURE);
 	}
 
@@ -833,6 +886,8 @@ static void *test_vm_thread(void *userdata) {
 				applog(LOG_ERR, "ERROR: The main WCET of %lu is above the threshold of %lu*20000. Your program is too complex! Exiting 'test_vm'", wcet, opt_wcet_main);
 				// let us clean the ast now
 				clean_up_ast();
+				if(test_code)
+					free(test_code);
 				exit(EXIT_FAILURE);
 			}else{
 				applog(LOG_DEBUG, "GOOD: The main WCET of %lu is below the threshold of %lu*20000.", wcet, opt_wcet_main);
@@ -845,6 +900,8 @@ static void *test_vm_thread(void *userdata) {
 				applog(LOG_ERR, "ERROR: The verify WCET of %lu is above the threshold of %lu*20000. Your program is too complex! Exiting 'test_vm'", wcet, opt_wcet_verify);
 				// let us clean the ast now
 				clean_up_ast();
+				if(test_code)
+					free(test_code);
 				exit(EXIT_FAILURE);
 			}else{
 				applog(LOG_DEBUG, "GOOD: The verify WCET of %lu is below the threshold of %lu*20000.", wcet, opt_wcet_verify);
@@ -860,6 +917,8 @@ static void *test_vm_thread(void *userdata) {
 			applog(LOG_ERR, "ERROR: Unable to convert 'source' to OpenC.  Exiting 'test_vm'\n");
 			// let us clean the ast now
 			clean_up_ast();
+			if(test_code)
+				free(test_code);
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -868,6 +927,8 @@ static void *test_vm_thread(void *userdata) {
 			applog(LOG_ERR, "ERROR: Unable to convert 'source' to C.  Exiting 'test_vm'\n");
 			// let us clean the ast now
 			clean_up_ast();
+			if(test_code)
+				free(test_code);
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -908,6 +969,9 @@ static void *test_vm_thread(void *userdata) {
 			errno = 0;
 			if (getline(&line, &size, stdin) == -1) {
 				applog(LOG_ERR, "ERROR: Your provided only %d storage lines in stdin. This is not enough, should be %d.", counter, g_work_package[0].storage_sz);
+				free_up();
+				if(test_code)
+					free(test_code);
 				exit(EXIT_FAILURE);
 			} else {
 				uint32_t val = (uint32_t)strtoul(line, &ptr, 10);
@@ -944,7 +1008,8 @@ static void *test_vm_thread(void *userdata) {
 		(g_work_package[0].vm_floats && !vm_f) ||
 		(g_work_package[0].vm_doubles && !vm_d) ||
 		(g_work_package[0].storage_sz && !vm_s)) {
-
+			if(test_code)
+				free(test_code);
 		applog(LOG_ERR, "%s: Unable to allocate VM memory", "'test-vm'");
 		exit(EXIT_FAILURE);
 	}
@@ -1067,6 +1132,7 @@ static void *test_vm_thread(void *userdata) {
 		if (opt_validate_work) {
 			if (!validate_work_source(0, inst)) {
 				applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
+				free_up();
 				exit(EXIT_FAILURE);
 			}
 		}
@@ -3133,6 +3199,11 @@ static void free_up(){
 		if(work_restart)
 			free(work_restart);
 
+
+		if(thr_deadswitch){
+			tq_free(thr_deadswitch->q);
+			free(thr_deadswitch);
+		}
 }
 
 static int thread_create(struct thr_info *thr, void* func)
@@ -3145,7 +3216,7 @@ static int thread_create(struct thr_info *thr, void* func)
 }
 
 int main(int argc, char **argv) {
-	struct thr_info *thr, *thr_deadswitch = NULL;
+	struct thr_info *thr;
 	int i, err, thr_idx, num_gpus = 0;
 
 	fprintf(stdout, "** Elastic Compute Engine **\n");

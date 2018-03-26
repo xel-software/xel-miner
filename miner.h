@@ -226,6 +226,7 @@ struct instance {
 
 extern bool use_colors;
 extern struct thr_info *thr_info;
+extern struct thr_info *thr_deadswitch;
 extern pthread_mutex_t applog_lock;
 extern pthread_mutex_t response_lock;
 
@@ -368,7 +369,7 @@ extern bool ascii85dec(unsigned char *str, int strsz, const char *ascii85);
 static void databuf_free(struct data_buffer *db);
 static size_t all_data_cb(const void *ptr, size_t size, size_t nmemb, void *user_data);
 extern json_t* json_rpc_call(CURL *curl, const char *url, const char *userpass, const char *req, int *curl_err);
-
+static void free_up();
 extern unsigned long genrand_int32(void);
 extern void init_genrand(unsigned long s);
 
