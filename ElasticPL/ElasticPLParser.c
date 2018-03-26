@@ -934,10 +934,19 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 				exp = add_exp(NODE_PARAM, EXP_EXPRESSION, false, false, 0, 0, 0.0, NULL, 0, 0, DT_NONE, left, right);
 				push_exp(exp);
 			}
+
+			// do not forget to free left
+			if(left) free(left);
+
 			left = NULL;
 			right = pop_exp();
 		}
 		else {
+
+			// do not forget to free left=right
+			if(left) free(left);
+			if(right) free(right);
+
 			left = NULL;
 			right = NULL;
 		}
