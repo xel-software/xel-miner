@@ -712,7 +712,7 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 
 	node_type = get_node_type(token, token_num);
 	data_type = token->data_type;
-	
+
 	// Map Token To Node Type
 	if (node_type == NODE_ERROR) {
 		applog(LOG_ERR, "Unknown Token in ElasticPL Source.  Line: %d, Token Type: %d", token->line_num, token->type);
@@ -767,7 +767,7 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 						val_uint64 = strtoull(&token->literal[2], NULL, 16);
 					}
 
-					// Convert Binary Numbers
+					// Convert Binary Npop_expumbers
 					else if ((len > 2) && (token->literal[0] == '0') && (token->literal[1] == 'b')) {
 						if (len > 66) {
 							applog(LOG_ERR, "Syntax Error: Line: %d - Binary value exceeds 64 bits (%s, len %d)", token->line_num, token->literal, len);
@@ -847,6 +847,8 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 			// Remove Expression For Variables w/ Constant Index
 			if (node_type == NODE_VAR_CONST) {
 				val_uint64 = left->uvalue;
+				// never forget to free Left
+				clean_up_ast_internal(left, false);
 				left = NULL;
 			}
 
@@ -868,7 +870,7 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 			right = pop_exp();
 			left = pop_exp();
 		}
-		
+
 		break;
 
 	case EXP_STATEMENT:
@@ -878,6 +880,8 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 			left = pop_exp();
 			if (node_type == NODE_CALL_FUNCTION) {
 				svalue = &left->svalue[0];
+				// left can be freed now
+				clean_up_ast_internal(left, true);
 				left = NULL;
 			}
 		}
@@ -889,10 +893,12 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 				right = pop_exp();
 			left = pop_exp();
 
-if (node_type == NODE_FUNCTION) {
-	svalue = left->svalue;
-	left = NULL;
-}
+		if (node_type == NODE_FUNCTION) {
+			svalue = left->svalue;
+			// also here, dont forget to free left before losing it
+			clean_up_ast_internal(left, true);
+			left = NULL;
+		}
 		}
 		// Repeat Statements
 		else if (node_type == NODE_REPEAT) {
@@ -940,13 +946,14 @@ if (node_type == NODE_FUNCTION) {
 	exp = add_exp(node_type, token->exp, is_vm_mem, is_vm_storage, val_int64, val_uint64, val_double, svalue, token_num, token->line_num, data_type, left, right);
 
 	// Update The "End Statement" Indicator For If/Else/Repeat/Block/Function/Result
-	if ((exp->type == NODE_IF) || (exp->type == NODE_ELSE) || (exp->type == NODE_REPEAT) || (exp->type == NODE_BLOCK) || (exp->type == NODE_FUNCTION) || (exp->type == NODE_VERIFY_BTY) || (exp->type == NODE_VERIFY_POW))
-		exp->end_stmnt = true;
-
-	if (exp)
+	if (exp) { // dont segfault here please
+		if ((exp->type == NODE_IF) || (exp->type == NODE_ELSE) || (exp->type == NODE_REPEAT) || (exp->type == NODE_BLOCK) || (exp->type == NODE_FUNCTION) || (exp->type == NODE_VERIFY_BTY) || (exp->type == NODE_VERIFY_POW))
+			exp->end_stmnt = true;
 		push_exp(exp);
-	else
+	}
+	else {
 		return false;
+	}
 
 	return true;
 }
@@ -1048,7 +1055,7 @@ extern bool parse_token_list(SOURCE_TOKEN_LIST *token_list) {
 				return false;
 			}
 
-			// Set TOKEN_VAR_END To Match Data Type 
+			// Set TOKEN_VAR_END To Match Data Type
 			token_list->token[i].data_type = token_list->token[stack_op[stack_op_idx]].data_type;
 
 			pop_op();
@@ -1197,7 +1204,7 @@ extern bool parse_token_list(SOURCE_TOKEN_LIST *token_list) {
 
 static bool validate_ast() {
 	int i, submit_sz_idx = 0, submit_idx_idx = 0;
-	
+
 	ast_func_idx = 0;
 
 	if ((stack_exp_idx < 0) || (stack_op_idx >= 0)) {

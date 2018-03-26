@@ -799,6 +799,8 @@ static void *test_vm_thread(void *userdata) {
 	// Convert The Source Code Into ElasticPL AST
 	if (!create_epl_ast(test_code)) {
 		applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
+		// let us clean the ast now
+		clean_up_ast();
 		exit(EXIT_FAILURE);
 	}
 
@@ -819,30 +821,36 @@ static void *test_vm_thread(void *userdata) {
 	// Calculate WCET
 	if (!calc_wcet()) {
 		applog(LOG_ERR, "ERROR: Unable to calculate WCET.  Exiting 'test_vm'\n");
+		// let us clean the ast now
+		clean_up_ast();
 		exit(EXIT_FAILURE);
 	}
 
-	uint64_t wcet = 0;	
+	uint64_t wcet = 0;
 	if(opt_test_wcet_main){
 		wcet = get_main_wcet();
 			if(wcet > opt_wcet_main*20000){
 				applog(LOG_ERR, "ERROR: The main WCET of %lu is above the threshold of %lu*20000. Your program is too complex! Exiting 'test_vm'", wcet, opt_wcet_main);
+				// let us clean the ast now
+				clean_up_ast();
 				exit(EXIT_FAILURE);
 			}else{
 				applog(LOG_DEBUG, "GOOD: The main WCET of %lu is below the threshold of %lu*20000.", wcet, opt_wcet_main);
 			}
 	}
-	
+
 	if(opt_test_wcet_verify){
 		wcet = get_verify_wcet();
 			if(wcet > opt_wcet_verify*20000){
 				applog(LOG_ERR, "ERROR: The verify WCET of %lu is above the threshold of %lu*20000. Your program is too complex! Exiting 'test_vm'", wcet, opt_wcet_verify);
+				// let us clean the ast now
+				clean_up_ast();
 				exit(EXIT_FAILURE);
 			}else{
 				applog(LOG_DEBUG, "GOOD: The verify WCET of %lu is below the threshold of %lu*20000.", wcet, opt_wcet_verify);
 			}
 	}
-	
+
 	applog(LOG_DEBUG, "DEBUG: storage size: %d", ast_submit_sz);
 
 	// Convert The ElasticPL Source Into a C or OpenCL Program
@@ -850,15 +858,22 @@ static void *test_vm_thread(void *userdata) {
 	if (opt_opencl) {
 		if (!create_opencl_source(work_package.work_str)) {
 			applog(LOG_ERR, "ERROR: Unable to convert 'source' to OpenC.  Exiting 'test_vm'\n");
+			// let us clean the ast now
+			clean_up_ast();
 			exit(EXIT_FAILURE);
 		}
 	}
 	else {
 		if (!convert_ast_to_c(work_package.work_str)) {
 			applog(LOG_ERR, "ERROR: Unable to convert 'source' to C.  Exiting 'test_vm'\n");
+			// let us clean the ast now
+			clean_up_ast();
 			exit(EXIT_FAILURE);
 		}
 	}
+
+	// let us clean the ast now
+	clean_up_ast();
 
 	// Add Work Package To Global List
 	work_package.active = true;
@@ -912,12 +927,12 @@ static void *test_vm_thread(void *userdata) {
 				else if (errno == 0 && line && *ptr != 0)
 					{ applog(LOG_ERR, "ERROR: number : %lu    valid  (but additional characters remain)\n", val); exit(EXIT_FAILURE); }*/
 
-				
+
 				vm_s[counter] = val;
 				counter++;
 
 			}
-			
+
 		}
 		applog(LOG_DEBUG, "DEBUG: We have successfully read %d items from stdin and placed them into vm_s.", g_work_package[0].storage_sz);
 	}

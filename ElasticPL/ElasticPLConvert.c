@@ -1,8 +1,8 @@
 /*
 * Copyright 2016 sprocket
 *
-* This program is free software; you can redistribute it and/or modify it
-* under the terms of the GNU General Public License as published by the Free
+* This program is  software; you can redistribute it and/or modify it
+* under the terms of the GNU General Public License as published by the
 * Software Foundation; either version 2 of the License, or (at your option)
 * any later version.
 */
@@ -30,7 +30,9 @@ int tabs;
 
 
 static void push_code(char *str) {
-	stack_code[stack_code_idx++] = str;
+	stack_code[stack_code_idx] = (char*)calloc(sizeof(char),strlen(str)+1);
+	strncpy(stack_code[stack_code_idx], str, strlen(str));
+	stack_code_idx++;
 }
 
 static char* pop_code() {
@@ -209,7 +211,7 @@ extern bool convert_ast_to_opencl(FILE* f) {
 		for (j = 0; j < stack_code_idx; j++) {
 			if (stack_code[j]) {
 				fprintf(f, "%s", stack_code[j]);
-				free(stack_code[j]);
+				(stack_code[j]);
 				stack_code[j] = NULL;
 			}
 		}
@@ -335,8 +337,13 @@ static bool convert_node(ast* node) {
 	case NODE_FUNCTION:
 		str = malloc(350);
 		if (!strcmp(node->svalue, "main")) {
-			if (opt_opencl)
+			if (opt_opencl){
+				if(str){
+					free(str);
+					str = NULL;
+				}
 				return true;
+			}
 			else
 				sprintf(str, "void %s_%s(uint32_t *bounty_found, uint32_t verify_pow, uint32_t *pow_found, uint32_t *target, uint32_t *hash) {\n", node->svalue, job_suffix);
 		}
@@ -418,11 +425,11 @@ static bool convert_node(ast* node) {
 		switch (node->data_type) {
 		case DT_INT:
 		case DT_LONG:
-			sprintf(str, "%lld", node->ivalue);
+			sprintf(str, "%ld", node->ivalue);
 			break;
 		case DT_UINT:
 		case DT_ULONG:
-			sprintf(str, "%llu", node->uvalue);
+			sprintf(str, "%lu", node->uvalue);
 			break;
 		case DT_FLOAT:
 		case DT_DOUBLE:
@@ -430,6 +437,10 @@ static bool convert_node(ast* node) {
 			break;
 		default:
 			applog(LOG_ERR, "Compiler Error: Invalid constant at Line: %d", node->line_num);
+			if(str) {
+				free(str);
+				str = NULL;
+			}
 			return false;
 		}
 		break;
@@ -437,30 +448,34 @@ static bool convert_node(ast* node) {
 		str = malloc(30);
 		switch (node->data_type) {
 		case DT_INT:
-			sprintf(str, "i[%llu]", ((node->uvalue >= ast_vm_ints) ? 0 : node->uvalue));
+			sprintf(str, "i[%lu]", ((node->uvalue >= ast_vm_ints) ? 0 : node->uvalue));
 			break;
 		case DT_UINT:
 			if (node->is_vm_mem)
-				sprintf(str, "m[%llu]", ((node->uvalue >= ast_vm_uints) ? 0 : node->uvalue));
+				sprintf(str, "m[%lu]", ((node->uvalue >= ast_vm_uints) ? 0 : node->uvalue));
 			else if (node->is_vm_storage)
-				sprintf(str, "s[%llu]", ((node->uvalue >= ast_vm_uints) ? 0 : node->uvalue));
+				sprintf(str, "s[%lu]", ((node->uvalue >= ast_vm_uints) ? 0 : node->uvalue));
 			else
-				sprintf(str, "u[%llu]", ((node->uvalue >= ast_vm_uints) ? 0 : node->uvalue));
+				sprintf(str, "u[%lu]", ((node->uvalue >= ast_vm_uints) ? 0 : node->uvalue));
 			break;
 		case DT_LONG:
-			sprintf(str, "l[%llu]", ((node->uvalue >= ast_vm_longs) ? 0 : node->uvalue));
+			sprintf(str, "l[%lu]", ((node->uvalue >= ast_vm_longs) ? 0 : node->uvalue));
 			break;
 		case DT_ULONG:
-			sprintf(str, "ul[%llu]", ((node->uvalue >= ast_vm_ulongs) ? 0 : node->uvalue));
+			sprintf(str, "ul[%lu]", ((node->uvalue >= ast_vm_ulongs) ? 0 : node->uvalue));
 			break;
 		case DT_FLOAT:
-			sprintf(str, "f[%llu]", ((node->uvalue >= ast_vm_floats) ? 0 : node->uvalue));
+			sprintf(str, "f[%lu]", ((node->uvalue >= ast_vm_floats) ? 0 : node->uvalue));
 			break;
 		case DT_DOUBLE:
-			sprintf(str, "d[%llu]", ((node->uvalue >= ast_vm_doubles) ? 0 : node->uvalue));
+			sprintf(str, "d[%lu]", ((node->uvalue >= ast_vm_doubles) ? 0 : node->uvalue));
 			break;
 		default:
 			applog(LOG_ERR, "Compiler Error: Invalid variable at Line: %d", node->line_num);
+			if(str){
+				free(str);
+				str = NULL;
+			}
 			return false;
 		}
 		break;
@@ -473,56 +488,60 @@ static bool convert_node(ast* node) {
 		switch (node->data_type) {
 		case DT_INT:
 			if (var_exp_flg)
-				sprintf(str, "if((%s) < %lu)\n\t%si[%s]", lstr, ast_vm_ints, tab[tabs], lstr);
+				sprintf(str, "if((%s) < %u)\n\t%si[%s]", lstr, ast_vm_ints, tab[tabs], lstr);
 			else
-				sprintf(str, "i[(((%s) < %lu) ? %s : 0)]", lstr, ast_vm_ints, lstr);
+				sprintf(str, "i[(((%s) < %u) ? %s : 0)]", lstr, ast_vm_ints, lstr);
 			break;
 		case DT_UINT:
 			if (node->is_vm_mem) {
 				if (var_exp_flg)
-					sprintf(str, "if((%s) < %lu)\n\t%sm[%s]", lstr, VM_M_ARRAY_SIZE, tab[tabs], lstr);
+					sprintf(str, "if((%s) < %u)\n\t%sm[%s]", lstr, VM_M_ARRAY_SIZE, tab[tabs], lstr);
 				else
-					sprintf(str, "m[(((%s) < %lu) ? %s : 0)]", lstr, VM_M_ARRAY_SIZE, lstr);
+					sprintf(str, "m[(((%s) < %u) ? %s : 0)]", lstr, VM_M_ARRAY_SIZE, lstr);
 			}
 			else if (node->is_vm_storage) {
 				if (var_exp_flg)
-					sprintf(str, "if((%s) < %lu)\n\t%ss[%s]", lstr, ast_submit_sz, tab[tabs], lstr);
+					sprintf(str, "if((%s) < %u)\n\t%ss[%s]", lstr, ast_submit_sz, tab[tabs], lstr);
 				else
-					sprintf(str, "s[(((%s) < %lu) ? %s : 0)]", lstr, ast_submit_sz, lstr);
+					sprintf(str, "s[(((%s) < %u) ? %s : 0)]", lstr, ast_submit_sz, lstr);
 			}
 			else {
 				if (var_exp_flg)
-					sprintf(str, "if((%s) < %lu)\n\t%su[%s]", lstr, ast_vm_uints, tab[tabs], lstr);
+					sprintf(str, "if((%s) < %u)\n\t%su[%s]", lstr, ast_vm_uints, tab[tabs], lstr);
 				else
-					sprintf(str, "u[(((%s) < %lu) ? %s : 0)]", lstr, ast_vm_uints, lstr);
+					sprintf(str, "u[(((%s) < %u) ? %s : 0)]", lstr, ast_vm_uints, lstr);
 			}
 			break;
 		case DT_LONG:
 			if (var_exp_flg)
-				sprintf(str, "if((%s) < %lu)\n\t%sl[%s]", lstr, ast_vm_longs, tab[tabs], lstr);
+				sprintf(str, "if((%s) < %u)\n\t%sl[%s]", lstr, ast_vm_longs, tab[tabs], lstr);
 			else
-				sprintf(str, "l[(((%s) < %lu) ? %s : 0)]", lstr, ast_vm_longs, lstr);
+				sprintf(str, "l[(((%s) < %u) ? %s : 0)]", lstr, ast_vm_longs, lstr);
 			break;
 		case DT_ULONG:
 			if (var_exp_flg)
-				sprintf(str, "if((%s) < %lu)\n\t%sul[%s]", lstr, ast_vm_ulongs, tab[tabs], lstr);
+				sprintf(str, "if((%s) < %u)\n\t%sul[%s]", lstr, ast_vm_ulongs, tab[tabs], lstr);
 			else
-				sprintf(str, "ul[(((%s) < %lu) ? %s : 0)]", lstr, ast_vm_ulongs, lstr);
+				sprintf(str, "ul[(((%s) < %u) ? %s : 0)]", lstr, ast_vm_ulongs, lstr);
 			break;
 		case DT_FLOAT:
 			if (var_exp_flg)
-				sprintf(str, "if((%s) < %lu)\n\t%sf[%s]", lstr, ast_vm_floats, tab[tabs], lstr);
+				sprintf(str, "if((%s) < %u)\n\t%sf[%s]", lstr, ast_vm_floats, tab[tabs], lstr);
 			else
-				sprintf(str, "f[(((%s) < %lu) ? %s : 0)]", lstr, ast_vm_floats, lstr);
+				sprintf(str, "f[(((%s) < %u) ? %s : 0)]", lstr, ast_vm_floats, lstr);
 			break;
 		case DT_DOUBLE:
 			if (var_exp_flg)
-				sprintf(str, "if((%s) < %lu)\n\t%sd[%s]", lstr, ast_vm_doubles, tab[tabs], lstr);
+				sprintf(str, "if((%s) < %u)\n\t%sd[%s]", lstr, ast_vm_doubles, tab[tabs], lstr);
 			else
-				sprintf(str, "d[(((%s) < %lu) ? %s : 0)]", lstr, ast_vm_doubles, lstr);
+				sprintf(str, "d[(((%s) < %u) ? %s : 0)]", lstr, ast_vm_doubles, lstr);
 			break;
 		default:
 			applog(LOG_ERR, "Compiler Error: Invalid variable at Line: %d", node->line_num);
+			if(str) {
+				free(str);
+				str = NULL;
+			}
 			return false;
 		}
 		break;
@@ -544,7 +563,7 @@ static bool convert_node(ast* node) {
 	case NODE_REPEAT:
 		str = malloc(strlen(lstr) + 256);
 		if (tabs < 1) tabs = 1;
-		sprintf(str, "%sint loop%d;\n%sfor (loop%d = 0; loop%d < (%s); loop%d++) {\n%s\tif (loop%d >= %lld) break;\n%s\tu[%lld] = loop%d;\n", tab[tabs - 1], node->token_num, tab[tabs - 1], node->token_num, node->token_num, lstr, node->token_num, tab[tabs - 1], node->token_num, node->ivalue, tab[tabs - 1], node->uvalue, node->token_num);
+		sprintf(str, "%sint loop%d;\n%sfor (loop%d = 0; loop%d < (%s); loop%d++) {\n%s\tif (loop%d >= %ld) break;\n%s\tu[%ld] = loop%d;\n", tab[tabs - 1], node->token_num, tab[tabs - 1], node->token_num, node->token_num, lstr, node->token_num, tab[tabs - 1], node->token_num, node->ivalue, tab[tabs - 1], node->uvalue, node->token_num);
 		break;
 	case NODE_BLOCK:
 		str = malloc(1000);
@@ -571,7 +590,7 @@ static bool convert_node(ast* node) {
 				sprintf(str, "%s}\n", tab[0]);
 		}
 		else if ((node->parent->type == NODE_ELSE) && (node == node->parent->right)) {
-			sprintf(str, "");
+			str[0] = 0; // better than sprintf zero length string
 		}
 		else {
 			if (tabs > 0)
@@ -597,7 +616,10 @@ static bool convert_node(ast* node) {
 		}
 		str = malloc(strlen(lstr) + strlen(rstr) + strlen(tmp) + 25);
 		sprintf(str, "((%s) ? (%s) : (%s))", tmp, lstr, rstr);
-		free(tmp);
+		if(tmp){
+			free(tmp);
+			tmp = NULL;
+		}
 		break;
 
 	case NODE_COND_ELSE:
@@ -873,12 +895,22 @@ static bool convert_node(ast* node) {
 	// Terminate Statements
 	if (node->end_stmnt && (node->type != NODE_IF) && (node->type != NODE_ELSE) && (node->type != NODE_REPEAT) && (node->type != NODE_BLOCK) && (node->type != NODE_FUNCTION)) {
 		tmp = malloc(strlen(str) + 20);
+
 		sprintf(tmp, "%s%s;\n", tab[tabs], str);
-		free(str);
 		push_code(tmp);
+		if(tmp){
+			free(tmp);
+			tmp = NULL;
+		}
 	}
 	else {
 		push_code(str);
+	}
+
+	if(str)
+	{
+		free(str);
+		str = NULL;
 	}
 
 	return true;
@@ -1011,6 +1043,8 @@ static bool get_node_inputs(ast* node, char **lstr, char **rstr) {
 		*rstr = pop_code();
 		*lstr = pop_code();
 		if (!lstr || !rstr) {
+			if(lstr) { free(lstr); lstr=NULL; }
+			if(rstr) { free(rstr); rstr=NULL; }
 			applog(LOG_ERR, "Compiler Error: Corupted code stack at Line: %d", node->line_num);
 			return false;
 		}
@@ -1022,11 +1056,20 @@ static bool get_node_inputs(ast* node, char **lstr, char **rstr) {
 		tmp[2] = pop_code();
 		tmp[3] = pop_code();
 		if (!tmp[0] | !tmp[1] | !tmp[2] | !tmp[3] ) {
+
+			if(tmp[0]) { free(tmp[0]); tmp[0]=NULL; }
+			if(tmp[1]) { free(tmp[1]); tmp[1]=NULL; }
+			if(tmp[2]) { free(tmp[2]); tmp[2]=NULL; }
+			if(tmp[3]) { free(tmp[3]); tmp[3]=NULL; }
 			applog(LOG_ERR, "Compiler Error: Corupted code stack at Line: %d", node->line_num);
 			return false;
 		}
 		*lstr = malloc(sizeof(tmp[0]) + sizeof(tmp[1]) + sizeof(tmp[2]) + sizeof(tmp[3]) + 10);
 		sprintf(*lstr, "%s,%s,%s,%s", tmp[3], tmp[2], tmp[1], tmp[0]);
+		if(tmp[0]) { free(tmp[0]); tmp[0]=NULL; }
+		if(tmp[1]) { free(tmp[1]); tmp[1]=NULL; }
+		if(tmp[2]) { free(tmp[2]); tmp[2]=NULL; }
+		if(tmp[3]) { free(tmp[3]); tmp[3]=NULL; }
 		break;
 
 	case NODE_ELSE:

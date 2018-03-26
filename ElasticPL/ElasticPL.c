@@ -78,7 +78,7 @@ extern bool create_epl_ast(char *source) {
 	// Reset Storage Variables
 	ast_submit_sz = 0;
 	ast_submit_idx = 0;
-	
+
 	// Parse EPL Source Code Into Tokens
 	if (!get_token_list(source, &token_list)) {
 		return false;
@@ -89,6 +89,9 @@ extern bool create_epl_ast(char *source) {
 		applog(LOG_ERR, "ERROR: Unable To Parse ElasticPL Tokens!");
 		return false;
 	}
+
+	// And free up the tokenslist
+	delete_token_list(&token_list);
 
 	/*if (opt_debug_epl) {
 		fprintf(stdout, "\n*********************************************************\n");
@@ -102,6 +105,7 @@ extern bool create_epl_ast(char *source) {
 
 	return true;
 }
+
 
 // Temporary - For Debugging Only
 extern void dump_vm_ast(ast* root) {
@@ -167,6 +171,25 @@ extern void dump_vm_ast(ast* root) {
 	}
 }
 
+void clean_up_ast_internal(ast* node, bool keep_svalue) {
+	if (node != NULL) {
+			 clean_up_ast_internal(node->right, false);
+			 clean_up_ast_internal(node->left, false);
+			 if(!keep_svalue && node->svalue){
+			     free(node->svalue);
+					 node->svalue = NULL;
+			 }
+			 free(node);
+  }
+}
+
+extern void clean_up_ast(){
+	int i;
+	for (i = 0; i <= stack_exp_idx; i++) {
+		clean_up_ast_internal(stack_exp[i], false);
+	}
+}
+
 static void print_node(ast* node) {
 	char val[18];
 	val[0] = 0;
@@ -181,34 +204,34 @@ static void print_node(ast* node) {
 		}
 		else {
 			if (node->is_signed)
-				printf("\tType: %d,\t%lld\t\t\t", node->type, node->ivalue);
+				printf("\tType: %d,\t%ld\t\t\t", node->type, node->ivalue);
 			else
-				printf("\tType: %d,\t%llu\t\t\t", node->type, node->uvalue);
+				printf("\tType: %d,\t%lu\t\t\t", node->type, node->uvalue);
 		}
 		break;
 	case NODE_VAR_CONST:
 		if (node->is_float) {
 			if (node->is_64bit)
-				printf("\tType: %d,\td[%llu]\t\t\t", node->type, node->uvalue);
+				printf("\tType: %d,\td[%lu]\t\t\t", node->type, node->uvalue);
 			else
-				printf("\tType: %d,\tf[%llu]\t\t\t", node->type, node->uvalue);
+				printf("\tType: %d,\tf[%lu]\t\t\t", node->type, node->uvalue);
 		}
 		else {
 			if (node->is_64bit) {
 				if (node->is_signed)
-					printf("\tType: %d,\tl[%llu]\t\t\t", node->type, node->uvalue);
+					printf("\tType: %d,\tl[%lu]\t\t\t", node->type, node->uvalue);
 				else
-					printf("\tType: %d,\tul[%llu]\t\t\t", node->type, node->uvalue);
+					printf("\tType: %d,\tul[%lu]\t\t\t", node->type, node->uvalue);
 			}
 			else {
 				if (node->is_signed) {
-					printf("\tType: %d,\ti[%llu]\t\t\t", node->type, node->uvalue);
+					printf("\tType: %d,\ti[%lu]\t\t\t", node->type, node->uvalue);
 				}
 				else {
 					if (node->is_vm_mem)
-						printf("\tType: %d,\tm[%llu]\t\t\t", node->type, node->uvalue);
+						printf("\tType: %d,\tm[%lu]\t\t\t", node->type, node->uvalue);
 					else
-						printf("\tType: %d,\tu[%llu]\t\t\t", node->type, node->uvalue);
+						printf("\tType: %d,\tu[%lu]\t\t\t", node->type, node->uvalue);
 				}
 			}
 		}
@@ -248,7 +271,7 @@ static void print_node(ast* node) {
 		printf("\tType: %d,\t%s()\t\t", node->type, node->svalue);
 		break;
 	case NODE_REPEAT:
-		printf("\tType: %d,\t%s (u[%llu], %lld)\t", node->type, get_node_str(node->type), node->uvalue, node->ivalue);
+		printf("\tType: %d,\t%s (u[%lu], %ld)\t", node->type, get_node_str(node->type), node->uvalue, node->ivalue);
 		break;
 	case NODE_BLOCK:
 		if (node->parent->type != NODE_FUNCTION)

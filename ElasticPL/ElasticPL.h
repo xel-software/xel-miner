@@ -341,6 +341,8 @@ static ast* add_exp(NODE_TYPE node_type, EXP_TYPE exp_type, bool is_vm_mem, bool
 extern char* get_node_str(NODE_TYPE node_type);
 extern void dump_vm_ast(ast* root);
 static void print_node(ast* node);
+extern void clean_up_ast_internal(ast* node, bool keep_svalue);
+extern void clean_up_ast();
 static bool validate_ast();
 static bool validate_functions();
 static bool validate_function_calls();
