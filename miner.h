@@ -381,4 +381,7 @@ extern bool create_opencl_source(char *work_str);
 extern void tohex(unsigned char * in, size_t insz, char * out, size_t outsz);
 int curve25519_donna(uint8_t *mypublic, const uint8_t *secret, const uint8_t *basepoint);
 
+extern char* strdupcs(const char* s);
+extern void clear_all_workpackages();
+
 #endif /* __MINER_H__ */

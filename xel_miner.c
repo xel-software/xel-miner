@@ -120,7 +120,7 @@ uint8_t *rpc_pass = NULL;
 uint8_t *rpc_userpass = NULL;
 uint8_t *passphrase = NULL;
 uint8_t publickey[32];
-uint8_t *test_filename;
+uint8_t *test_filename = NULL;
 
 struct timeval g_miner_start_time;
 struct work g_work = { 0 };
@@ -363,7 +363,7 @@ void parse_arg(int key, char *arg)
 				show_usage_and_exit(1);
 			}
 			free(rpc_url);
-			rpc_url = strdup(arg);
+			rpc_url = strdupcs(arg);
 		}
 		else {
 			if (*ap == '\0' || *ap == '/') {
@@ -383,11 +383,11 @@ void parse_arg(int key, char *arg)
 		break;
 	case 'p':
 		free(rpc_pass);
-		rpc_pass = strdup(arg);
+		rpc_pass = strdupcs(arg);
 		strhide(arg);
 		break;
 	case 'P':
-		passphrase = strdup(arg);
+		passphrase = strdupcs(arg);
 		strhide(arg);
 
 		// Generate publickey From Secret Phrase
@@ -456,7 +456,7 @@ void parse_arg(int key, char *arg)
 		break;
 	case 'u':
 		free(rpc_user);
-		rpc_user = strdup(arg);
+		rpc_user = strdupcs(arg);
 		break;
 	case 'v':
 		show_version_and_exit();
@@ -879,7 +879,7 @@ static void *test_vm_thread(void *userdata) {
 	work_package.active = true;
 	add_work_package(&work_package);
 
-	// Initialize Global Variables
+	// Inclean_up_ast();itialize Global Variables
 	vm_m = calloc(VM_M_ARRAY_SIZE, sizeof(uint32_t));
 	memcpy(vm_m, work.vm_input, VM_M_ARRAY_SIZE * sizeof(uint32_t));
 
@@ -1341,6 +1341,14 @@ static void update_pending_cnt(uint64_t work_id, bool add) {
 	}
 }
 
+extern void clear_all_workpackages(){
+	int i=0;
+	for(i=0; i<g_work_package_cnt; ++i){
+			if(g_work_package[i].storage)
+				free(g_work_package[i].storage);
+	}
+	free(g_work_package);
+}
 extern bool add_work_package(struct work_package *work_package) {
 	g_work_package = realloc(g_work_package, sizeof(struct work_package) * (g_work_package_cnt + 1));
 	if (!g_work_package) {
@@ -3099,6 +3107,34 @@ BOOL WINAPI ConsoleHandler(DWORD dwType)
 }
 #endif
 
+static void free_up(){
+
+	int i;
+
+		applog(LOG_DEBUG, "Cleaning up");
+		if (rpc_url) free(rpc_url);
+		if (rpc_user) free(rpc_user);
+		if (rpc_pass) free(rpc_pass);
+		if (test_filename)
+			free(test_filename);
+		clear_all_workpackages();
+
+		// now clear Threads
+		if(thr_info){
+			for(i=0; i<opt_n_threads + 3; ++i){
+					// clear theads
+					if(thr_info[i].q)
+						tq_free(thr_info[i].q);
+			}
+			free(thr_info);
+		}
+
+		// clear work restart
+		if(work_restart)
+			free(work_restart);
+
+}
+
 static int thread_create(struct thr_info *thr, void* func)
 {
 	int err = 0;
@@ -3164,17 +3200,20 @@ int main(int argc, char **argv) {
 	}
 
 	if (!rpc_url)
-		rpc_url = strdup("http://127.0.0.1:6876/nxt");
+		rpc_url = strdupcs("http://127.0.0.1:6876/nxt");
 
 	if (rpc_user && rpc_pass) {
 		rpc_userpass = (char*)malloc(strlen(rpc_user) + strlen(rpc_pass) + 2);
-		if (!rpc_userpass)
+		if (!rpc_userpass){
+			free_up();
 			return 1;
+		}
 		sprintf(rpc_userpass, "%s:%s", rpc_user, rpc_pass);
 	}
 
 	if (!opt_test_vm && !passphrase) {
 		applog(LOG_ERR, "ERROR: Passphrase (option -P) is required");
+		free_up();
 		return 1;
 	}
 
@@ -3194,25 +3233,32 @@ int main(int argc, char **argv) {
 #endif
 
 	work_restart = (struct work_restart*) calloc(opt_n_threads, sizeof(*work_restart));
-	if (!work_restart)
+	if (!work_restart){
+		free_up();
 		return 1;
+	}
 
 	thr_info = (struct thr_info*) calloc(opt_n_threads + 3, sizeof(*thr));
-	if (!thr_info)
+	if (!thr_info){
+		free_up();
 		return 1;
+	}
 
 	// In Test Compiler Mode, Run Parser / Complier Using Source Code From Test File
 	if (opt_test_vm) {
 		thr = &thr_info[0];
 		thr->id = 0;
 		thr->q = tq_new();
-		if (!thr->q)
+		if (!thr->q){
+			free_up();
 			return 1;
+		}
 
 		if(opt_deadswitch > 0){
 			thr_deadswitch = (struct thr_info*) calloc(1, sizeof(*thr_deadswitch));
 			if (thread_create(thr_deadswitch, deadswitch)) {
 				applog(LOG_ERR, "Test VM thread create failed!");
+				free_up();
 				return 1;
 			}
 
@@ -3220,6 +3266,7 @@ int main(int argc, char **argv) {
 
 		if (thread_create(thr, test_vm_thread)) {
 			applog(LOG_ERR, "Test VM thread create failed!");
+			free_up();
 			return 1;
 		}
 
@@ -3230,7 +3277,7 @@ int main(int argc, char **argv) {
 			pthread_mutex_unlock(&went_through_lock);
 			pthread_join(thr_deadswitch->pth, NULL);
 		}
-		free(test_filename);
+		free_up();
 		return 0;
 	}
 
@@ -3244,12 +3291,15 @@ int main(int argc, char **argv) {
 	thr = &thr_info[work_thr_id];
 	thr->id = work_thr_id;
 	thr->q = tq_new();
-	if (!thr->q)
+	if (!thr->q){
+		free_up();
 		return 1;
+	}
 
 	// Start workio Thread
 	if (thread_create(thr, workio_thread)) {
 		applog(LOG_ERR, "work thread create failed");
+		free_up();
 		return 1;
 	}
 
@@ -3263,8 +3313,10 @@ int main(int argc, char **argv) {
 
 		thr->id = thr_idx++;
 		thr->q = tq_new();
-		if (!thr->q)
+		if (!thr->q){
+			free_up();
 			return 1;
+		}
 		if (opt_opencl) {
 #ifdef USE_OPENCL
 			err = thread_create(thr, gpu_miner_thread);
@@ -3277,6 +3329,7 @@ int main(int argc, char **argv) {
 		}
 		if (err) {
 			applog(LOG_ERR, "%s mining thread create failed!", thr->name);
+			free_up();
 			return 1;
 		}
 	}
@@ -3289,10 +3342,13 @@ int main(int argc, char **argv) {
 	thr = &thr_info[opt_n_threads + 1];
 	thr->id = opt_n_threads + 1;
 	thr->q = tq_new();
-	if (!thr->q)
+	if (!thr->q){
+		free_up();
 		return 1;
+	}
 	if (thread_create(thr, longpoll_thread)) {
 		applog(LOG_ERR, "Longpoll thread create failed");
+		free_up();
 		return 1;
 	}
 
@@ -3300,20 +3356,22 @@ int main(int argc, char **argv) {
 	thr = &thr_info[opt_n_threads + 2];
 	thr->id = opt_n_threads + 2;
 	thr->q = tq_new();
-	if (!thr->q)
+	if (!thr->q){
+		free_up();
 		return 1;
+	}
 	if (thread_create(thr, key_monitor_thread)) {
 		applog(LOG_ERR, "Key monitor thread create failed");
+		free_up();
 		return 1;
 	}
 
 	// Main Loop - Wait for workio thread to exit
 	pthread_join(thr_info[work_thr_id].pth, NULL);
 
-	applog(LOG_WARNING, "Exiting " PACKAGE_NAME);
+	free_up();
 
-	if (test_filename)
-		free(test_filename);
+	applog(LOG_WARNING, "Exiting " PACKAGE_NAME);
 
 // TODO: Cleanup any still running threads on exit.
 

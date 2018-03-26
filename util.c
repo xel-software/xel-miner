@@ -42,6 +42,13 @@ struct thread_q *tq_new(void)
 	return tq;
 }
 
+char* strdupcs(const char* s){
+	char *d = malloc (strlen (s) + 1);   // Space for length plus nul
+  if (d == NULL) return NULL;          // No memory
+  strcpy (d,s);                        // Copy the characters
+  return d;
+}
+
 void tq_free(struct thread_q *tq) {
 	struct tq_ent *ent, *iter;
 
