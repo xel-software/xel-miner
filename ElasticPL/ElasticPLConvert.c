@@ -293,6 +293,7 @@ static bool convert_function(ast* root) {
 						str = malloc(25);
 						sprintf(str, "%s}\n", tab[tabs]);
 						push_code(str);
+						free(str);
 					}
 
 					// Indent Else Statements To Match Corresponding IF

@@ -188,6 +188,14 @@ extern void clean_up_ast(){
 	for (i = 0; i <= stack_exp_idx; i++) {
 		clean_up_ast_internal(stack_exp[i], false);
 	}
+	if(stack_exp){
+		free(stack_exp);
+		stack_exp=NULL;
+	}
+	if(stack_op){
+		free(stack_op);
+		stack_op=NULL;
+	}
 }
 
 static void print_node(ast* node) {

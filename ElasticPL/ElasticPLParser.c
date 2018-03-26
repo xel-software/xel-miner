@@ -911,7 +911,7 @@ static bool create_exp(SOURCE_TOKEN *token, int token_num) {
 			val_uint64 = tmp->uvalue;	// Loop Counter
 			clean_up_ast_internal(tmp, false);
 			tmp = NULL;
-			
+
 			if (val_int64 <= 0) {
 				applog(LOG_ERR, "Syntax Error: Line: %d - Invalid value for max iterations", token->line_num);
 				return false;
@@ -1139,8 +1139,8 @@ extern bool parse_token_list(SOURCE_TOKEN_LIST *token_list) {
 			left = stack_exp[stack_exp_idx]->left;
 			right = stack_exp[stack_exp_idx]->right;
 
-			// Remove If Expression From Stack
-			pop_exp();
+			// Remove If Expression From Stack (and free, but not deeply)
+			free(pop_exp());
 
 			// Return Left & Right Expressions Back To Stack
 			push_exp(left);
