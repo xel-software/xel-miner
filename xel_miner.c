@@ -2432,9 +2432,12 @@ static void *cpu_miner_thread(void *userdata) {
 				iteration = g_work_package[work.package_id].iteration_id;
 
 				// Copy New Storage Values To VM
-				if (g_work_package[work.package_id].storage_sz)
-					memcpy(vm_s, g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
-
+				if (g_work_package[work.package_id].storage_sz) {
+					if (g_work_package[work.package_id].storage_id < 0xFFFF)
+						memcpy(vm_s, g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
+					else
+						memset(vm_s, 0, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
+				}
 			}
 		}
 
