@@ -83,8 +83,8 @@ int opt_n_threads = 0;
 static enum prefs opt_pref = PREF_PROFIT;
 char pref_workid[32];
 bool opt_validate_work = false;
-static volatile bool g_pow_ignore = false;
-static volatile bool g_bounty_ignore = false;
+volatile bool g_pow_ignore = false;
+volatile bool g_bounty_ignore = false;
 
 int delay_sleep = 0;
 int ignore_mask = 0;
@@ -134,7 +134,7 @@ const uint8_t basepoint[32] = { 9 };
 
 struct submit_req *g_submit_req;
 int g_submit_req_cnt = 0;
-int g_new_block = false;
+volatile int g_new_block = false;
 
 uint32_t g_bounty_accepted_cnt = 0;
 uint32_t g_bounty_rejected_cnt = 0;
@@ -2073,10 +2073,12 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 				g_bounty_accepted_cnt++;
 			}
 			else if (strstr(err_desc, "limit of")) {
+				pthread_mutex_lock(&longpoll_lock);
 				if(!g_bounty_ignore)
 					applog(LOG_NOTICE, "%s: %s***** Bounty limit reached for this block, pausing until next block *****", thr_info[req->thr_id].name, CL_YLW);
 				g_bounty_rejected_cnt++;
 				g_bounty_ignore=true;
+				pthread_mutex_unlock(&longpoll_lock);
 			}
 			else {
 				applog(LOG_NOTICE, "%s: %s***** Bounty Rejected! (Probably a new block is currenly being broadcast) *****", thr_info[req->thr_id].name, CL_RED);
@@ -2101,10 +2103,12 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 				g_pow_discarded_cnt++;
 			}
 			else if (strstr(err_desc, "limit of")) {
+				pthread_mutex_lock(&longpoll_lock);
 				if(!g_pow_ignore)
 					applog(LOG_NOTICE, "%s: %s***** POW limit reached for this block, pausing until next block *****", thr_info[req->thr_id].name, CL_YLW);
 				g_pow_discarded_cnt++;
 				g_pow_ignore=true;
+				pthread_mutex_unlock(&longpoll_lock);
 			}
 			else {
 				applog(LOG_NOTICE, "%s: %s***** POW Rejected! (Probably a new block is currenly being broadcast) *****", thr_info[req->thr_id].name, CL_RED);
@@ -2322,9 +2326,11 @@ static void *cpu_miner_thread(void *userdata) {
 	gettimeofday((struct timeval *) &tv_start, NULL);
 
 	while (1) {
-
-		if(g_pow_ignore && g_bounty_ignore){
-			printf("WAITING ig_pow %d, ig_bty %d\n",g_pow_ignore,g_bounty_ignore);
+		pthread_mutex_lock(&longpoll_lock);
+		bool res = g_pow_ignore && g_bounty_ignore;
+		pthread_mutex_unlock(&longpoll_lock);
+		if(res){
+			printf("WAITING\n");
 			sleep(1);
 			continue;
 			// do not work if there is not chance to submit anyway
@@ -2450,7 +2456,10 @@ static void *cpu_miner_thread(void *userdata) {
 		}
 
 		// Submit Work That Meets Bounty Criteria
-		if (g_bounty_ignore==false && (rc == 1 && (ignore_mask&2)==0)) {
+		pthread_mutex_lock(&longpoll_lock);
+		bool ign = g_bounty_ignore;
+		pthread_mutex_unlock(&longpoll_lock);
+		if (ign==false && (rc == 1 && (ignore_mask&2)==0)) {
 
 			if(delay_sleep>0)
 				sleep(delay_sleep);
@@ -2486,7 +2495,10 @@ static void *cpu_miner_thread(void *userdata) {
 		}
 
 		// Submit Work That Meets POW Target
-		if (g_pow_ignore==false && (rc == 2 && (ignore_mask&1)==0)) {
+		pthread_mutex_lock(&longpoll_lock);
+		ign = g_pow_ignore;
+		pthread_mutex_unlock(&longpoll_lock);
+		if (ign==false && (rc == 2 && (ignore_mask&1)==0)) {
 
 			if(delay_sleep>0)
 				sleep(delay_sleep);
@@ -2494,11 +2506,14 @@ static void *cpu_miner_thread(void *userdata) {
 			applog(LOG_DEBUG, "CPU%d: Submitting POW Solution", thr_id);
 			applog(LOG_DEBUG, "DEBUG: Hash - %08X%08X%08X...  Tgt - %s", work.pow_hash[0], work.pow_hash[1], work.pow_hash[2], g_pow_target_str);
 			applog(LOG_DEBUG, "DEBUG: First 4 Inputs were: %d, %d, %d, %d", work.vm_input[0], work.vm_input[1], work.vm_input[2], work.vm_input[3]);
-if(g_pow_ignore && g_bounty_ignore){
-			sleep(1);
-			continue;
-			// do not work if there is not chance to submit anyway
-		}
+			pthread_mutex_lock(&longpoll_lock);
+			bool ign2 = g_pow_ignore && g_bounty_ignore;
+			pthread_mutex_unlock(&longpoll_lock);
+			if(ign2){
+						sleep(1);
+						continue;
+						// do not work if there is not chance to submit anyway
+					}
 
 			wc = (struct workio_cmd *) calloc(1, sizeof(*wc));
 			if (!wc) {
@@ -2704,7 +2719,15 @@ static void *gpu_miner_thread(void *userdata) {
 		memcpy(&work.pow_hash[0], &vm_output[1], 16);
 
 		// Check For Bounty Solutions
-		if (g_bounty_ignore==false && (vm_result[0] > 1)) {
+		pthread_mutex_lock(&longpoll_lock);
+		bool ign = g_bounty_ignore;
+		pthread_mutex_unlock(&longpoll_lock);
+
+		// Check For POW Solutions
+		pthread_mutex_lock(&longpoll_lock);
+		bool ignpow = g_pow_ignore;
+		pthread_mutex_unlock(&longpoll_lock);
+		if (ign==false && (vm_result[0] > 1)) {
 			applog(LOG_NOTICE, "%s - %d: Submitting Bounty Solution", mythr->name, mult32[3]);
 
 			// Create Submit Request
@@ -2732,9 +2755,7 @@ static void *gpu_miner_thread(void *userdata) {
 				goto out;
 			}
 		}
-
-		// Check For POW Solutions
-		else if (g_pow_ignore==false && ((vm_result[0] == 1) || (vm_result[0] == 3))) {
+		else if (ignpow==false && ((vm_result[0] == 1) || (vm_result[0] == 3))) {
 
 			if (opt_debug) {
 				applog(LOG_DEBUG, "DEBUG: Hash - %08X%08X%08X%08X  Tgt - %08X%08X%08X%08X", work.pow_hash[0], work.pow_hash[1], work.pow_hash[2], work.pow_hash[3], g_pow_target[0], g_pow_target[1], g_pow_target[2], g_pow_target[3]);
@@ -2883,7 +2904,6 @@ static void *longpoll_thread(void *userdata)
 					g_cur_pow_cnt = 0;
 					g_pow_ignore = false;
 					g_bounty_ignore = false;
-
 					pthread_mutex_unlock(&longpoll_lock);
 				}
 			}
