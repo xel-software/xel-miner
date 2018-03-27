@@ -1966,8 +1966,7 @@ static int get_work_storage(CURL *curl, char *work_str, uint32_t *storage) {
 		json_decref(val);
 		return -1;
 	}
-		applog(LOG_ERR, "STORAGE IS %s", str);
-
+	
 	if (!hex2ints(storage, sizeof(*storage), str, max_str_len)) {
 		applog(LOG_ERR, "ERROR: Unable to convert 'storage' for work_id: %s", work_str);
 		json_decref(val);
