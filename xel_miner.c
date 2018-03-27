@@ -243,7 +243,7 @@ Options while mining ----------------------------------------------------------\
    q + <enter>                Toggle Quite mode\n\
 ";
 
-static char const short_options[] = "c:Dk:hm:o:p:P:qr:R:s:St:T:u:vVX";
+static char const short_options[] = "c:Dd:i:k:hm:o:p:P:qr:R:s:St:T:u:vVX";
 
 static struct option const options[] = {
 	{ "config",			1, NULL, 'c' },
@@ -294,11 +294,10 @@ static void parse_cmdline(int argc, char *argv[])
 
 	while (1) {
 		key = getopt_long(argc, argv, short_options, options, NULL);
-
 		if (key < 0)
 			break;
-
 		parse_arg(key, optarg);
+
 	}
 	if (optind < argc) {
 		fprintf(stderr, "%s: unsupported non-option argument -- '%s'\n",
@@ -369,7 +368,8 @@ void parse_arg(int key, char *arg)
 				free_up();
 				show_usage_and_exit(1);
 			}
-			free(rpc_url);
+			if(rpc_url)
+				free(rpc_url);
 			rpc_url = (char*)malloc(strlen(arg) + 20);
 			sprintf(rpc_url, "%s", arg);
 		}
@@ -379,7 +379,8 @@ void parse_arg(int key, char *arg)
 				free_up();
 				show_usage_and_exit(1);
 			}
-			free(rpc_url);
+			if(rpc_url)
+				free(rpc_url);
 			rpc_url = (char*)malloc(strlen(ap) + 20);
 			sprintf(rpc_url, "http://%s", ap);
 		}
@@ -400,6 +401,7 @@ void parse_arg(int key, char *arg)
 		passphrase = strdupcs(arg);
 		strhide(arg);
 
+
 		// Generate publickey From Secret Phrase
 		char* hash_sha256 = (char*)malloc(32 * sizeof(char));
 		sha256(passphrase, strlen(passphrase), hash_sha256);
@@ -411,16 +413,6 @@ void parse_arg(int key, char *arg)
 
 		// Do "donna"
 		curve25519_donna(publickey, hash_sha256, basepoint);
-
-		char temp_pub[65];
-		tohex(publickey, 32, temp_pub, 65);
-		temp_pub[64] = 0;
-		applog(LOG_INFO, "Provided pubkey '%s'", temp_pub);
-
-		//printf("Public Key: ");
-		//for (i = 0; i < 32; i++)
-		//	printf("%02X", publickey[i]);
-		//printf("\n");
 
 		free(hash_sha256);
 
@@ -2514,6 +2506,7 @@ out:
 	if (inst)
 		free_library(inst);
 	if (inst) free(inst);
+	inst = NULL;
 	if (vm_m) free(vm_m);
 	if (vm_i) free(vm_i);
 	if (vm_u) free(vm_u);
@@ -2524,7 +2517,6 @@ out:
 	if (vm_s) free(vm_s);
 
 	tq_freeze(mythr->q);
-
 
 	return NULL;
 }
