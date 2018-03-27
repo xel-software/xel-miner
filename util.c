@@ -32,8 +32,10 @@ struct thread_q *tq_new(void)
 	struct thread_q *tq;
 
 	tq = (struct thread_q*) calloc(1, sizeof(*tq));
-	if (!tq)
+	if (!tq){
+		printf("fatal error: could not create thread queue.\n");
 		return NULL;
+	}
 
 	INIT_LIST_HEAD(&tq->q);
 	pthread_mutex_init(&tq->mutex, NULL);

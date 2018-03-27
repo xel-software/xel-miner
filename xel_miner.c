@@ -370,7 +370,8 @@ void parse_arg(int key, char *arg)
 				show_usage_and_exit(1);
 			}
 			free(rpc_url);
-			rpc_url = strdupcs(arg);
+			rpc_url = (char*)malloc(strlen(arg) + 20);
+			sprintf(rpc_url, "%s", arg);
 		}
 		else {
 			if (*ap == '\0' || *ap == '/') {
@@ -379,13 +380,14 @@ void parse_arg(int key, char *arg)
 				show_usage_and_exit(1);
 			}
 			free(rpc_url);
-			rpc_url = (char*)malloc(strlen(ap) + 8);
+			rpc_url = (char*)malloc(strlen(ap) + 20);
 			sprintf(rpc_url, "http://%s", ap);
 		}
 
 		if (!nm) {
-			rpc_url = realloc(rpc_url, strlen(rpc_url) + 5);
-			sprintf(rpc_url, "%s/nxt", rpc_url);
+			char tmp[strlen(ap) + 20];
+			sprintf(tmp, "%s/nxt", rpc_url);
+			memcpy(rpc_url, tmp, strlen(ap) + 20);
 		}
 
 		break;
@@ -2509,6 +2511,8 @@ static void *cpu_miner_thread(void *userdata) {
 	}
 
 out:
+	if (inst)
+		free_library(inst);
 	if (inst) free(inst);
 	if (vm_m) free(vm_m);
 	if (vm_i) free(vm_i);
@@ -3338,8 +3342,7 @@ int main(int argc, char **argv) {
 		free_up();
 		return 1;
 	}
-
-	thr_info = (struct thr_info*) calloc(opt_n_threads + 3, sizeof(*thr));
+	thr_info = (struct thr_info*) calloc(opt_n_threads + 3, sizeof(struct thr_info));
 	if (!thr_info){
 		free_up();
 		return 1;
