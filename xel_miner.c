@@ -83,6 +83,8 @@ int opt_n_threads = 0;
 static enum prefs opt_pref = PREF_PROFIT;
 char pref_workid[32];
 bool opt_validate_work = false;
+static volatile bool g_pow_ignore = false;
+static volatile bool g_bounty_ignore = false;
 
 int delay_sleep = 0;
 int ignore_mask = 0;
@@ -2063,15 +2065,21 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 	if (req->req_type == SUBMIT_BOUNTY) {
 		if (err_desc) {
 			if (strstr(err_desc, "Duplicate unconfirmed transaction:")) {
-				applog(LOG_NOTICE, "%s: %s***** Bounty Discarded *****", thr_info[req->thr_id].name, CL_YLW);
+				applog(LOG_NOTICE, "%s: https://stackoverflow.com/questions/1157209/is-there-an-alternative-sleep-function-in-c-to-milliseconds%s***** Bounty Discarded *****", thr_info[req->thr_id].name, CL_YLW);
 				applog(LOG_DEBUG, "Work ID: %s - Work is already closed, you missed the reveal period", req->work_str, err_desc);
 			}
 			else if (strstr(err_desc, "successfully")){
 				applog(LOG_NOTICE, "%s: %s***** Bounty Claimed! *****", thr_info[req->thr_id].name, CL_GRN);
 				g_bounty_accepted_cnt++;
 			}
+			else if (strstr(err_desc, "limit of")) {
+				if(!g_bounty_ignore)
+					applog(LOG_NOTICE, "%s: %s***** Bounty limit reached for this block, pausing until next block *****", thr_info[req->thr_id].name, CL_YLW);
+				g_bounty_rejected_cnt++;
+				g_bounty_ignore=true;
+			}
 			else {
-				applog(LOG_NOTICE, "%s: %s***** Bounty Rejected! *****", thr_info[req->thr_id].name, CL_RED);
+				applog(LOG_NOTICE, "%s: %s***** Bounty Rejected! (Probably a new block is currenly being broadcast) *****", thr_info[req->thr_id].name, CL_RED);
 				g_bounty_rejected_cnt++;
 			}
 		}
@@ -2092,9 +2100,14 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 				applog(LOG_INFO, "Work ID: %s -%s", req->work_str, err_desc + 34);
 				g_pow_discarded_cnt++;
 			}
+			else if (strstr(err_desc, "limit of")) {
+				if(!g_pow_ignore)
+					applog(LOG_NOTICE, "%s: %s***** POW limit reached for this block, pausing until next block *****", thr_info[req->thr_id].name, CL_YLW);
+				g_pow_discarded_cnt++;
+				g_pow_ignore=true;
+			}
 			else {
-				applog(LOG_NOTICE, "%s: %s***** POW Rejected! *****", thr_info[req->thr_id].name, CL_RED);
-				applog(LOG_INFO, "Work ID: %s, Reason: %s", req->work_str, err_desc);
+				applog(LOG_NOTICE, "%s: %s***** POW Rejected! (Probably a new block is currenly being broadcast) *****", thr_info[req->thr_id].name, CL_RED);
 				g_pow_rejected_cnt++;
 			}
 		}
@@ -2310,6 +2323,13 @@ static void *cpu_miner_thread(void *userdata) {
 
 	while (1) {
 
+		if(g_pow_ignore && g_bounty_ignore){
+			printf("WAITING ig_pow %d, ig_bty %d\n",g_pow_ignore,g_bounty_ignore);
+			sleep(1);
+			continue;
+			// do not work if there is not chance to submit anyway
+		}
+
 		// No Work Available
 		if (!g_work.work_id) {
 			if (work.work_id)
@@ -2430,12 +2450,12 @@ static void *cpu_miner_thread(void *userdata) {
 		}
 
 		// Submit Work That Meets Bounty Criteria
-		if (rc == 1 && (ignore_mask&2)==0) {
+		if (g_bounty_ignore==false && (rc == 1 && (ignore_mask&2)==0)) {
 
 			if(delay_sleep>0)
 				sleep(delay_sleep);
 
-			applog(LOG_NOTICE, "CPU%d: Submitting Bounty Solution", thr_id);
+			applog(LOG_DEBUG, "CPU%d: Submitting Bounty Solution", thr_id);
 
 			// Create Submit Request
 			wc = (struct workio_cmd *) calloc(1, sizeof(*wc));
@@ -2466,14 +2486,19 @@ static void *cpu_miner_thread(void *userdata) {
 		}
 
 		// Submit Work That Meets POW Target
-		if (rc == 2 && (ignore_mask&1)==0) {
+		if (g_pow_ignore==false && (rc == 2 && (ignore_mask&1)==0)) {
 
 			if(delay_sleep>0)
 				sleep(delay_sleep);
 
-			applog(LOG_NOTICE, "CPU%d: Submitting POW Solution", thr_id);
+			applog(LOG_DEBUG, "CPU%d: Submitting POW Solution", thr_id);
 			applog(LOG_DEBUG, "DEBUG: Hash - %08X%08X%08X...  Tgt - %s", work.pow_hash[0], work.pow_hash[1], work.pow_hash[2], g_pow_target_str);
 			applog(LOG_DEBUG, "DEBUG: First 4 Inputs were: %d, %d, %d, %d", work.vm_input[0], work.vm_input[1], work.vm_input[2], work.vm_input[3]);
+if(g_pow_ignore && g_bounty_ignore){
+			sleep(1);
+			continue;
+			// do not work if there is not chance to submit anyway
+		}
 
 			wc = (struct workio_cmd *) calloc(1, sizeof(*wc));
 			if (!wc) {
@@ -2576,6 +2601,8 @@ static void *gpu_miner_thread(void *userdata) {
 		// Check If We Are Mining The Most Current Work
 		if (work.work_id != g_work.work_id) {
 
+
+
 			// Copy Global Work Into Local Thread Work
 			memcpy(&work, &g_work, sizeof(struct work));
 			work.thr_id = thr_id;
@@ -2677,7 +2704,7 @@ static void *gpu_miner_thread(void *userdata) {
 		memcpy(&work.pow_hash[0], &vm_output[1], 16);
 
 		// Check For Bounty Solutions
-		if (vm_result[0] > 1) {
+		if (g_bounty_ignore==false && (vm_result[0] > 1)) {
 			applog(LOG_NOTICE, "%s - %d: Submitting Bounty Solution", mythr->name, mult32[3]);
 
 			// Create Submit Request
@@ -2707,7 +2734,7 @@ static void *gpu_miner_thread(void *userdata) {
 		}
 
 		// Check For POW Solutions
-		else if ((vm_result[0] == 1) || (vm_result[0] == 3)) {
+		else if (g_pow_ignore==false && ((vm_result[0] == 1) || (vm_result[0] == 3))) {
 
 			if (opt_debug) {
 				applog(LOG_DEBUG, "DEBUG: Hash - %08X%08X%08X%08X  Tgt - %08X%08X%08X%08X", work.pow_hash[0], work.pow_hash[1], work.pow_hash[2], work.pow_hash[3], g_pow_target[0], g_pow_target[1], g_pow_target[2], g_pow_target[3]);
@@ -2854,6 +2881,8 @@ static void *longpoll_thread(void *userdata)
 
 					// Reset POW Counter When Block Changes
 					g_cur_pow_cnt = 0;
+					g_pow_ignore = false;
+					g_bounty_ignore = false;
 
 					pthread_mutex_unlock(&longpoll_lock);
 				}
@@ -2919,6 +2948,8 @@ static void *workio_thread(void *userdata)
 
 	while (1) {
 
+		sleep(1);
+
 		// Get Work (New Block or Every 'Scantime' To Check For Difficulty Change)
 		if (g_new_block || (time(NULL) - g_work_time) >= opt_scantime) {
 
@@ -2938,6 +2969,8 @@ static void *workio_thread(void *userdata)
 			pthread_mutex_lock(&longpoll_lock);
 			g_new_block = false;
 			pthread_mutex_unlock(&longpoll_lock);
+
+
 		}
 
 		// Check For New Solutions On Queue
@@ -3017,6 +3050,8 @@ static bool add_submit_req(struct work *work, uint32_t *data, enum submit_comman
 			pthread_mutex_unlock(&longpoll_lock);
 		}
 		else {
+			g_pow_ignore = true;
+			applog(LOG_NOTICE, "%s***** miner has already submitted %d POW this block, we pause for a while *****", CL_YLW, MAX_POW_PER_BLOCK);
 			applog(LOG_DEBUG, "Maximum POW per block reached...POW submission ignored");
 			pthread_mutex_unlock(&submit_lock);
 			return true;

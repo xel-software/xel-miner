@@ -7,7 +7,7 @@
 #define USER_AGENT PACKAGE_NAME "/" MINER_VERSION
 #define MAX_CPUS 16
 
-#define MAX_POW_PER_BLOCK 10
+#define MAX_POW_PER_BLOCK 50
 
 #include <curl/curl.h>
 #include <jansson.h>
