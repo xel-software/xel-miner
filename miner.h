@@ -72,8 +72,8 @@ extern int opt_opencl_gthreads;
 extern int opt_opencl_vwidth;
 
 extern struct work_package *g_work_package;
-extern int g_work_package_cnt;
-extern int g_work_package_idx;
+extern volatile int g_work_package_cnt;
+extern volatile int g_work_package_idx;
 
 extern struct work_restart *work_restart;
 
@@ -103,6 +103,8 @@ struct work_package {
 	int pending_bty_cnt;
 	bool blacklisted;
 	bool active;
+	int iterations;
+
 
 	// VM Memory
 	uint32_t vm_ints;
@@ -123,6 +125,7 @@ struct work_package {
 	uint32_t storage_idx;	// Index In u[] To Extract Storage From
 	uint32_t storage_cnt;	// Number Of Storage Solutions For Iteration
 	uint32_t *storage;
+
 
 };
 
