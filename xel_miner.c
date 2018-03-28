@@ -143,7 +143,7 @@ uint32_t g_bounty_error_cnt = 0;
 uint32_t g_pow_accepted_cnt = 0;
 uint32_t g_pow_rejected_cnt = 0;
 uint32_t g_pow_discarded_cnt = 0;
-
+bool g_opt_avoidcache = false;
 int work_thr_id;
 struct thr_info *thr_info;
 struct thr_info *thr_deadswitch = NULL;
@@ -222,6 +222,7 @@ Options:\n\
   -s, --scan-time <n>         Max time to scan work before requesting new work (Default: 60 sec)\n\
   	  --test-miner <file>     Run the Miner using JSON formatted work in <file>\n\
       --test-vm <file>        Run the Parser / Compiler using the ElasticPL source code in <file>\n\
+		--test-avoidcache   		  Do not save metadata\n\
 	  --test-block <block>		Block-id for test run\n\
 	  --test-work <work>			Work-id for test run\n\
 	  --test-limit-storage <ints>			Only allow storage sizes up to <int>\n\
@@ -270,6 +271,7 @@ static struct option const options[] = {
 	{ "scan-time",		1, NULL, 's' },
 	{ "test-miner",		1, NULL, 1004 },
 	{ "test-vm",		1, NULL, 1005 },
+	{ "test-avoidcache",	0, NULL, 1022 },
 	{ "test-block",	1, NULL, 1011 },
 	{ "test-work",	1, NULL, 1012 },
 	{ "test-limit-storage",	1, NULL, 1021 },
@@ -421,6 +423,9 @@ void parse_arg(int key, char *arg)
 	case 'q':
 		opt_quiet = true;
 		break;
+	case 1022:
+			g_opt_avoidcache = true;
+			break;
 	case 'r':
 		v = atoi(arg);
 		if (v < -1 || v > 9999){
@@ -792,7 +797,9 @@ static void *test_vm_thread(void *userdata) {
 	char path_lib_workstruct[255];
 	sprintf(path_lib, "work/job_%lu.so", work.work_id);
 	sprintf(path_lib_workstruct, "work/job_%lu.so.metadata", work.work_id);
-	skip_recompile = (access( path_lib, F_OK ) != -1) && (access( path_lib_workstruct, F_OK ) != -1);
+
+	if(!g_opt_avoidcache)
+		skip_recompile = (access( path_lib, F_OK ) != -1) && (access( path_lib_workstruct, F_OK ) != -1);
 
 	if(skip_recompile){
 		// load metadata
@@ -2008,7 +2015,7 @@ static int get_work_storage(CURL *curl, char *work_str, uint32_t *storage) {
 		json_decref(val);
 		return -1;
 	}
-	
+
 	if (!hex2ints(storage, sizeof(*storage), str, max_str_len)) {
 		applog(LOG_ERR, "ERROR: Unable to convert 'storage' for work_id: %s", work_str);
 		json_decref(val);
