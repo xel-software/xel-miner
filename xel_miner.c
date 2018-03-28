@@ -767,9 +767,11 @@ void tohex_int(unsigned int * in, size_t insz, char * out, size_t outsz)
 }
 
 static void *test_vm_thread(void *userdata) {
+	FILE* fin = NULL, *fout = NULL;
+
 	struct thr_info *mythr = (struct thr_info *) userdata;
 	int thr_id = mythr->id;
-	char *test_code = calloc(MAX_SOURCE_SIZE, sizeof(char));
+	char *test_code = calloc(MAX_SOURCE_SIZE + 1, sizeof(char));
 	struct work work = { 0 };
 	struct work_package work_package = { 0 };
 	struct instance *inst = NULL;
@@ -778,12 +780,38 @@ static void *test_vm_thread(void *userdata) {
 	uint32_t *vm_input = NULL;
 	uint32_t *mult32 = (uint32_t *)work.multiplicator;
 	unsigned char *ocl_source;
+	bool skip_recompile = false;
 
 	// Create Test Work
 	work.package_id = 0;
 	work.iteration_id = 0;
 	work.block_id = var_test_block;
 	work.work_id = var_test_work;
+
+  // Determine if we can reuse an already compiled library
+	char path_lib[255];
+	char path_lib_workstruct[255];
+	sprintf(path_lib, "work/job_%lu.so", work.work_id);
+	sprintf(path_lib_workstruct, "work/job_%lu.so.metadata", work.work_id);
+	skip_recompile = (access( path_lib, F_OK ) != -1) && (access( path_lib_workstruct, F_OK ) != -1);
+
+	if(skip_recompile){
+		// load metadata
+		applog(LOG_DEBUG, "DEBUG: Skipping recompilation to be blazing fast");
+		fin = fopen(path_lib_workstruct, "rb");
+		if(NULL == fin)
+    {
+        skip_recompile = false;
+				applog(LOG_DEBUG, "DEBUG: Failed to open work-structure, skipping cache");
+    }else{
+			size_t st = fread(&work_package, sizeof(struct work_package), 1, fin);
+	    if ( 1 != st){
+				skip_recompile = false;
+				applog(LOG_DEBUG, "DEBUG: Failed to reconstruct work-structure (read), skipping cache");
+			}
+			fclose(fin);
+		}
+	}
 
 	applog(LOG_DEBUG, "DEBUG: TestVM: block id '%lu'", work.block_id);
 	applog(LOG_DEBUG, "DEBUG: TestVM: work id '%lu'", work.work_id);
@@ -833,24 +861,26 @@ static void *test_vm_thread(void *userdata) {
 	// Initialize ints
 	get_vm_input(&work);
 
-	applog(LOG_DEBUG, "DEBUG: Loading Test File '%s'", test_filename);
-	if (!load_test_file(test_filename, test_code)){
-		free_up();
-		if(test_code)
-			free(test_code);
-		exit(EXIT_FAILURE);
-	}
+  if(!skip_recompile){
+		applog(LOG_DEBUG, "DEBUG: Loading Test File '%s'", test_filename);
+		if (!load_test_file(test_filename, test_code)){
+			free_up();
+			if(test_code)
+				free(test_code);
+			exit(EXIT_FAILURE);
+		}
 
-	// Convert The Source Code Into ElasticPL AST
-	if (!create_epl_ast(test_code)) {
-		applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
-		// let us clean the ast now
-		clean_up_ast();
-		free_up();
-		if(test_code)
-			free(test_code);
-		exit(EXIT_FAILURE);
-	}
+		// Convert The Source Code Into ElasticPL AST
+		if (!create_epl_ast(test_code)) {
+			applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
+			// let us clean the ast now
+			clean_up_ast();
+			free_up();
+			if(test_code)
+				free(test_code);
+			exit(EXIT_FAILURE);
+		}
+
 
 	// Copy Global Array Sizes Into Work Package
 	work_package.vm_ints = ast_vm_ints;
@@ -865,53 +895,63 @@ static void *test_vm_thread(void *userdata) {
 	work_package.storage_idx = ast_submit_idx;	// Currently Storage Uses Same Index As Submit
 
 
+		fout = fopen(path_lib_workstruct, "wb");
+		if(fout == NULL)
+		{
+				applog(LOG_DEBUG, "DEBUG: Failed to open work-structure for saving");
+		}else{
+			if ( 1 != fwrite(&work_package, sizeof(struct work_package), 1, fout)){
+				applog(LOG_DEBUG, "DEBUG: Failed to write work-structuree");
+			}else
+				applog(LOG_DEBUG, "DEBUG: Successfully saved metadata (len = %d)", sizeof(struct work_package));
+			fclose(fout);
+		}
 
-	// Calculate WCET
-	if (!calc_wcet()) {
-		applog(LOG_ERR, "ERROR: Unable to calculate WCET.  Exiting 'test_vm'\n");
-		// let us clean the ast now
-		clean_up_ast();
-		if(test_code)
-			free(test_code);
-		exit(EXIT_FAILURE);
+		// Calculate WCET
+		if (!calc_wcet()) {
+			applog(LOG_ERR, "ERROR: Unable to calculate WCET.  Exiting 'test_vm'\n");
+			// let us clean the ast now
+			clean_up_ast();
+			if(test_code)
+				free(test_code);
+			exit(EXIT_FAILURE);
+		}
+		uint64_t wcet = 0;
+		if(opt_test_wcet_main){
+			wcet = get_main_wcet();
+				if(wcet > opt_wcet_main*20000){
+					applog(LOG_ERR, "ERROR: The main WCET of %lu is above the threshold of %lu*20000. Your program is too complex! Exiting 'test_vm'", wcet, opt_wcet_main);
+					// let us clean the ast now
+					clean_up_ast();
+					free_up();
+					if(test_code)
+						free(test_code);
+					exit(EXIT_FAILURE);
+				}else{
+					applog(LOG_DEBUG, "GOOD: The main WCET of %lu is below the threshold of %lu*20000.", wcet, opt_wcet_main);
+				}
+		}
+		if(opt_test_wcet_verify){
+			wcet = get_verify_wcet();
+				if(wcet > opt_wcet_verify*20000){
+					applog(LOG_ERR, "ERROR: The verify WCET of %lu is above the threshold of %lu*20000. Your program is too complex! Exiting 'test_vm'", wcet, opt_wcet_verify);
+					// let us clean the ast now
+					clean_up_ast();
+					free_up();
+					if(test_code)
+						free(test_code);
+					exit(EXIT_FAILURE);
+				}else{
+					applog(LOG_DEBUG, "GOOD: The verify WCET of %lu is below the threshold of %lu*20000.", wcet, opt_wcet_verify);
+				}
+		}
 	}
 
-	uint64_t wcet = 0;
-	if(opt_test_wcet_main){
-		wcet = get_main_wcet();
-			if(wcet > opt_wcet_main*20000){
-				applog(LOG_ERR, "ERROR: The main WCET of %lu is above the threshold of %lu*20000. Your program is too complex! Exiting 'test_vm'", wcet, opt_wcet_main);
-				// let us clean the ast now
-				clean_up_ast();
-				free_up();
-				if(test_code)
-					free(test_code);
-				exit(EXIT_FAILURE);
-			}else{
-				applog(LOG_DEBUG, "GOOD: The main WCET of %lu is below the threshold of %lu*20000.", wcet, opt_wcet_main);
-			}
-	}
-
-	if(opt_test_wcet_verify){
-		wcet = get_verify_wcet();
-			if(wcet > opt_wcet_verify*20000){
-				applog(LOG_ERR, "ERROR: The verify WCET of %lu is above the threshold of %lu*20000. Your program is too complex! Exiting 'test_vm'", wcet, opt_wcet_verify);
-				// let us clean the ast now
-				clean_up_ast();
-				free_up();
-				if(test_code)
-					free(test_code);
-				exit(EXIT_FAILURE);
-			}else{
-				applog(LOG_DEBUG, "GOOD: The verify WCET of %lu is below the threshold of %lu*20000.", wcet, opt_wcet_verify);
-			}
-	}
-
-	applog(LOG_DEBUG, "DEBUG: storage size: %d", ast_submit_sz);
+	applog(LOG_DEBUG, "DEBUG: storage size: %d", work_package.submit_sz);
 
 	// Convert The ElasticPL Source Into a C or OpenCL Program
 	use_elasticpl_math = false;
-	if (opt_opencl) {
+	if (opt_opencl && !skip_recompile) {
 		if (!create_opencl_source(work_package.work_str)) {
 			applog(LOG_ERR, "ERROR: Unable to convert 'source' to OpenC.  Exiting 'test_vm'\n");
 			// let us clean the ast now
@@ -922,7 +962,7 @@ static void *test_vm_thread(void *userdata) {
 			exit(EXIT_FAILURE);
 		}
 	}
-	else {
+	else if(!skip_recompile) {
 		if (!convert_ast_to_c(work_package.work_str)) {
 			applog(LOG_ERR, "ERROR: Unable to convert 'source' to C.  Exiting 'test_vm'\n");
 			// let us clean the ast now
@@ -935,7 +975,9 @@ static void *test_vm_thread(void *userdata) {
 	}
 
 	// let us clean the ast now
-	clean_up_ast();
+	if(!skip_recompile) {
+		clean_up_ast();
+	}
 
 	// Add Work Package To Global List
 	work_package.active = true;
@@ -1120,7 +1162,7 @@ static void *test_vm_thread(void *userdata) {
 	}
 	else {
 		// Compile The C Program Library
-		if (!compile_library(g_work_package[0].work_str)) {
+		if (!skip_recompile && !compile_library(g_work_package[0].work_str)) {
 			applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
 			free_up();
 			if(test_code)
@@ -1137,7 +1179,7 @@ static void *test_vm_thread(void *userdata) {
 
 		// Temporary Logic For Miner To Validate 'main' & 'verify'
 		// This Should Be Done Prior To Author Submitting The Job By The Node
-		if (opt_validate_work) {
+		if (opt_validate_work && !skip_recompile) {
 			if (!validate_work_source(0, inst)) {
 				applog(LOG_ERR, "ERROR: Exiting 'test_vm'");
 				free_up();
