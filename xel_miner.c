@@ -83,18 +83,17 @@ int opt_n_threads = 0;
 static enum prefs opt_pref = PREF_PROFIT;
 char pref_workid[32];
 bool opt_validate_work = false;
-volatile bool g_pow_ignore = false;
-volatile bool g_bounty_ignore = false;
+volatile bool* g_pow_ignore = NULL;
+volatile bool* g_bounty_ignore = NULL;
 
 int delay_sleep = 0;
 int ignore_mask = 0;
 int num_cpus;
-bool g_need_work = false;
 char g_work_nm[50];
 char g_work_id[22];
-uint64_t g_cur_work_id;
-uint64_t g_cur_block_id;
-uint64_t g_cur_pow_cnt;
+volatile uint64_t g_cur_work_id;
+volatile uint64_t g_cur_block_id;
+volatile uint64_t g_cur_pow_cnt;
 unsigned char g_pow_target_str[33];
 uint32_t g_pow_target[4];
 
@@ -126,14 +125,14 @@ uint8_t *test_filename = NULL;
 
 struct timeval g_miner_start_time;
 struct work g_work = { 0 };
-time_t g_work_time = 0;
+volatile time_t g_work_time = 0;
 struct work_package *g_work_package;
-int g_work_package_cnt = 0;
-int g_work_package_idx = 0;
+volatile int g_work_package_cnt = 0;
+volatile int g_work_package_idx = 0;
 const uint8_t basepoint[32] = { 9 };
 
 struct submit_req *g_submit_req;
-int g_submit_req_cnt = 0;
+volatile int g_submit_req_cnt = 0;
 volatile int g_new_block = false;
 
 uint32_t g_bounty_accepted_cnt = 0;
@@ -1714,7 +1713,7 @@ static int decode_work(CURL *curl, const json_t *val, struct work *work) {
 			work_package.storage_sz = ast_submit_sz;	// Currently, Storage Size = Submit Size
 			work_package.storage_idx = ast_submit_idx;	// Currently, Storage Index = Submti Index
 			work_package.storage = malloc(ast_submit_sz * sizeof(uint32_t));
-
+			work_package.iterations = iterations;
 			// Calculate WCET
 			work_package.WCET = calc_wcet();
 			if (!work_package.WCET) {
@@ -1762,7 +1761,7 @@ static int decode_work(CURL *curl, const json_t *val, struct work *work) {
 
 		// Check If Work Has Available Bounties
 		bty_rcvd = (int)json_integer_value(json_object_get(pkg, "received_bounties"));
-		if (g_work_package[work_pkg_id].bounty_limit <= (bty_rcvd + g_work_package[work_pkg_id].pending_bty_cnt)) {
+		if (g_work_package[work_pkg_id].bounty_limit*g_work_package[work_pkg_id].iterations <= (bty_rcvd + g_work_package[work_pkg_id].pending_bty_cnt)) {
 			applog(LOG_DEBUG, "DEBUG: Skipping work_id: %s - No Bounties Left", g_work_package[work_pkg_id].work_str);
 			continue;
 		}
@@ -2009,8 +2008,7 @@ static int get_work_storage(CURL *curl, char *work_str, uint32_t *storage) {
 		json_decref(val);
 		return -1;
 	}
-		applog(LOG_ERR, "STORAGE IS %s", str);
-
+	
 	if (!hex2ints(storage, sizeof(*storage), str, max_str_len)) {
 		applog(LOG_ERR, "ERROR: Unable to convert 'storage' for work_id: %s", work_str);
 		json_decref(val);
@@ -2116,10 +2114,10 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 			}
 			else if (strstr(err_desc, "limit of")) {
 				pthread_mutex_lock(&longpoll_lock);
-				if(!g_bounty_ignore)
+				if(!*g_bounty_ignore)
 					applog(LOG_NOTICE, "%s: %s***** Bounty limit reached for this block, pausing until next block *****", thr_info[req->thr_id].name, CL_YLW);
 				g_bounty_rejected_cnt++;
-				g_bounty_ignore=true;
+				*g_bounty_ignore=true;
 				pthread_mutex_unlock(&longpoll_lock);
 			}
 			else {
@@ -2146,10 +2144,10 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 			}
 			else if (strstr(err_desc, "limit of")) {
 				pthread_mutex_lock(&longpoll_lock);
-				if(!g_pow_ignore)
+				if(!*g_pow_ignore)
 					applog(LOG_NOTICE, "%s: %s***** POW limit reached for this block, pausing until next block *****", thr_info[req->thr_id].name, CL_YLW);
 				g_pow_discarded_cnt++;
-				g_pow_ignore=true;
+				*g_pow_ignore=true;
 				pthread_mutex_unlock(&longpoll_lock);
 			}
 			else {
@@ -2369,7 +2367,7 @@ static void *cpu_miner_thread(void *userdata) {
 
 	while (1) {
 		pthread_mutex_lock(&longpoll_lock);
-		bool res = g_pow_ignore && g_bounty_ignore;
+		bool res = *g_pow_ignore && *g_bounty_ignore;
 		pthread_mutex_unlock(&longpoll_lock);
 		if(res){
 			printf("WAITING\n");
@@ -2447,7 +2445,6 @@ static void *cpu_miner_thread(void *userdata) {
 				free_library(inst);
 			inst = calloc(1, sizeof(struct instance));
 			create_instance(inst, work.work_str);
-			inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d, vm_s);
 
 			// Set Round / Iteration For The Work
 			rnd = 0;
@@ -2461,6 +2458,9 @@ static void *cpu_miner_thread(void *userdata) {
 					memset(vm_s, 0, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
 			}
 
+			inst->initialize(vm_m, vm_i, vm_u, vm_l, vm_ul, vm_f, vm_d, vm_s);
+
+
 		}
 		// Otherwise, Just Update POW Target / Iteration / Storage
 		else {
@@ -2473,9 +2473,12 @@ static void *cpu_miner_thread(void *userdata) {
 				iteration = g_work_package[work.package_id].iteration_id;
 
 				// Copy New Storage Values To VM
-				if (g_work_package[work.package_id].storage_sz)
-					memcpy(vm_s, g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
-
+				if (g_work_package[work.package_id].storage_sz) {
+					if (g_work_package[work.package_id].storage_id < 0xFFFF)
+						memcpy(vm_s, g_work_package[work.package_id].storage, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
+					else
+						memset(vm_s, 0, g_work_package[work.package_id].storage_sz * sizeof(uint32_t));
+				}
 			}
 		}
 
@@ -2499,7 +2502,7 @@ static void *cpu_miner_thread(void *userdata) {
 
 		// Submit Work That Meets Bounty Criteria
 		pthread_mutex_lock(&longpoll_lock);
-		bool ign = g_bounty_ignore;
+		bool ign = *g_bounty_ignore;
 		pthread_mutex_unlock(&longpoll_lock);
 		if (ign==false && (rc == 1 && (ignore_mask&2)==0)) {
 
@@ -2538,7 +2541,7 @@ static void *cpu_miner_thread(void *userdata) {
 
 		// Submit Work That Meets POW Target
 		pthread_mutex_lock(&longpoll_lock);
-		ign = g_pow_ignore;
+		ign = *g_pow_ignore;
 		pthread_mutex_unlock(&longpoll_lock);
 		if (ign==false && (rc == 2 && (ignore_mask&1)==0)) {
 
@@ -2549,7 +2552,7 @@ static void *cpu_miner_thread(void *userdata) {
 			applog(LOG_DEBUG, "DEBUG: Hash - %08X%08X%08X...  Tgt - %s", work.pow_hash[0], work.pow_hash[1], work.pow_hash[2], g_pow_target_str);
 			applog(LOG_DEBUG, "DEBUG: First 4 Inputs were: %d, %d, %d, %d", work.vm_input[0], work.vm_input[1], work.vm_input[2], work.vm_input[3]);
 			pthread_mutex_lock(&longpoll_lock);
-			bool ign2 = g_pow_ignore && g_bounty_ignore;
+			bool ign2 = *g_pow_ignore && *g_bounty_ignore;
 			pthread_mutex_unlock(&longpoll_lock);
 			if(ign2){
 						sleep(1);
@@ -2762,12 +2765,12 @@ static void *gpu_miner_thread(void *userdata) {
 
 		// Check For Bounty Solutions
 		pthread_mutex_lock(&longpoll_lock);
-		bool ign = g_bounty_ignore;
+		bool ign = *g_bounty_ignore;
 		pthread_mutex_unlock(&longpoll_lock);
 
 		// Check For POW Solutions
 		pthread_mutex_lock(&longpoll_lock);
-		bool ignpow = g_pow_ignore;
+		bool ignpow = *g_pow_ignore;
 		pthread_mutex_unlock(&longpoll_lock);
 		if (ign==false && (vm_result[0] > 1)) {
 			applog(LOG_NOTICE, "%s - %d: Submitting Bounty Solution", mythr->name, mult32[3]);
@@ -2944,8 +2947,8 @@ static void *longpoll_thread(void *userdata)
 
 					// Reset POW Counter When Block Changes
 					g_cur_pow_cnt = 0;
-					g_pow_ignore = false;
-					g_bounty_ignore = false;
+					*g_pow_ignore = false;
+					*g_bounty_ignore = false;
 					pthread_mutex_unlock(&longpoll_lock);
 				}
 			}
@@ -2976,7 +2979,8 @@ static void *longpoll_thread(void *userdata)
 
 						// Reset POW Counter When Block Changes
 						g_cur_pow_cnt = 0;
-
+						*g_pow_ignore = false;
+						*g_bounty_ignore = false;
 						pthread_mutex_unlock(&longpoll_lock);
 					}
 				}
@@ -3014,6 +3018,8 @@ static void *workio_thread(void *userdata)
 
 		// Get Work (New Block or Every 'Scantime' To Check For Difficulty Change)
 		if (g_new_block || (time(NULL) - g_work_time) >= opt_scantime) {
+			applog(LOG_DEBUG, "Getting new work (reason: new block or just too long ago)");
+
 
 			if (!get_work(curl)) {
 				if ((opt_retries >= 0) && (++failures > opt_retries)) {
@@ -3112,7 +3118,9 @@ static bool add_submit_req(struct work *work, uint32_t *data, enum submit_comman
 			pthread_mutex_unlock(&longpoll_lock);
 		}
 		else {
-			g_pow_ignore = true;
+			pthread_mutex_lock(&longpoll_lock);
+			*g_pow_ignore = true;
+			pthread_mutex_unlock(&longpoll_lock);
 			applog(LOG_NOTICE, "%s***** miner has already submitted %d POW this block, we pause for a while *****", CL_YLW, MAX_POW_PER_BLOCK);
 			applog(LOG_DEBUG, "Maximum POW per block reached...POW submission ignored");
 			pthread_mutex_unlock(&submit_lock);
@@ -3299,6 +3307,9 @@ static void free_up(){
 	int i;
 
 		applog(LOG_DEBUG, "Cleaning up");
+
+		if(g_bounty_ignore) free((void*)g_bounty_ignore);
+		if(g_pow_ignore) free((void*)g_pow_ignore);
 		if (rpc_url) free(rpc_url);
 		if (rpc_user) free(rpc_user);
 		if (rpc_pass) free(rpc_pass);
@@ -3341,6 +3352,9 @@ static int thread_create(struct thr_info *thr, void* func)
 int main(int argc, char **argv) {
 	struct thr_info *thr;
 	int i, err, thr_idx, num_gpus = 0;
+
+	g_pow_ignore = (bool*)malloc(sizeof(bool));
+	g_bounty_ignore = (bool*)malloc(sizeof(bool));
 
 	fprintf(stdout, "** Elastic Compute Engine **\n");
 	fprintf(stdout, "   Miner Version: " MINER_VERSION"\n");
