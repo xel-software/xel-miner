@@ -1718,14 +1718,14 @@ static int decode_work(CURL *curl, const json_t *val, struct work *work) {
 			work_package.WCET = calc_wcet();
 			if (!work_package.WCET) {
 				work_package.blacklisted = true;
-				applog(LOG_ERR, "ERROR: Unable to calculate WCET for work_id: %s\n\n%s\n", work_package.work_str, str);
+				applog(LOG_ERR, "ERROR: Unable to calculate WCET for work_id: %s", work_package.work_str);
 				return 0;
 			}
 
 			// Convert The ElasticPL Source Into A C Program
 			if (!convert_ast_to_c(work_package.work_str)) {
 				work_package.blacklisted = true;
-				applog(LOG_ERR, "ERROR: Unable to convert 'source' to C for work_id: %s\n\n%s\n", work_package.work_str, str);
+				applog(LOG_ERR, "ERROR: Unable to convert 'source' to C for work_id: %s", work_package.work_str);
 				return 0;
 			}
 
@@ -1733,7 +1733,7 @@ static int decode_work(CURL *curl, const json_t *val, struct work *work) {
 			if (opt_opencl) {
 				if (!create_opencl_source(NULL)) {
 					work_package.blacklisted = true;
-					applog(LOG_ERR, "ERROR: Unable to convert 'source' to OpenCL for work_id: %s\n\n%s\n", work_package.work_str, str);
+					applog(LOG_ERR, "ERROR: Unable to convert 'source' to OpenCL for work_id: %s", work_package.work_str);
 					return 0;
 				}
 			}
@@ -2370,7 +2370,6 @@ static void *cpu_miner_thread(void *userdata) {
 		bool res = *g_pow_ignore && *g_bounty_ignore;
 		pthread_mutex_unlock(&longpoll_lock);
 		if(res){
-			printf("WAITING\n");
 			sleep(1);
 			continue;
 			// do not work if there is not chance to submit anyway
@@ -3355,6 +3354,8 @@ int main(int argc, char **argv) {
 
 	g_pow_ignore = (bool*)malloc(sizeof(bool));
 	g_bounty_ignore = (bool*)malloc(sizeof(bool));
+	*g_pow_ignore = false;
+	*g_bounty_ignore = false;
 
 	fprintf(stdout, "** Elastic Compute Engine **\n");
 	fprintf(stdout, "   Miner Version: " MINER_VERSION"\n");
