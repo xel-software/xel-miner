@@ -3125,11 +3125,14 @@ static bool add_submit_req(struct work *work, uint32_t *data, enum submit_comman
 		}
 		else {
 			pthread_mutex_lock(&longpoll_lock);
-			*g_pow_ignore = true;
+			if(*g_pow_ignore==false){
+				*g_pow_ignore = true;
+				applog(LOG_NOTICE, "%s***** miner has already submitted %d POW this block, we pause for a while *****", CL_YLW, MAX_POW_PER_BLOCK);
+			}
 			pthread_mutex_unlock(&longpoll_lock);
-			applog(LOG_NOTICE, "%s***** miner has already submitted %d POW this block, we pause for a while *****", CL_YLW, MAX_POW_PER_BLOCK);
-			applog(LOG_DEBUG, "Maximum POW per block reached...POW submission ignored");
+
 			pthread_mutex_unlock(&submit_lock);
+
 			return true;
 		}
 	}
