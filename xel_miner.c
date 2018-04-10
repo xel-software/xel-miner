@@ -1201,7 +1201,7 @@ static void *test_vm_thread(void *userdata) {
 			rc = inst->execute(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, work.pow_hash);
 		else
 			rc = inst->verify(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, work.pow_hash);
-
+		
 		// Run A Continuous Test
 		//uint32_t rnd;
 		//long hashes_done;
@@ -1299,8 +1299,11 @@ static bool get_vm_input(struct work *work) {
 	work->vm_input[10] = mult32[1];
 
 	// Set Inputs m[11] To Iteration Number
-	work->vm_input[11] = mult32[2];
-
+	work->vm_input[11] = mult32[2]; /*
+printf("INPUT\n");
+		for(int i=0;i<12;++i){
+			printf("%d\n",work->vm_input[i]);
+		}*/
 	return true;
 }
 
@@ -2077,7 +2080,7 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 		else {
 			sprintf(url, "%s?requestType=submitSolution", rpc_url);
 //			sprintf(data, "deadline=3&work_id=%s&data=%s&multiplicator=%s&storage_id=%d&is_pow=true&hash=&secretPhrase=%s", req->work_str, submit_data_hex, req->mult, req->storage_id, passphrase);
-			sprintf(data, "deadline=3&work_id=%s&data=%s&multiplicator=%s&storage_id=%d&is_pow=true&hash=%s&secretPhrase=%s", req->work_str, submit_data_hex, req->mult, req->storage_id, req->hash, passphrase);
+			sprintf(data, "deadline=1&work_id=%s&data=%s&multiplicator=%s&storage_id=%d&is_pow=true&hash=%s&secretPhrase=%s", req->work_str, submit_data_hex, req->mult, req->storage_id, req->hash, passphrase);
 		}
 	}
 	else {
