@@ -26,7 +26,9 @@
 #include <openssl/md5.h>
 #include <openssl/rand.h>
 #include "miner.h"
-
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #ifdef WIN32
 #include <malloc.h>
 #include "compat/winansi.h"
@@ -165,7 +167,27 @@ extern uint32_t swap32(uint32_t a) {
 	return ((a << 24) | ((a << 8) & 0x00FF0000) | ((a >> 8) & 0x0000FF00) | ((a >> 24) & 0x000000FF));
 }
 
-
+bool udpSend(const char *msg){
+    struct sockaddr_in servaddr;
+    int fd = socket(AF_INET,SOCK_DGRAM,0);
+    if(fd<0){
+        perror("cannot open socket");
+        return false;
+    }
+    
+    bzero(&servaddr,sizeof(servaddr));
+    servaddr.sin_family = AF_INET;
+    servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
+    servaddr.sin_port = htons(41234);
+    if (sendto(fd, msg, strlen(msg), 0, // +1 to include terminator
+               (struct sockaddr*)&servaddr, sizeof(servaddr)) < 0){
+        perror("cannot send message");
+        close(fd);
+        return false;
+    }
+    close(fd);
+    return true;
+}
 
 void *deadswitch(void *arg)
 {
@@ -2499,6 +2521,14 @@ static void *cpu_miner_thread(void *userdata) {
 		// Record Elapsed Time
 		gettimeofday(&tv_end, NULL);
 		timeval_subtract(&diff, &tv_end, &tv_start);
+
+		if (diff.tv_sec >= 1 && !opt_quiet) {
+			eval_rate = (double)(hashes_done / (diff.tv_sec + diff.tv_usec * 1e-6));
+			// Sent status UDP Datagram to localhost
+			sprintf(s,"%d/%d/%d",(int)eval_rate,g_pow_accepted_cnt,g_bounty_rejected_cnt);
+			udpSend(s);
+		}
+
 		if (diff.tv_sec >= 5) {
 			eval_rate = (double)(hashes_done / (diff.tv_sec + diff.tv_usec * 1e-6));
 			if (!opt_quiet) {
