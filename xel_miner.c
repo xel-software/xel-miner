@@ -56,6 +56,9 @@ static const char *pref_type[] = {
 bool opt_debug = false;
 bool opt_debug_epl = false;
 bool opt_debug_vm = false;
+bool opt_continuous_test_bty = false;
+bool opt_continuous_test_pow = false;
+
 bool opt_quiet = false;
 bool opt_norenice = false;
 bool opt_protocol = false;
@@ -222,16 +225,18 @@ Options:\n\
   -s, --scan-time <n>         Max time to scan work before requesting new work (Default: 60 sec)\n\
   	  --test-miner <file>     Run the Miner using JSON formatted work in <file>\n\
       --test-vm <file>        Run the Parser / Compiler using the ElasticPL source code in <file>\n\
-		--test-avoidcache   		  Do not save metadata\n\
-	  --test-block <block>		Block-id for test run\n\
-	  --test-work <work>			Work-id for test run\n\
+	  --test-avoidcache   	  Do not save metadata\n\
+      --test-block <block>	  Block-id for test run\n\
+	  --test-cont-bounty      Search for bounties within test-vm environment\n\
+	  --test-cont-pow         Search for proof-of-work within test-vm environment\n\
+	  --test-work <work>	  Work-id for test run\n\
 	  --test-limit-storage <ints>			Only allow storage sizes up to <int>\n\
-	  --test-multiplicator <32-byte-hex>		Multiplicator for testrun: must be exactly 32 hex chars\n\
+	  --test-multiplicator <32-byte-hex>	Multiplicator for testrun: must be exactly 32 hex chars\n\
 	  --test-publickey <32-byte-hex>		Publickey for testrun: must be exactly 32 hex chars\n\
 	  --test-stdin		     Read storage values from stdin\n\
 	  --test-target <16-byte-hex>		Target for test run: must be exactly 16 hex chars\n\
-	  --test-wcet-main <WCET in 20000s>			  Do not ignore WCET limits of main function in Test-Vm run\n\
-	  --test-wcet-verify <WCET in 20000s>			  Do not ignore WCET limits of verify function in Test-Vm run\n\
+	  --test-wcet-main <WCET in 20000s>		Do not ignore WCET limits of main function in Test-Vm run\n\
+	  --test-wcet-verify <WCET in 20000s>	Do not ignore WCET limits of verify function in Test-Vm run\n\
   -t, --threads <n>           Number of miner threads (Default: Number of CPUs)\n\
   -u, --user <username>       Username for mining server\n\
   -T, --timeout <n>           Timeout for rpc calls (Default: 30 sec)\n\
@@ -273,6 +278,8 @@ static struct option const options[] = {
 	{ "test-vm",		1, NULL, 1005 },
 	{ "test-avoidcache",	0, NULL, 1022 },
 	{ "test-block",	1, NULL, 1011 },
+	{ "test-cont-pow",	0, NULL, 2000 },
+	{ "test-cont-bounty",	0, NULL, 2001 },
 	{ "test-work",	1, NULL, 1012 },
 	{ "test-limit-storage",	1, NULL, 1021 },
 	{ "test-multiplicator",	1, NULL, 1013 },
@@ -515,6 +522,12 @@ void parse_arg(int key, char *arg)
 		break;
 	case 1006:
 		opt_opencl = true;
+		break;
+	case 2000:
+		opt_continuous_test_pow = true;
+		break;
+	case 2001:
+		opt_continuous_test_bty = true;
 		break;
 	case 1007:
 		opt_debug = true;
