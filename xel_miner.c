@@ -1232,11 +1232,57 @@ static void *test_vm_thread(void *userdata) {
 
 		// Execute The VM Logic
 //		rc = inst->verify(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, work.pow_hash);
-		if(!opt_verify_only)
-			rc = inst->execute(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, work.pow_hash);
-		else
-			rc = inst->verify(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, work.pow_hash);
-		
+
+		if(!opt_continuous_test_bty){
+			if(!opt_verify_only)
+				rc = inst->execute(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, work.pow_hash);
+			else
+				rc = inst->verify(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, work.pow_hash);
+		}else{
+			uint32_t* intmult = (uint32_t*)work.multiplicator;
+			intmult[2] = 1;											
+			intmult[3] = genrand_int32();							
+			intmult[7] = genrand_int32();	
+
+			// run continuous test
+			applog(LOG_INFO, ">> STARTING CONTINUOUS TEST, THIS MAY TAKE VERY LONG DEPENDING ON YOUR PROBLEM <<");
+			for (i = 0; i < 0xFFFFFFFF; i++) {
+				intmult[7]++;
+				intmult[6]+=3;
+				get_vm_input(&work);
+				// Reset VM Memory
+				memcpy(vm_m, work.vm_input, VM_M_ARRAY_SIZE * sizeof(uint32_t));						
+
+				rc = inst->execute(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, work.pow_hash);
+				if(i>0 && i%5000000==0){
+						applog(LOG_DEBUG, "ran %d iterations, still working ...", i);
+				}
+				if (bounty_found != 0) {
+					applog(LOG_INFO, "********************************");
+					applog(LOG_INFO, "FOUND A SOLUTION TO YOUR PROBLEM");
+					applog(LOG_INFO, " we will dump all 12 input ints");
+					applog(LOG_INFO, "********************************");
+					
+					for (int ix = 0; ix < 12; ix++) {
+						applog(LOG_INFO, "m[%d]\t=\t%u",ix,work.vm_input[ix]);
+					}
+					break;
+				}
+				/*if (pow_found != 0) {
+					applog(LOG_INFO, "********************************");
+					applog(LOG_INFO, "FOUND SOLUTION TO POW CHALLENGE");
+					applog(LOG_INFO, " we will dump all 12 input ints");
+					applog(LOG_INFO, "********************************");
+					
+					for (int ix = 0; ix < 12; ix++) {
+						applog(LOG_INFO, "m[%d]\t=\t%u",ix,work.vm_input[ix]);
+					}
+					break;
+				}*/
+				
+			}
+
+		}
 		// Run A Continuous Test
 		//uint32_t rnd;
 		//long hashes_done;
