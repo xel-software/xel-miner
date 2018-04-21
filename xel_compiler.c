@@ -87,7 +87,7 @@ bool create_c_source(char *work_str) {
 
 	fprintf(f, "static uint32_t check_pow(uint32_t msg_0, uint32_t msg_1, uint32_t msg_2, uint32_t msg_3, uint32_t *m, uint32_t *target, uint32_t *hash) {\n");
 	fprintf(f, "\tint i;\n");
-	fprintf(f, "\tchar msg[48];\n");
+	fprintf(f, "\tunsigned char msg[48];\n");
 	fprintf(f, "\tuint32_t *msg32 = (uint32_t *)(msg);\n");
 	fprintf(f, "\tmsg32[0] = msg_0;\n");
 	fprintf(f, "\tmsg32[1] = msg_1;\n");
