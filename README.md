@@ -1,7 +1,3 @@
-<h1><b>For updates on the Elastic Project, please check Evil-Knievel's github</b></h1>
-
-https://github.com/OrdinaryDude?tab=repositories
-
 <b>The miner in this github should be fully functional; however, I won't be making any additional updates to it.  Hopefully others can improve upon what I have done.</b>
 
 Miner		v0.9.6
@@ -23,7 +19,7 @@ Below are the steps I used to get the miner running on an Ubuntu server & Raspbe
 <ul>
 <li>sudo apt-get update</li>
 <li>sudo apt-get install cmake libcurl4-openssl-dev libudev-dev screen libtool pkg-config libjansson-dev libssl-dev</li>
-<li>git clone https://github.com/sprocket-fpga/xel_miner.git</li>
+<li>git clone https://github.com/xel-software/Miner-Mainnet</li>
 <li>cd xel_miner</li>
 <li>cd build</li>
 <li>cmake .. (note, if you are using OpenCL, then use "cmake .. -USE_OPENCL"</li>
@@ -49,5 +45,5 @@ ________________________________________________________________________________
 <ul>
 <li>The core of the miner is based on cpuminer</li>
 <li>The ElasticPL / Work Package logic is based on the tireless efforts of Evil-Knievel</li>
-<li>The Elastic project can be found here: https://github.com/OrdinaryDude</li>
+<li>The Elastic project can be found here: https://github.com/xel-software</li>
 </ul>
