@@ -26,10 +26,15 @@ ElasticPL 	v0.9.1
 **The miner build has been tested using GCC on Ubuntu 16.04 as well as MinGW32 (using GCC) on Windows 7/10.**
 
 `apt-get update`
+
 `apt-get install -y cmake libcurl4-openssl-dev libudev-dev screen libtool pkg-config libjansson-dev libssl-dev`
+
 `git clone --depth 1 https://github.com/xel-software/xel-miner`
+
 `cd xel-miner`
+
 `cmake .`
+
 `make install`
 
 ### To run the Miner using CPU:
