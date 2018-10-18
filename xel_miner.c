@@ -2195,24 +2195,24 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 
 	if (req->req_type == SUBMIT_BOUNTY) {
 		if (err_desc) {
-			if (strstr(err_desc, "Duplicate unconfirmed transaction:")) {
-				applog(LOG_NOTICE, "%s: https://stackoverflow.com/questions/1157209/is-there-an-alternative-sleep-function-in-c-to-milliseconds%s***** Bounty Discarded *****", thr_info[req->thr_id].name, CL_YLW);
-				applog(LOG_DEBUG, "Work ID: %s - Work is already closed, you missed the reveal period", req->work_str, err_desc);
-			}
-			else if (strstr(err_desc, "successfully")){
+			if (strstr(err_desc, "successfully")) {
 				applog(LOG_NOTICE, "%s: %s***** Bounty Claimed! *****", thr_info[req->thr_id].name, CL_GRN);
 				g_bounty_accepted_cnt++;
 			}
-			else if (strstr(err_desc, "limit of")) {
+			else if ((strstr(err_desc, "limit")) || (strstr(err_desc, "closed"))) {
+				applog(LOG_NOTICE, "%s: %s***** Bounty Discarded *****", thr_info[req->thr_id].name, CL_YLW);
+				applog(LOG_INFO, "Work ID: %s - All Bounties for this job have been claimed.", req->work_str);
+				applog(LOG_DEBUG, "Work ID: %s, Reason: %s", req->work_str, err_desc);
 				pthread_mutex_lock(&longpoll_lock);
-				if(!*g_bounty_ignore)
-					applog(LOG_NOTICE, "%s: %s***** Bounty limit reached for this block, pausing until next block *****", thr_info[req->thr_id].name, CL_YLW);
-				g_bounty_rejected_cnt++;
-				*g_bounty_ignore=true;
+				g_new_block = true;
 				pthread_mutex_unlock(&longpoll_lock);
+				pthread_mutex_lock(&submit_lock);
+				*g_bounty_ignore=true;
+				pthread_mutex_unlock(&submit_lock);
+				g_bounty_deprecated_cnt++;
 			}
 			else {
-				applog(LOG_NOTICE, "%s: %s***** Bounty Rejected! (Probably a new block is currenly being broadcast) *****", thr_info[req->thr_id].name, CL_RED);
+				applog(LOG_NOTICE, "%s: %s***** Bounty Rejected! *****", thr_info[req->thr_id].name, CL_RED);
 				g_bounty_rejected_cnt++;
 			}
 		}
@@ -2224,25 +2224,22 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 	}
 	else if (req->req_type == SUBMIT_POW) {
 		if (err_desc) {
-			if (strstr(err_desc, "successfully submitted")) {
+			if (strstr(err_desc, "successfully")) {
 				applog(LOG_NOTICE, "%s: %s***** POW Accepted *****", thr_info[req->thr_id].name, CL_CYN);
 				g_pow_accepted_cnt++;
 			}
-			else if (strstr(err_desc, "Duplicate unconfirmed transaction:")) {
-				applog(LOG_NOTICE, "%s: %s***** POW Discarded! *****", thr_info[req->thr_id].name, CL_YLW);
-				applog(LOG_INFO, "Work ID: %s -%s", req->work_str, err_desc + 34);
-				g_pow_discarded_cnt++;
-			}
-			else if (strstr(err_desc, "limit of")) {
-				pthread_mutex_lock(&longpoll_lock);
-				if(!*g_pow_ignore)
-					applog(LOG_NOTICE, "%s: %s***** POW limit reached for this block, pausing until next block *****", thr_info[req->thr_id].name, CL_YLW);
-				g_pow_discarded_cnt++;
+			else if (strstr(err_desc, "limit")) {
+				applog(LOG_NOTICE, "%s: %s***** POW Discarded *****", thr_info[req->thr_id].name, CL_YLW);
+				applog(LOG_INFO, "Work ID: %s - All POW rewards for this block have been claimed.", req->work_str);
+				applog(LOG_DEBUG, "Work ID: %s, Reason: %s", req->work_str, err_desc);
+				pthread_mutex_lock(&submit_lock);
 				*g_pow_ignore=true;
-				pthread_mutex_unlock(&longpoll_lock);
+				pthread_mutex_unlock(&submit_lock);
+				g_pow_discarded_cnt++;
 			}
 			else {
-				applog(LOG_NOTICE, "%s: %s***** POW Rejected! (Probably a new block is currenly being broadcast) *****", thr_info[req->thr_id].name, CL_RED);
+				applog(LOG_NOTICE, "%s: %s***** POW Rejected! *****", thr_info[req->thr_id].name, CL_RED);
+				applog(LOG_INFO, "Work ID: %s, Reason: %s", req->work_str, err_desc);
 				g_pow_rejected_cnt++;
 			}
 		}
@@ -2252,7 +2249,7 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 		}
 		req->req_type = SUBMIT_COMPLETE;
 	}
-
+	
 	json_decref(val);
 	free(url);
 	if (data) free(data);
