@@ -30,9 +30,22 @@ apt-get update
 apt-get install -y cmake libcurl4-openssl-dev libudev-dev screen libtool pkg-config libjansson-dev libssl-dev
 git clone --depth 1 https://github.com/xel-software/xel-miner
 cd xel-miner
-cmake .
+```
+
+if you **don't** want to use OpenCL :
+```
+cmake . -USE_OPENCL
+```
+
+if you want to use OpenCL :
+```
+cmake . -USE_OPENCL
+```
+
+```
 make install
 ```
+
 
 ### To run the Miner using CPU:
 
