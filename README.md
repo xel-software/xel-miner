@@ -40,7 +40,7 @@ make install
 
 if you want to use OpenCL :
 ```
-cmake . -USE_OPENCL
+cmake .
 make install
 ```
 
