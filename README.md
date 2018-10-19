@@ -34,13 +34,13 @@ cd xel-miner
 
 if you **don't** want to use OpenCL :
 ```
-cmake . -USE_OPENCL
+cmake .
 make install
 ```
 
 if you want to use OpenCL :
 ```
-cmake .
+cmake .  -USE_OPENCL
 make install
 ```
 
