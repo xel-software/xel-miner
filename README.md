@@ -25,9 +25,33 @@ ElasticPL 	v0.9.1
 
 **The miner build has been tested using GCC on Ubuntu 16.04 as well as MinGW32 (using GCC) on Windows 7/10.**
 
+### install pre-requisities
+
+##### Linux
+
 ```
 apt-get update
 apt-get install -y cmake libcurl4-openssl-dev libudev-dev screen libtool pkg-config libjansson-dev libssl-dev
+```
+
+##### macOS
+
+you must first install homebrew (if not already installed):
+
+```
+/usr/bin/ruby -e "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install)"
+```
+
+Then proceed with the installation :
+
+```
+brew install gmp make cmake openssl
+ln -s /usr/local/opt/openssl/include/openssl /usr/local/include/openssl
+```
+
+### build
+
+```
 git clone --depth 1 https://github.com/xel-software/xel-miner
 cd xel-miner
 ```
@@ -45,11 +69,13 @@ make install
 ```
 
 
-### To run the Miner using CPU:
+### run
+
+##### using CPU:
 
 `./xel_miner -t <num_threads> -P <secret_phrase> -D`
 
-### To run the Miner using GPU:
+##### using GPU:
 
 `./xel_miner -t <num_threads> -P <secret_phrase> -D --opencl`
 

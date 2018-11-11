@@ -1,3 +1,12 @@
 .project
 .settings
 .classpath
+Makefile
+xel_miner
+CMakeCache.txt
+compat/
+CMakeFiles
+
+ElasticPL/cmake_install\.cmake
+
+cmake_install\.cmake
