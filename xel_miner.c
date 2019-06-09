@@ -177,7 +177,7 @@ bool udpSend(const char *msg){
         perror("cannot open socket");
         return false;
     }
-    
+
     bzero(&servaddr,sizeof(servaddr));
     servaddr.sin_family = AF_INET;
     servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
@@ -1240,9 +1240,9 @@ static void *test_vm_thread(void *userdata) {
 				rc = inst->verify(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, work.pow_hash);
 		}else{
 			uint32_t* intmult = (uint32_t*)work.multiplicator;
-			intmult[2] = 1;											
-			intmult[3] = genrand_int32();							
-			intmult[7] = genrand_int32();	
+			intmult[2] = 1;
+			intmult[3] = genrand_int32();
+			intmult[7] = genrand_int32();
 
 			// run continuous test
 			applog(LOG_INFO, ">> STARTING CONTINUOUS TEST, THIS MAY TAKE VERY LONG DEPENDING ON YOUR PROBLEM <<");
@@ -1251,7 +1251,7 @@ static void *test_vm_thread(void *userdata) {
 				intmult[6]+=3;
 				get_vm_input(&work);
 				// Reset VM Memory
-				memcpy(vm_m, work.vm_input, VM_M_ARRAY_SIZE * sizeof(uint32_t));						
+				memcpy(vm_m, work.vm_input, VM_M_ARRAY_SIZE * sizeof(uint32_t));
 
 				rc = inst->execute(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, work.pow_hash);
 				if(i>0 && i%5000000==0){
@@ -1262,7 +1262,7 @@ static void *test_vm_thread(void *userdata) {
 					applog(LOG_INFO, "FOUND A SOLUTION TO YOUR PROBLEM");
 					applog(LOG_INFO, " we will dump all 12 input ints");
 					applog(LOG_INFO, "********************************");
-					
+
 					for (int ix = 0; ix < 12; ix++) {
 						applog(LOG_INFO, "m[%d]\t=\t%u",ix,work.vm_input[ix]);
 					}
@@ -1273,13 +1273,13 @@ static void *test_vm_thread(void *userdata) {
 					applog(LOG_INFO, "FOUND SOLUTION TO POW CHALLENGE");
 					applog(LOG_INFO, " we will dump all 12 input ints");
 					applog(LOG_INFO, "********************************");
-					
+
 					for (int ix = 0; ix < 12; ix++) {
 						applog(LOG_INFO, "m[%d]\t=\t%u",ix,work.vm_input[ix]);
 					}
 					break;
 				}*/
-				
+
 			}
 
 		}
@@ -2249,7 +2249,7 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 		}
 		req->req_type = SUBMIT_COMPLETE;
 	}
-	
+
 	json_decref(val);
 	free(url);
 	if (data) free(data);
@@ -2588,7 +2588,7 @@ static void *cpu_miner_thread(void *userdata) {
 		if (diff.tv_sec >= 5) {
 			eval_rate = (double)(hashes_done / (diff.tv_sec + diff.tv_usec * 1e-6));
 			if (!opt_quiet) {
-				sprintf(s, eval_rate >= 1000.0 ? "%0.2f kEval/s" : "%0.2f Eval/s", (eval_rate >= 1000.0) ? eval_rate / 1000 : eval_rate);
+				sprintf(s, eval_rate >= 1000.0 ? "%0.2f kFLOP/s" : "%0.2f FLOP/s", (eval_rate >= 1000.0) ? eval_rate / 1000 : eval_rate);
 				applog(LOG_INFO, "CPU%d: %s", thr_id, s);
 			}
 			gettimeofday((struct timeval *) &tv_start, NULL);
@@ -2939,7 +2939,7 @@ static void *gpu_miner_thread(void *userdata) {
 
 			if (!opt_quiet) {
 				eval_rate = (double)((hashes_done / (diff.tv_sec + (diff.tv_usec / 1000000.0))) / 1000.0);
-				sprintf(str, eval_rate >= 1000.0 ? "%0.2f mEval/s" : "%0.2f kEval/s", (eval_rate >= 1000.0) ? eval_rate / 1000 : eval_rate);
+				sprintf(str, eval_rate >= 1000.0 ? "%0.2f mFLOP/s" : "%0.2f kFLOP/s", (eval_rate >= 1000.0) ? eval_rate / 1000 : eval_rate);
 				applog(LOG_INFO, "%s: %s", mythr->name, str);
 			}
 			gettimeofday((struct timeval *) &tv_start, NULL);
