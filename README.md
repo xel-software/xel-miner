@@ -117,4 +117,4 @@ check the dedicated git project : https://github.com/xel-software/xel-installer-
 ## Credits
   - The core of the miner is based on cpuminer
   - The ElasticPL / Work Package logic is based on the tireless efforts of Evil-Knievel
-  - The Elastic project can be found here: https://github.com/xel-software
+  - The XEL project can be found here: https://github.com/xel-software
