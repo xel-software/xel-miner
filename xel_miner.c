@@ -238,7 +238,7 @@ Options:\n\
       --opencl-vwidth <n>	  Vector width of local work size (1 - 256, default: calculated)\n\
   -o, --url=URL               URL of mining server\n\
   -p, --pass <password>       Password for mining server\n\
-  -P, --phrase <passphrase>   Secret Passphrase for Elastic account\n\
+  -P, --phrase <passphrase>   Secret Passphrase for XEL account\n\
       --protocol              Display dump of protocol-level activities\n\
   -q, --quiet                 Display minimal output\n\
   -r, --retries <n>           Number of times to retry if a network call fails\n\
