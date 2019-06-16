@@ -1601,7 +1601,7 @@ static bool get_work(CURL *curl) {
 	}
 
 	if (!val) {
-		applog(LOG_ERR, "ERROR: 'json_rpc_call' failed...retrying in %d seconds", opt_fail_pause);
+		applog(LOG_ERR, "ERROR: 'json_rpc_call' failed...retrying in %d seconds ,recommend to restart Miner", opt_fail_pause); // its a bug need to fix it , help wanted !!
 		sleep(opt_fail_pause);
 		return false;
 	}
