@@ -73,11 +73,15 @@ make install
 
 ##### using CPU:
 
-`./xel_miner -t <num_threads> -P <secret_phrase> -D`
+`./xel_miner -t <num_threads> -P "<secret_phrase>" -D`
+
+if you want to use it with a remote node, add the option `-o <remote node>` :
+
+`./xel_miner -t <num_threads> -P "<secret_phrase>" -D -o http://computation-01.xel.org:17876`
 
 ##### using GPU:
 
-`./xel_miner -t <num_threads> -P <secret_phrase> -D --opencl`
+`./xel_miner -t <num_threads> -P "<secret_phrase>" -D --opencl`
 
 use `./xel_miner -h` to see a full list of options.
 
