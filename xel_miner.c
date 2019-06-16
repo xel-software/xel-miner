@@ -3456,7 +3456,7 @@ int main(int argc, char **argv) {
 	*g_pow_ignore = false;
 	*g_bounty_ignore = false;
 
-	fprintf(stdout, "** Elastic Compute Engine **\n");
+	fprintf(stdout, "** XEL Compute Engine **\n");
 	fprintf(stdout, "   Miner Version: " MINER_VERSION"\n");
 	fprintf(stdout, "   ElasticPL Version: " ELASTICPL_VERSION"\n");
 
