@@ -2588,7 +2588,7 @@ static void *cpu_miner_thread(void *userdata) {
 		if (diff.tv_sec >= 5) {
 			eval_rate = (double)(hashes_done / (diff.tv_sec + diff.tv_usec * 1e-6));
 			if (!opt_quiet) {
-				sprintf(s, eval_rate >= 1000.0 ? "%0.2f kEval/s" : "%0.2f  Eval/s", (eval_rate >= 1000.0) ? eval_rate / 1000 : eval_rate);
+				sprintf(s, eval_rate >= 1000.0 ? "%0.2f kEval/s" : "%0.2f Eval/s", (eval_rate >= 1000.0) ? eval_rate / 1000 : eval_rate);
 				applog(LOG_INFO, "CPU%d: %s", thr_id, s);
 			}
 			gettimeofday((struct timeval *) &tv_start, NULL);
