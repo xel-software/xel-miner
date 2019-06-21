@@ -67,7 +67,7 @@ bool opt_protocol = false;
 bool use_colors = true;
 static int opt_retries = -1;
 static int opt_fail_pause = 10;
-static int opt_scantime = 60;  // Get New Work From Server At Least Every 60s
+static int opt_scantime = 30;  // Get New Work From Server At Least Every 30s
 bool opt_test_miner = false;
 bool opt_test_vm = false;
 bool opt_verify_only = false;
@@ -177,7 +177,7 @@ bool udpSend(const char *msg){
         perror("cannot open socket");
         return false;
     }
-    
+
     bzero(&servaddr,sizeof(servaddr));
     servaddr.sin_family = AF_INET;
     servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
@@ -238,7 +238,7 @@ Options:\n\
       --opencl-vwidth <n>	  Vector width of local work size (1 - 256, default: calculated)\n\
   -o, --url=URL               URL of mining server\n\
   -p, --pass <password>       Password for mining server\n\
-  -P, --phrase <passphrase>   Secret Passphrase for Elastic account\n\
+  -P, --phrase <passphrase>   Secret Passphrase for XEL account\n\
       --protocol              Display dump of protocol-level activities\n\
   -q, --quiet                 Display minimal output\n\
   -r, --retries <n>           Number of times to retry if a network call fails\n\
@@ -1240,9 +1240,9 @@ static void *test_vm_thread(void *userdata) {
 				rc = inst->verify(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, work.pow_hash);
 		}else{
 			uint32_t* intmult = (uint32_t*)work.multiplicator;
-			intmult[2] = 1;											
-			intmult[3] = genrand_int32();							
-			intmult[7] = genrand_int32();	
+			intmult[2] = 1;
+			intmult[3] = genrand_int32();
+			intmult[7] = genrand_int32();
 
 			// run continuous test
 			applog(LOG_INFO, ">> STARTING CONTINUOUS TEST, THIS MAY TAKE VERY LONG DEPENDING ON YOUR PROBLEM <<");
@@ -1251,7 +1251,7 @@ static void *test_vm_thread(void *userdata) {
 				intmult[6]+=3;
 				get_vm_input(&work);
 				// Reset VM Memory
-				memcpy(vm_m, work.vm_input, VM_M_ARRAY_SIZE * sizeof(uint32_t));						
+				memcpy(vm_m, work.vm_input, VM_M_ARRAY_SIZE * sizeof(uint32_t));
 
 				rc = inst->execute(g_work_package[0].work_id, &bounty_found, 1, &pow_found, g_pow_target, work.pow_hash);
 				if(i>0 && i%5000000==0){
@@ -1262,7 +1262,7 @@ static void *test_vm_thread(void *userdata) {
 					applog(LOG_INFO, "FOUND A SOLUTION TO YOUR PROBLEM");
 					applog(LOG_INFO, " we will dump all 12 input ints");
 					applog(LOG_INFO, "********************************");
-					
+
 					for (int ix = 0; ix < 12; ix++) {
 						applog(LOG_INFO, "m[%d]\t=\t%u",ix,work.vm_input[ix]);
 					}
@@ -1273,13 +1273,13 @@ static void *test_vm_thread(void *userdata) {
 					applog(LOG_INFO, "FOUND SOLUTION TO POW CHALLENGE");
 					applog(LOG_INFO, " we will dump all 12 input ints");
 					applog(LOG_INFO, "********************************");
-					
+
 					for (int ix = 0; ix < 12; ix++) {
 						applog(LOG_INFO, "m[%d]\t=\t%u",ix,work.vm_input[ix]);
 					}
 					break;
 				}*/
-				
+
 			}
 
 		}
@@ -1601,7 +1601,7 @@ static bool get_work(CURL *curl) {
 	}
 
 	if (!val) {
-		applog(LOG_ERR, "ERROR: 'json_rpc_call' failed...retrying in %d seconds", opt_fail_pause);
+		applog(LOG_ERR, "ERROR: 'json_rpc_call' failed...retrying in %d seconds ,recommend to restart Miner", opt_fail_pause); // its a bug need to fix it , help wanted !!
 		sleep(opt_fail_pause);
 		return false;
 	}
@@ -2249,7 +2249,7 @@ static bool submit_work(CURL *curl, struct submit_req *req) {
 		}
 		req->req_type = SUBMIT_COMPLETE;
 	}
-	
+
 	json_decref(val);
 	free(url);
 	if (data) free(data);
@@ -3456,7 +3456,7 @@ int main(int argc, char **argv) {
 	*g_pow_ignore = false;
 	*g_bounty_ignore = false;
 
-	fprintf(stdout, "** Elastic Compute Engine **\n");
+	fprintf(stdout, "** XEL Compute Engine **\n");
 	fprintf(stdout, "   Miner Version: " MINER_VERSION"\n");
 	fprintf(stdout, "   ElasticPL Version: " ELASTICPL_VERSION"\n");
 

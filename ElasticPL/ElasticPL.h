@@ -45,7 +45,7 @@ uint32_t ast_vm_ulongs;
 uint32_t ast_vm_floats;
 uint32_t ast_vm_doubles;
 
-// Number / Location Of Unsigned Ints To Send To Elastic Node For Validation
+// Number / Location Of Unsigned Ints To Send To XEL Node For Validation
 uint32_t ast_submit_sz;
 uint32_t ast_submit_idx;
 

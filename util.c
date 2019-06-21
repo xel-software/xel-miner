@@ -441,7 +441,7 @@ json_t* json_rpc_call(CURL *curl, const char *url, const char *userpass, const c
 	}
 
 	if (!all_data.buf) {
-		applog(LOG_ERR, "ERROR: Curl did not return any data in 'json_rpc_call'");
+		applog(LOG_ERR, "ERROR: Curl did not return any data in 'json_rpc_call' , Restart miner");
 		*curl_err = -1;
 		goto err_out;
 	}
